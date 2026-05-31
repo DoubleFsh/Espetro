@@ -1,0 +1,19 @@
+{
+  "game": {
+    "required_players": 20,
+    "deploy_timeout_seconds": 180,
+    "deploy_warning_seconds": 30,
+    "defend_commander_vote_seconds": 20,
+    "attack_commander_vote_seconds": 20,
+    "defend_faction_select_seconds": 30,
+    "attack_faction_select_seconds": 30,
+    "faction_pool_size": 6,
+    "respawn_invincibility_ticks": 60,
+    "waiting_y": 200
+  },
+  "troops": {
+    "initial_attack": 280,
+    "initial_defend": 1200,
+    "commander_death_penalty": 2
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "bastion": {
+    "cooldown_seconds": 60,
+    "required_planks": 640,
+    "armor_stand_health": 500,
+    "destroy_troop_penalty": 20
+  }
+}
