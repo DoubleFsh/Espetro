@@ -196,6 +196,7 @@ public class Espetro {
                 org.espetro.team.TroopCountManager.init();
                 // 初始化兵站管理器
                 BastionManager.getInstance();
+                BastionManager.registerForcedChunkLoadingCallback();
             });
         }
 

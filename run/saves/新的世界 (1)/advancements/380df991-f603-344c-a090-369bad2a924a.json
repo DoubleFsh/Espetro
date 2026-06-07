@@ -157,6 +157,7 @@
   },
   "minecraft:adventure/kill_all_mobs": {
     "criteria": {
+      "minecraft:skeleton": "2026-06-07 00:01:25 +0800",
       "minecraft:ghast": "2026-05-31 01:16:20 +0800",
       "minecraft:slime": "2026-05-31 00:43:18 +0800",
       "minecraft:zombie": "2026-05-31 01:16:26 +0800"
@@ -238,6 +239,24 @@
   "minecraft:adventure/shoot_arrow": {
     "criteria": {
       "shot_arrow": "2026-05-31 01:21:12 +0800"
+    },
+    "done": true
+  },
+  "minecraft:recipes/food/cooked_porkchop": {
+    "criteria": {
+      "has_porkchop": "2026-06-06 21:58:43 +0800"
+    },
+    "done": true
+  },
+  "minecraft:recipes/food/cooked_porkchop_from_campfire_cooking": {
+    "criteria": {
+      "has_porkchop": "2026-06-06 21:58:43 +0800"
+    },
+    "done": true
+  },
+  "minecraft:recipes/food/cooked_porkchop_from_smoking": {
+    "criteria": {
+      "has_porkchop": "2026-06-06 21:58:43 +0800"
     },
     "done": true
   },

@@ -129,6 +129,26 @@ public class ClientPacketHandlers {
         }
     }
 
+    // ==================== UnifiedDeployScreenPacket ====================
+
+    public static void handleUnifiedDeployScreen(UnifiedDeployScreenPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        // 记录当前阵营/编制ID
+        org.espetro.client.gui.ClientGameState.setPlayerFactionId(packet.getFactionId());
+        org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
+
+        if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            // 已在统一界面中，只更新数据
+            screen.updateClassCounts(packet.getClassCounts());
+            screen.updateTimeRemaining(packet.getDeployTimeRemaining());
+            // 载具部署已分离到 VehicleDeployScreen，通过"载具部署指令"物品单独打开
+        } else {
+            mc.setScreen(new org.espetro.client.gui.UnifiedDeployScreen(packet));
+        }
+    }
+
     // ==================== GameStateResponsePacket ====================
 
     public static void handleGameStateResponse(org.espetro.network.GameStateResponsePacket packet) {

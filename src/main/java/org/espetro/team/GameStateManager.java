@@ -184,24 +184,20 @@ public class GameStateManager {
     }
 
     /**
-     * 部署阶段开始时广播职业选择
+     * 部署阶段开始时广播统一部署界面
      */
     private void broadcastClassSelectionForDeploy() {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        ClassSelectManager selectManager = ClassSelectManager.getInstance();
-        String attackFaction = selectManager.getFinalAttackClass();
-        String defendFaction = selectManager.getFinalDefendClass();
+        int deployTimeout = GameConfig.getDeployTimeoutSeconds();
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
             if (team == null) continue;
 
-            String factionId = "ATTACK".equals(team) ? attackFaction : defendFaction;
-            if (factionId != null) {
-                NetworkManager.sendClassSelectionScreen(player, factionId);
-            }
+            // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
+            NetworkManager.sendUnifiedDeployScreen(player, deployTimeout);
         }
 
         Espetro.broadcastToAll("§e请选择你的职业！按 §aJ键 §e打开职业选择界面");
@@ -517,46 +513,132 @@ public class GameStateManager {
 
         teamSelectedPlayers.add(player.getUUID());
 
-        player.removeAllEffects();
-        player.setGameMode(GameType.SURVIVAL);
+        // ===== 根据当前游戏阶段分别处理中途加入者的状态同步 =====
+        switch (currentPhase) {
 
-        teleportToTeamSpawn(player, team);
+            case DEFEND_COMMANDER_VOTE, ATTACK_COMMANDER_VOTE -> {
+                // 投票阶段：保持旁观者+失明状态（与原有一致）
+                String votingTeam = currentPhase.getActiveTeam();
+                int voteRemaining = voteManager.getRemainingSeconds();
 
-        BastionManager bastionManager = BastionManager.getInstance();
-        SpawnPointConfig.SpawnPoint spawnPoint = SpawnPointConfig.getSpawnPoint(team);
-        ServerLevel overworld = server.overworld();
-        bastionManager.savePlayerDeployPoint(player,
-            new BlockPos((int) spawnPoint.x, (int) spawnPoint.y, (int) spawnPoint.z),
-            overworld);
-        bastionManager.activatePlayerBastionSelection(player.getUUID());
+                if (team.equals(votingTeam)) {
+                    // 正在轮到该队投票 -> 给新玩家发送投票界面
+                    NetworkManager.sendCommanderVoteScreenToPlayer(player, team, voteRemaining);
+                    player.sendSystemMessage(Component.literal(
+                        "§6★ 指挥官投票进行中！请投票选择你的指挥官！[§e" + voteRemaining + "秒§6] ★"));
+                    // ★ 关键：重新广播投票界面给全队，同步新玩家的名字到所有已有客户端
+                    NetworkManager.broadcastCommanderVoteScreenForTeam(team, voteRemaining);
+                } else {
+                    // 对方正在投票 -> 显示等待提示
+                    String votingName = "DEFEND".equals(votingTeam) ? "守方" : "攻方";
+                    player.sendSystemMessage(Component.literal(
+                        "§7" + votingName + "正在选择指挥官，请稍候... [§e" + voteRemaining + "秒§7]"));
+                    // 同步对方队伍的等待提示（新玩家名字已加入VoteManager）
+                    NetworkManager.broadcastCommanderVoteScreenForTeam(votingTeam, voteRemaining);
+                }
+            }
 
-        TroopCountManager troopMgr = TroopCountManager.getInstance();
-        NetworkManager.broadcastTroopCounts(
-            troopMgr.getAttackTroops(), troopMgr.getDefendTroops());
+            case DEFEND_FACTION_SELECT, ATTACK_FACTION_SELECT -> {
+                // 编制选择阶段：保持旁观者+失明状态
+                String selectingTeam = currentPhase.getActiveTeam();
+                int selectRemaining = selectManager.getRemainingSeconds();
 
-        String commanderName = "无";
-        UUID commanderUuid = "ATTACK".equals(team)
-            ? voteManager.getAttackCommander()
-            : voteManager.getDefendCommander();
-        if (commanderUuid != null) {
-            ServerPlayer commander = server.getPlayerList().getPlayer(commanderUuid);
-            if (commander != null) {
-                commanderName = commander.getName().getString();
+                UUID cmdUuid = "ATTACK".equals(team) ? voteManager.getAttackCommander()
+                    : voteManager.getDefendCommander();
+                boolean isCmd = cmdUuid != null && cmdUuid.equals(player.getUUID());
+
+                if (team.equals(selectingTeam)) {
+                    if (isCmd) {
+                        NetworkManager.sendClassSelectScreen(player, team, true, selectRemaining);
+                        player.sendSystemMessage(Component.literal(
+                            "§6★ 你是指挥官，请为队伍选择编制！[§e" + selectRemaining + "秒§6] ★"));
+                    } else {
+                        player.sendSystemMessage(Component.literal(
+                            "§7等待指挥官选择编制... [§e" + selectRemaining + "秒§7]"));
+                    }
+                    // ★ 重新广播编制界面给全队（含新玩家名字）
+                    NetworkManager.broadcastClassSelectScreenForTeam(team, selectRemaining);
+                } else {
+                    String selectingName = "DEFEND".equals(selectingTeam) ? "守方" : "攻方";
+                    player.sendSystemMessage(Component.literal(
+                        "§7" + selectingName + "正在选择编制，请稍候... [§e" + selectRemaining + "秒§7]"));
+                    // 同步对方队伍的编制界面
+                    NetworkManager.broadcastClassSelectScreenForTeam(selectingTeam, selectRemaining);
+                }
+            }
+
+            case DEPLOYING -> {
+                // 部署阶段：切换生存模式，同步部署状态
+                player.removeAllEffects();
+                player.setGameMode(GameType.SURVIVAL);
+
+                teleportToTeamSpawn(player, team);
+
+                int deployTimeout = GameConfig.getDeployTimeoutSeconds();
+                if ("ATTACK".equals(team)) {
+                    player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS,
+                        deployTimeout * TICKS_PER_SECOND, 0, false, false, false));
+                    attackDeployPositions.put(player.getUUID(), player.blockPosition());
+                }
+
+                // 发送统一部署主界面
+                NetworkManager.sendUnifiedDeployScreen(player, deployTimeout - (deployTickCounter / TICKS_PER_SECOND));
+                player.sendSystemMessage(Component.literal(
+                    "§a✅ 增援到达部署阶段！请在左侧面板选择职业和部署点"));
+
+                Espetro.broadcastToAll("§e⚡ 增援到达！" + player.getName().getString()
+                    + " 加入了" + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方")
+                    + " §7(部署中)");
+            }
+
+            case BATTLE -> {
+                // 对战阶段：完整增援流程（原逻辑不变）
+                player.removeAllEffects();
+                player.setGameMode(GameType.SURVIVAL);
+
+                teleportToTeamSpawn(player, team);
+
+                BastionManager bastionManager = BastionManager.getInstance();
+                SpawnPointConfig.SpawnPoint spawnPoint = SpawnPointConfig.getSpawnPoint(team);
+                ServerLevel overworld = server.overworld();
+                bastionManager.savePlayerDeployPoint(player,
+                    new BlockPos((int) spawnPoint.x, (int) spawnPoint.y, (int) spawnPoint.z),
+                    overworld);
+                bastionManager.activatePlayerBastionSelection(player.getUUID());
+
+                TroopCountManager troopMgr = TroopCountManager.getInstance();
+                NetworkManager.broadcastTroopCounts(
+                    troopMgr.getAttackTroops(), troopMgr.getDefendTroops());
+
+                String commanderName = "无";
+                UUID commanderUuid = "ATTACK".equals(team)
+                    ? voteManager.getAttackCommander()
+                    : voteManager.getDefendCommander();
+                if (commanderUuid != null) {
+                    ServerPlayer commander = server.getPlayerList().getPlayer(commanderUuid);
+                    if (commander != null) {
+                        commanderName = commander.getName().getString();
+                    }
+                }
+
+                player.sendSystemMessage(Component.literal("§a════════════════════════════════"));
+                player.sendSystemMessage(Component.literal("§a你已作为增援加入"
+                    + ("ATTACK".equals(team) ? "§c进攻方" : "§9防守方") + "§a！"));
+                player.sendSystemMessage(Component.literal("§e编制: §f" + factionId));
+                player.sendSystemMessage(Component.literal("§e指挥官: §f" + commanderName));
+                player.sendSystemMessage(Component.literal("§a════════════════════════════════"));
+                player.sendSystemMessage(Component.literal("§e⚠ 请先在部署面板选择部署点，再选择职业！"));
+
+                NetworkManager.sendUnifiedDeployScreen(player, -1);
+
+                Espetro.broadcastToAll("§e⚡ 增援到达！" + player.getName().getString()
+                    + " 加入了" + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方"));
+            }
+
+            default -> {
+                // 其他阶段保持旁观者状态
             }
         }
-
-        player.sendSystemMessage(Component.literal("§a════════════════════════════════"));
-        player.sendSystemMessage(Component.literal("§a你已作为增援加入"
-            + ("ATTACK".equals(team) ? "§c进攻方" : "§9防守方") + "§a！"));
-        player.sendSystemMessage(Component.literal("§e编制: §f" + factionId));
-        player.sendSystemMessage(Component.literal("§e指挥官: §f" + commanderName));
-        player.sendSystemMessage(Component.literal("§a════════════════════════════════"));
-        player.sendSystemMessage(Component.literal("§e⚠ 请先在下方消息中选择部署点，再选择职业！"));
-
-        org.espetro.network.BastionSelectionPacket.sendBastionSelectionMessage(player);
-
-        Espetro.broadcastToAll("§e⚡ 增援到达！" + player.getName().getString() + " 加入了"
-            + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方"));
     }
 
     public void onMidGameDeployComplete(ServerPlayer player) {
@@ -565,11 +647,11 @@ public class GameStateManager {
         String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
 
         if (factionId != null) {
-            NetworkManager.sendClassSelectionScreen(player, factionId);
+            // 不再发送旧的 ClassSelectionScreen，由 UnifiedDeployScreen 统一处理
             if (wasMidGameJoiner) {
-                player.sendSystemMessage(Component.literal("§a✅ 部署完成！请按 §eJ键 §a选择你的职业"));
+                player.sendSystemMessage(Component.literal("§a✅ 部署完成！"));
             } else {
-                player.sendSystemMessage(Component.literal("§a✅ 已复活！请按 §eJ键 §a重新选择你的职业"));
+                player.sendSystemMessage(Component.literal("§a✅ 已复活！"));
             }
         }
     }

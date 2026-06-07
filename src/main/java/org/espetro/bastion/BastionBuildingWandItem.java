@@ -11,14 +11,15 @@ import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.core.Direction;
 import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GameStateManager;
@@ -28,10 +29,10 @@ import javax.annotation.Nullable;
 import java.util.*;
 
 /**
- * 兵站建筑指令木棍
+ * 兵站建筑指令鱼竿
  * 指挥官使用此物品右键来建造兵站
  */
-public class BastionBuildingWandItem extends Item {
+public class BastionBuildingWandItem extends FishingRodItem {
 
     // 物品标识符
     public static final String BASTION_WAND_ID = "bastion_building_wand";
@@ -64,18 +65,10 @@ public class BastionBuildingWandItem extends Item {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
-        // 检查冷却
+        // 检查冷却（800秒）
         String cooldownMsg = BastionManager.getInstance().canBuildBastion(serverPlayer.getUUID());
         if (cooldownMsg != null) {
             serverPlayer.sendSystemMessage(Component.literal(cooldownMsg));
-            return InteractionResultHolder.fail(player.getItemInHand(hand));
-        }
-
-        // 检查背包是否有足够的木板
-        int requiredPlanks = BastionManager.getInstance().getRequiredPlanks();
-        int plankCount = countPlanksInInventory(serverPlayer);
-        if (plankCount < requiredPlanks) {
-            serverPlayer.sendSystemMessage(Component.literal("§c建筑材料不足！需要 " + requiredPlanks + " 个木板，当前只有 " + plankCount + " 个。"));
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
@@ -86,6 +79,13 @@ public class BastionBuildingWandItem extends Item {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
+        // 检查队伍兵站数量上限（最多3个）
+        int teamBastionCount = BastionManager.getInstance().getTeamBastions(team).size();
+        if (teamBastionCount >= BastionManager.MAX_BASTIONS_PER_TEAM) {
+            serverPlayer.sendSystemMessage(Component.literal("§c你的队伍已达到兵站数量上限（" + BastionManager.MAX_BASTIONS_PER_TEAM + "个），无法继续建造！"));
+            return InteractionResultHolder.fail(player.getItemInHand(hand));
+        }
+
         // 获取玩家视线方向的方块位置，Y高度与指挥官一致
         BlockPos lookPos = getTargetBlockPos(serverPlayer);
         if (lookPos == null) {
@@ -93,9 +93,6 @@ public class BastionBuildingWandItem extends Item {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
         BlockPos targetPos = new BlockPos(lookPos.getX(), serverPlayer.blockPosition().getY(), lookPos.getZ());
-
-        // 消耗木板
-        consumePlanks(serverPlayer, requiredPlanks);
 
         // 生成默认名称
         String bastionName = generateBastionName(team);
@@ -115,6 +112,9 @@ public class BastionBuildingWandItem extends Item {
             // 放置小房子
             buildBastionStructure(serverLevel, targetPos, team);
 
+            // 记录弹药补给潜影盒位置
+            bastion.setShulkerPos(new BlockPos(targetPos.getX(), targetPos.getY(), targetPos.getZ() + 1));
+
             // 播放建造音效
             serverLevel.playSound(null, targetPos, SoundEvents.EXPERIENCE_ORB_PICKUP,
                 SoundSource.PLAYERS, 1.0f, 1.0f);
@@ -123,9 +123,7 @@ public class BastionBuildingWandItem extends Item {
             serverPlayer.sendSystemMessage(Component.literal("§7兵站建造冷却: " + cooldownSeconds + "秒"));
             Espetro.broadcastToTeam(team, "§6[兵站] §a指挥官 §e" + serverPlayer.getName().getString() + " §a建造了兵站 §b" + bastionName);
         } else {
-            // 创建失败，返还木板
-            givePlanks(serverPlayer, requiredPlanks);
-            serverPlayer.sendSystemMessage(Component.literal("§c兵站创建失败！材料已返还。"));
+            serverPlayer.sendSystemMessage(Component.literal("§c兵站创建失败！"));
         }
 
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
@@ -136,59 +134,6 @@ public class BastionBuildingWandItem extends Item {
      */
     private boolean isCommander(ServerPlayer player) {
         return VoteManager.getInstance().isCommander(player.getUUID());
-    }
-
-    /**
-     * 计算背包中的木板数量
-     */
-    private int countPlanksInInventory(ServerPlayer player) {
-        int count = 0;
-        for (ItemStack stack : player.getInventory().items) {
-            if (stack.is(Items.OAK_PLANKS) || stack.is(Items.SPRUCE_PLANKS) ||
-                stack.is(Items.BIRCH_PLANKS) || stack.is(Items.JUNGLE_PLANKS) ||
-                stack.is(Items.ACACIA_PLANKS) || stack.is(Items.DARK_OAK_PLANKS) ||
-                stack.is(Items.CHERRY_PLANKS) || stack.is(Items.MANGROVE_PLANKS) ||
-                stack.is(Items.BAMBOO_PLANKS) || stack.is(Items.CRIMSON_PLANKS) ||
-                stack.is(Items.WARPED_PLANKS)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
-    }
-
-    /**
-     * 消耗木板
-     */
-    private void consumePlanks(ServerPlayer player, int amount) {
-        int remaining = amount;
-        for (int i = 0; i < player.getInventory().items.size() && remaining > 0; i++) {
-            ItemStack stack = player.getInventory().items.get(i);
-            if (isPlank(stack)) {
-                int toRemove = Math.min(remaining, stack.getCount());
-                stack.shrink(toRemove);
-                remaining -= toRemove;
-            }
-        }
-    }
-
-    /**
-     * 返还木板
-     */
-    private void givePlanks(ServerPlayer player, int amount) {
-        ItemStack planks = new ItemStack(Items.OAK_PLANKS, amount);
-        player.getInventory().add(planks);
-    }
-
-    /**
-     * 检查是否是木板
-     */
-    private boolean isPlank(ItemStack stack) {
-        return stack.is(Items.OAK_PLANKS) || stack.is(Items.SPRUCE_PLANKS) ||
-            stack.is(Items.BIRCH_PLANKS) || stack.is(Items.JUNGLE_PLANKS) ||
-            stack.is(Items.ACACIA_PLANKS) || stack.is(Items.DARK_OAK_PLANKS) ||
-            stack.is(Items.CHERRY_PLANKS) || stack.is(Items.MANGROVE_PLANKS) ||
-            stack.is(Items.BAMBOO_PLANKS) || stack.is(Items.CRIMSON_PLANKS) ||
-            stack.is(Items.WARPED_PLANKS);
     }
 
     /**
@@ -281,18 +226,21 @@ public class BastionBuildingWandItem extends Item {
         // === 内部装饰 ===
         // 灯笼
         level.setBlock(new BlockPos(x, y + 1, z + 1), Blocks.LANTERN.defaultBlockState(), 3);
+        // 弹药补给潜影盒（灯笼正下方地面，队伍颜色）
+        BlockPos shulkerPos = new BlockPos(x, y, z + 1);
+        BlockState shulkerBox = (isAttack ? Blocks.RED_SHULKER_BOX : Blocks.BLUE_SHULKER_BOX)
+            .defaultBlockState().setValue(ShulkerBoxBlock.FACING, Direction.SOUTH);
+        level.setBlock(shulkerPos, shulkerBox, 3);
     }
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         BastionManager config = BastionManager.getInstance();
-        int requiredPlanks = config.getRequiredPlanks();
         int cooldown = config.getCooldownSeconds();
         int health = config.getArmorStandHealth();
 
         tooltip.add(Component.literal("§6你总不会是战犯吧"));
-        tooltip.add(Component.literal("§e右键使用消耗" + requiredPlanks + "个木板"));
-        tooltip.add(Component.literal("§e在目标位置建造兵站"));
+        tooltip.add(Component.literal("§e右键在目标位置建造兵站"));
         tooltip.add(Component.literal("§7放置一个有" + health + "血的盔甲架作为核心"));
         tooltip.add(Component.literal("§c使用冷却: " + cooldown + "秒"));
     }

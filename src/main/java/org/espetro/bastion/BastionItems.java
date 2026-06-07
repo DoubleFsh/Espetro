@@ -13,19 +13,19 @@ import org.espetro.Espetro;
 @Mod.EventBusSubscriber(modid = Espetro.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class BastionItems {
 
-    // 兵站建筑指令木棍
+    // 兵站建筑指令鱼竿
     public static BastionBuildingWandItem BASTION_BUILDING_WAND;
 
     @SubscribeEvent
     public static void registerItems(RegisterEvent event) {
         event.register(Registries.ITEM, helper -> {
-            // 创建兵站建筑指令木棍
+            // 创建兵站建筑指令鱼竿
             BASTION_BUILDING_WAND = new BastionBuildingWandItem();
             helper.register(
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, BastionBuildingWandItem.BASTION_WAND_ID),
                 BASTION_BUILDING_WAND
             );
-            Espetro.LOGGER.info("注册兵站建筑指令木棍: {}", BastionBuildingWandItem.BASTION_WAND_ID);
+            Espetro.LOGGER.info("注册兵站建筑指令鱼竿: {}", BastionBuildingWandItem.BASTION_WAND_ID);
         });
     }
 }

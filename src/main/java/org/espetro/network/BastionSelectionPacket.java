@@ -72,7 +72,7 @@ public class BastionSelectionPacket {
     }
 
     /**
-     * 向死亡玩家发送复活点选择 GUI 界面
+     * 旧复活点选择入口的兼容转发：实际发送统一部署面板。
      */
     public static void sendBastionSelectionMessage(ServerPlayer player) {
         org.espetro.network.NetworkManager.sendDeployPointSelectScreen(player);
@@ -107,25 +107,46 @@ public class BastionSelectionPacket {
 
         // 检查玩家是否在等待复活
         if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
-            // 玩家已经复活，不再允许重复选择
             player.sendSystemMessage(Component.literal("§c你已经完成了复活选择！"));
             return false;
         }
 
-        // 清除等待状态（必须在传送前清除，防止重复点击）
+        // 立即清除等待状态，防止重复点击
         BastionManager.getInstance().clearWaiting(player.getUUID());
 
+        // 远距离兵站所在区块可能尚未加载，先加载再延迟传送
+        selectedBastion.ensureChunkLoaded();
+        final BastionData finalBastion = selectedBastion;
+        final ServerPlayer finalPlayer = player;
+
+        // 延迟到下一个 tick 传送：等待区块内实体完全就绪
+        player.server.execute(() -> doTeleport(finalPlayer, finalBastion));
+
+        return true;
+    }
+
+    /**
+     * 执行传送：区块已加载，实体已就绪，校验盔甲架后传送玩家
+     */
+    private static void doTeleport(ServerPlayer player, BastionData bastion) {
+        // 二次校验盔甲架是否有效（此时区块实体应已就绪）
+        if (!bastion.checkArmorStand()) {
+            BastionManager.getInstance().setBastionActive(bastion, false);
+            // 盔甲架失效，回退到原部署点
+            if (BastionManager.getInstance().respawnAtDeployPoint(player.server.overworld(), player)) {
+                player.sendSystemMessage(Component.literal("§e该兵站已失效，已自动在原部署点复活"));
+            } else {
+                player.sendSystemMessage(Component.literal("§c该兵站已失效，且无可用原部署点！"));
+            }
+            return;
+        }
+
         // 传送玩家到兵站位置
-        org.espetro.team.SpawnPointConfig.SpawnPoint spawn = 
-            new org.espetro.team.SpawnPointConfig.SpawnPoint(
-                selectedBastion.getPosition().getX() + 0.5,
-                selectedBastion.getPosition().getY() + 1,
-                selectedBastion.getPosition().getZ() + 0.5,
-                0f
-            );
-        
-        player.teleportTo(selectedBastion.getLevel(), 
-            spawn.x, spawn.y, spawn.z, spawn.yaw, 0f);
+        player.teleportTo(bastion.getLevel(),
+            bastion.getPosition().getX() + 0.5,
+            bastion.getPosition().getY() + 1,
+            bastion.getPosition().getZ() + 0.5,
+            0f, 0f);
 
         // 设置生存模式
         player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
@@ -138,12 +159,10 @@ public class BastionSelectionPacket {
         player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
             net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE,
             invincibilityTicks,
-            127, // 最大等级
+            127,
             false, false, false
         ));
 
-        player.sendSystemMessage(Component.literal("§a已在 §e" + selectedBastion.getName() + " §a复活！"));
-
-        return true;
+        player.sendSystemMessage(Component.literal("§a已在 §e" + bastion.getName() + " §a复活！"));
     }
 }
