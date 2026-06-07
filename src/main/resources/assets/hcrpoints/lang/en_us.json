@@ -1,0 +1,11 @@
+{
+  "mod.hcrpoints.name": "HCR AAD",
+  "key.categories.hcrpoints": "HCR Capture Points",
+  "key.hcrpoints.open_gui": "Open Point Info",
+  "key.hcrpoints.tactical_map": "Toggle Tactical Map",
+  "key.hcrpoints.map_display_mode": "Cycle Map Display Mode",
+  "key.hcrpoints.map_config": "Open Map Config",
+  "key.hcrpoints.open_md_reader": "Open MD Reader",
+  "gui.hcrpoints.md_reader.title": "MD File Reader",
+  "gui.hcrpoints.md_reader.file_list": "File List"
+}

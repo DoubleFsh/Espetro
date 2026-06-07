@@ -1,0 +1,13 @@
+
+[tacticalMap]
+	#战术地图显示模式
+	#Allowed Values: TOGGLE_KEY, ALWAYS_VISIBLE_BOTTOM_LEFT, ALWAYS_VISIBLE_TOP_LEFT, ALWAYS_VISIBLE_BOTTOM_RIGHT, ALWAYS_VISIBLE_TOP_RIGHT
+	displayMode = "TOGGLE_KEY"
+	#迷你地图缩放比例 (百分比)
+	#Range: 25 ~ 100
+	miniMapScale = 75
+	#攻方进度条颜色 (十六进制，如：#FF5500)
+	attackerProgressBarColor = "#FF5500"
+	#守方进度条颜色 (十六进制，如：#0055FF)
+	defenderProgressBarColor = "#0055FF"
+

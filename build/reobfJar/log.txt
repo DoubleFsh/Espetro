@@ -124,37 +124,37 @@ Reading Input: /home/shushu/IdeaProjects/Espetro/build/libs/espetro-1.6.0-final.
 Adding input to inheritance map
 Processing entries
 Conflicting propagated mapping for net/minecraft/world/entity/LivingEntity/lambda$addAdditionalSaveData$3(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/nbt/Tag;)V from net/minecraft/world/entity/player/Player/lambda$addAdditionalSaveData$3(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/nbt/Tag;)V: lambda$addAdditionalSaveData$3 -> m_219754_
-Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
-Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
-Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
-Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/bastion/BastionBuildingWandItem/appendHoverText(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;Ljava/util/List;Lnet/minecraft/world/item/TooltipFlag;)V from net/minecraft/world/item/Item/appendHoverText(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;Ljava/util/List;Lnet/minecraft/world/item/TooltipFlag;)V: appendHoverText -> m_7373_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen$TransparentTextButton/updateWidgetNarration(Lnet/minecraft/client/gui/narration/NarrationElementOutput;)V from net/minecraft/client/gui/components/AbstractWidget/updateWidgetNarration(Lnet/minecraft/client/gui/narration/NarrationElementOutput;)V: updateWidgetNarration -> m_168797_
-Conflicting propagated mapping for org/espetro/bastion/BastionBuildingWandItem/use(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResultHolder; from net/minecraft/world/item/FishingRodItem/use(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResultHolder;: use -> m_7203_
+Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen$TransparentTextButton/onClick(DD)V from net/minecraft/client/gui/components/AbstractWidget/onClick(DD)V: onClick -> m_5716_
-Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/keyPressed(III)Z from net/minecraft/client/gui/screens/Screen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen$TransparentTextButton/renderWidget(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/components/AbstractWidget/renderWidget(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: renderWidget -> m_87963_
+Conflicting propagated mapping for org/espetro/bastion/BastionBuildingWandItem/use(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResultHolder; from net/minecraft/world/item/FishingRodItem/use(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResultHolder;: use -> m_7203_
+Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/keyPressed(III)Z from net/minecraft/client/gui/screens/Screen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/keyReleased(III)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/keyReleased(III)Z: keyReleased -> m_7920_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
@@ -165,6 +165,32 @@ Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/ch
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/mouseReleased(DDI)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/Espetro$ServerCommandHandler$1/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture; from net/minecraft/server/packs/resources/PreparableReloadListener/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;: reload -> m_5540_
 Conflicting propagated mapping for org/espetro/Espetro$ServerCommandHandler$1/getName()Ljava/lang/String; from net/minecraft/server/packs/resources/PreparableReloadListener/getName()Ljava/lang/String;: getName -> m_7812_
+Conflicting propagated mapping for net/minecraftforge/client/gui/overlay/ForgeGui/clearCache()V from net/minecraft/client/gui/Gui/clearCache()V: clearCache -> m_93091_
+Conflicting propagated mapping for net/minecraftforge/client/gui/overlay/ForgeGui/render(Lnet/minecraft/client/gui/GuiGraphics;F)V from net/minecraft/client/gui/Gui/render(Lnet/minecraft/client/gui/GuiGraphics;F)V: render -> m_280421_
+Conflicting propagated mapping for net/minecraftforge/client/gui/overlay/ForgeGui/renderPortalOverlay(Lnet/minecraft/client/gui/GuiGraphics;F)V from net/minecraft/client/gui/Gui/renderPortalOverlay(Lnet/minecraft/client/gui/GuiGraphics;F)V: renderPortalOverlay -> m_280379_
+Conflicting propagated mapping for net/minecraftforge/client/gui/overlay/ForgeGui/renderJumpMeter(Lnet/minecraft/world/entity/PlayerRideableJumping;Lnet/minecraft/client/gui/GuiGraphics;I)V from net/minecraft/client/gui/Gui/renderJumpMeter(Lnet/minecraft/world/entity/PlayerRideableJumping;Lnet/minecraft/client/gui/GuiGraphics;I)V: renderJumpMeter -> m_280069_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/CapturePointDetailsScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/CapturePointDetailsScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/CapturePointDetailsScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/keyPressed(III)Z from net/minecraft/client/gui/screens/Screen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/mouseScrolled(DDD)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/mouseClicked(DDI)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/MDRenderScreen/resize(Lnet/minecraft/client/Minecraft;II)V from net/minecraft/client/gui/screens/Screen/resize(Lnet/minecraft/client/Minecraft;II)V: resize -> m_6574_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/isPauseScreen()Z from net/minecraft/client/gui/screens/Screen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/mouseScrolled(DDD)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/mouseClicked(DDI)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/mouseDragged(DDIDD)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseDragged(DDIDD)Z: mouseDragged -> m_7979_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/TacticalMapConfigScreen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V from net/minecraft/client/gui/screens/Screen/render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V: render -> m_88315_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/TacticalMapConfigScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/ServerConfigScreen/mouseReleased(DDI)Z from net/minecraft/client/gui/components/events/ContainerEventHandler/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/TacticalMapConfigScreen/init()V from net/minecraft/client/gui/screens/Screen/init()V: init -> m_7856_
+Conflicting propagated mapping for com/example/hcrpoints/client/gui/TacticalMapConfigScreen/tick()V from net/minecraft/client/gui/screens/Screen/tick()V: tick -> m_86600_
 Adding extras
 Sorting
 Writing Output: /home/shushu/IdeaProjects/Espetro/build/reobfJar/output.jar
@@ -181,6 +207,85 @@ Writing Output: /home/shushu/IdeaProjects/Espetro/build/reobfJar/output.jar
   assets/espetro/models/item/bastion_building_wand.json
   assets/espetro/models/item/vehicle_deploy_book.json
   assets/espetro/models/item/vehicle_deploy_stick.json
+  assets/hcrpoints/
+  assets/hcrpoints/lang/
+  assets/hcrpoints/lang/en_us.json
+  assets/hcrpoints/lang/zh_cn.json
+  assets/hcrpoints/md_templates/
+  assets/hcrpoints/md_templates/HCR AAD￦ﾨﾡ￧ﾻﾄ￤ﾽ﾿￧ﾔﾨ￦ﾕﾙ￧ﾨﾋ.md
+  assets/hcrpoints/md_templates/MD￩ﾘﾅ￨ﾯﾻ￥ﾙﾨ￤ﾽ﾿￧ﾔﾨ￦ﾕﾙ￧ﾨﾋ.md
+  com/
+  com/example/
+  com/example/hcrpoints/
+  com/example/hcrpoints/HCRPointsMod$ClientModEvents.class
+  com/example/hcrpoints/HCRPointsMod.class
+  com/example/hcrpoints/api/
+  com/example/hcrpoints/api/HCRAPI.class
+  com/example/hcrpoints/capturepoint/
+  com/example/hcrpoints/capturepoint/CapturePoint$1.class
+  com/example/hcrpoints/capturepoint/CapturePoint$SerializableCapturePoint.class
+  com/example/hcrpoints/capturepoint/CapturePoint.class
+  com/example/hcrpoints/capturepoint/CapturePointManager$CapturedInfo.class
+  com/example/hcrpoints/capturepoint/CapturePointManager$PlannedCapturePoint.class
+  com/example/hcrpoints/capturepoint/CapturePointManager.class
+  com/example/hcrpoints/capturepoint/CaptureState.class
+  com/example/hcrpoints/capturepoint/DisplayState.class
+  com/example/hcrpoints/client/
+  com/example/hcrpoints/client/AudioManager.class
+  com/example/hcrpoints/client/ClientEventHandler.class
+  com/example/hcrpoints/client/ClientProxy.class
+  com/example/hcrpoints/client/PlayerTeamIndicator.class
+  com/example/hcrpoints/client/gui/
+  com/example/hcrpoints/client/gui/CapturePointDetailsScreen$1.class
+  com/example/hcrpoints/client/gui/CapturePointDetailsScreen.class
+  com/example/hcrpoints/client/gui/MDRenderScreen$MdTitle.class
+  com/example/hcrpoints/client/gui/MDRenderScreen$ScreenState.class
+  com/example/hcrpoints/client/gui/MDRenderScreen.class
+  com/example/hcrpoints/client/gui/ServerConfigScreen.class
+  com/example/hcrpoints/client/gui/TacticalMapConfigScreen.class
+  com/example/hcrpoints/command/
+  com/example/hcrpoints/command/CapturePointPresetManager$1.class
+  com/example/hcrpoints/command/CapturePointPresetManager$BlockPosAdapter.class
+  com/example/hcrpoints/command/CapturePointPresetManager$PresetData.class
+  com/example/hcrpoints/command/CapturePointPresetManager$SerializableCapturePoint.class
+  com/example/hcrpoints/command/CapturePointPresetManager.class
+  com/example/hcrpoints/command/HCRCommand.class
+  com/example/hcrpoints/command/TeamfightPresetManager$1.class
+  com/example/hcrpoints/command/TeamfightPresetManager$BlockPosAdapter.class
+  com/example/hcrpoints/command/TeamfightPresetManager$PresetData.class
+  com/example/hcrpoints/command/TeamfightPresetManager$SerializablePlannedPoint.class
+  com/example/hcrpoints/command/TeamfightPresetManager.class
+  com/example/hcrpoints/config/
+  com/example/hcrpoints/config/MapPlayerDisplayConfig.class
+  com/example/hcrpoints/config/ModConfig.class
+  com/example/hcrpoints/config/TacticalMapConfig.class
+  com/example/hcrpoints/hud/
+  com/example/hcrpoints/hud/AreaInfoHUD.class
+  com/example/hcrpoints/hud/CapturePointHUD$1.class
+  com/example/hcrpoints/hud/CapturePointHUD.class
+  com/example/hcrpoints/hud/CurrentCapturePointHUD$1.class
+  com/example/hcrpoints/hud/CurrentCapturePointHUD.class
+  com/example/hcrpoints/hud/MapDisplayMode.class
+  com/example/hcrpoints/hud/MessagePopup$MessageEntry.class
+  com/example/hcrpoints/hud/MessagePopup.class
+  com/example/hcrpoints/hud/ReinforcementsHUD.class
+  com/example/hcrpoints/hud/TacticalMapHUD$1.class
+  com/example/hcrpoints/hud/TacticalMapHUD$InstanceHolder.class
+  com/example/hcrpoints/hud/TacticalMapHUD$PlayerDistanceInfo.class
+  com/example/hcrpoints/hud/TacticalMapHUD.class
+  com/example/hcrpoints/network/
+  com/example/hcrpoints/network/NetworkHandler.class
+  com/example/hcrpoints/network/PlayLowReinforcementAudioMessage.class
+  com/example/hcrpoints/network/ShowMessagePopupMessage.class
+  com/example/hcrpoints/network/SyncCapturePointsMessage.class
+  com/example/hcrpoints/network/SyncConfigMessage.class
+  com/example/hcrpoints/network/SyncMapPlayerDisplayMessage.class
+  com/example/hcrpoints/network/SyncOperationModeMessage.class
+  com/example/hcrpoints/network/SyncPlayerPositionsMessage$PlayerPosition.class
+  com/example/hcrpoints/network/SyncPlayerPositionsMessage.class
+  com/example/hcrpoints/util/
+  com/example/hcrpoints/util/ModLogger.class
+  com/example/hcrpoints/util/TutorialManager.class
   data/
   data/espetro/
   data/espetro/config/
@@ -298,3 +403,5 @@ Writing Output: /home/shushu/IdeaProjects/Espetro/build/reobfJar/output.jar
   org/espetro/vehicle/VehicleItems.class
   org/espetro/vehicle/VehicleManager.class
   pack.mcmeta
+  textures/
+  textures/capture_point_details.png

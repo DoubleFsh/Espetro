@@ -1,0 +1,11 @@
+{
+  "key.category.hcrpoints": "HCR AAD",
+  "key.categories.hcrpoints": "HCR据点系统",
+  "key.hcrpoints.open_gui": "打开据点信息",
+  "key.hcrpoints.tactical_map": "切换战术地图",
+  "key.hcrpoints.map_display_mode": "切换地图显示模式",
+  "key.hcrpoints.map_config": "打开地图配置界面",
+  "key.hcrpoints.open_md_reader": "打开MD文件阅读器",
+  "gui.hcrpoints.md_reader.title": "MD文件阅读器",
+  "gui.hcrpoints.md_reader.file_list": "文件列表"
+}

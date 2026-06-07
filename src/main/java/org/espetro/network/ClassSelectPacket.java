@@ -84,16 +84,13 @@ public class ClassSelectPacket {
             // 2) 始终检查 SpawnPointConfig 中该队伍当前配置的部署点
             //    （覆盖 /espetro spawnpoint here 重新设置后旧记录不同步的情况）
             if (!inRange) {
-                String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
-                if (factionId != null) {
-                    String team = GameStateManager.getTeamFromFactionStatic(factionId);
-                    if (team != null) {
-                        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
-                        if (spawn != null) {
-                            BlockPos teamSpawnPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
-                            if (playerPos.closerThan(teamSpawnPos, 6)) {
-                                inRange = true;
-                            }
+                String team = countManager.getEffectivePlayerTeam(player.getUUID());
+                if (team != null) {
+                    SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
+                    if (spawn != null) {
+                        BlockPos teamSpawnPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
+                        if (playerPos.closerThan(teamSpawnPos, 6)) {
+                            inRange = true;
                         }
                     }
                 }
@@ -131,7 +128,9 @@ public class ClassSelectPacket {
             }
 
             // 同步人数给玩家
-            ClassCountSyncPacket syncPacket = new ClassCountSyncPacket(countManager.getCountsForFaction(teamOrFaction), teamOrFaction);
+            String team = countManager.getEffectivePlayerTeam(player.getUUID());
+            ClassCountSyncPacket syncPacket = new ClassCountSyncPacket(
+                countManager.getCountsForFaction(team, teamOrFaction), teamOrFaction);
             NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), syncPacket);
         });
         ctx.get().setPacketHandled(true);

@@ -92,7 +92,8 @@ public class ClassCountSyncPacket {
             if (player != null) {
                 // 服务端处理：收到请求，返回人数数据
                 ClassCountManager countManager = ClassCountManager.getInstance();
-                Map<String, Integer> counts = countManager.getCountsForFaction(factionId);
+                String team = countManager.getEffectivePlayerTeam(player.getUUID());
+                Map<String, Integer> counts = countManager.getCountsForFaction(team, factionId);
                 ClassCountSyncPacket response = new ClassCountSyncPacket(counts, factionId);
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);
             } else {

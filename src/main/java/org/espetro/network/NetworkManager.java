@@ -535,7 +535,7 @@ public class NetworkManager {
         FactionDataLoader.ClassKitData[] kits = loader.getClassesForFaction(factionId);
         if (kits != null) {
             for (FactionDataLoader.ClassKitData kit : kits) {
-                int count = ClassCountManager.getInstance().getCount(kit.id);
+                int count = ClassCountManager.getInstance().getCount(team, kit.id);
                 classList.add(new UnifiedDeployScreenPacket.ClassInfo(
                     kit.id, kit.name, kit.description, kit.role,
                     kit.maxPlayers, count, kit.troopValue, kit.healthBonus, kit.speedBonus

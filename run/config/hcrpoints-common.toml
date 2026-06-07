@@ -1,0 +1,53 @@
+
+["HUD Settings"]
+	#启用HUD显示
+	enableHUD = true
+	#启用据点信息轮播
+	enableCarousel = true
+
+["Team Settings"]
+	#启用队伍机制，避免同队伍玩家互相争夺同一据点
+	enableTeams = false
+	#在玩家头顶显示敌我标识（友军绿色箭头/敌军红色倒三角），需要队伍机制同时启用
+	enableTeamIndicator = true
+
+["Performance Settings"]
+	#据点检查间隔（tick）
+	#Range: 1 ~ 100
+	checkInterval = 5
+
+["Reward Settings"]
+	#据点内获得点数的时间间隔（秒）
+	#Range: 1 ~ 3600
+	pointRewardInterval = 60
+	#据点内每次获得的点数
+	#Range: 1 ~ 1000
+	pointRewardAmount = 5
+	#击杀玩家获得的点数
+	#Range: 1 ~ 1000
+	killRewardAmount = 50
+	#占领据点获得的点数
+	#Range: 1 ~ 1000
+	captureRewardAmount = 100
+	#占领据点后，获得持续奖励的时间间隔（秒）
+	#Range: 1 ~ 3600
+	capturedRewardInterval = 60
+	#占领据点后，每次获得的持续奖励点数
+	#Range: 1 ~ 1000
+	capturedRewardAmount = 10
+	#占领据点后，开始获得持续奖励的延迟时间（秒）
+	#Range: 1 ~ 3600
+	capturedRewardDelay = 5
+	#启用友军击杀惩罚
+	enableFriendlyFirePenalty = true
+	#友军击杀扣除的点数
+	#Range: 1 ~ 10000
+	friendlyFirePenalty = 200
+
+["Operation Settings"]
+	#启用行动攻防机制，类似于战地1的行动模式
+	enableOperationMode = false
+	#当一方兵力低于此百分比时播放背水一战背景音乐（0-100，设置为0则不播放）
+	#Range: 0.0 ~ 100.0
+	lowReinforcementThreshold = 10.0
+
