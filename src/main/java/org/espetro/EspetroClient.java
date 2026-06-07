@@ -19,11 +19,13 @@ public class EspetroClient {
         net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
             .addListener(EspetroClient::registerKeyBindings);
 
-        // 注册 FORGE 事件总线（Tick + HUD 渲染）
+        // 注册 FORGE 事件总线（Tick + HUD 渲染 + 隐藏玩家名字）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onClientTick);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderOverlay);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onRenderNameTag);
     }
 
     // ==================== 事件处理方法 ====================
@@ -69,6 +71,16 @@ public class EspetroClient {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc != null && mc.screen == null && mc.level != null) {
             org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
+        }
+    }
+
+    /**
+     * 隐藏所有玩家头顶的名字标签（完全取消渲染）
+     * 注意：服务端 PlayerTeam.setNameTagVisibility(NEVER) 作为主要手段处理此问题
+     */
+    private static void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {
+        if (event.getEntity() instanceof net.minecraft.world.entity.player.Player) {
+            event.setContent(net.minecraft.network.chat.Component.empty());
         }
     }
 }

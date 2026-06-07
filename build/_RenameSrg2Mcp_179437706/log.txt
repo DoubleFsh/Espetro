@@ -1,0 +1,15 @@
+Java Launcher: /home/shushu/.gradle/jdks/eclipse_adoptium-17-amd64-linux/jdk-17.0.18+8/bin/java
+Arguments: '--task, SRG_TO_MCP, --input, /home/shushu/.gradle/caches/modules-2/files-2.1/curse.maven/mutil-351914/7772906/29a233bbe5b156f16bfe67e402681a490c843062/mutil-351914-7772906.jar, --output, /home/shushu/.gradle/caches/forge_gradle/deobf_dependencies/curse/maven/mutil-351914/7772906_mapped_official_1.20.1/mutil-351914-7772906_mapped_official_1.20.1.jar, --mcp, /home/shushu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip, --strip-signatures'
+Classpath:
+ - /home/shushu/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/installertools/1.4.4/installertools-1.4.4-fatjar.jar
+Working directory: /home/shushu/IdeaProjects/Espetro/build/_RenameSrg2Mcp_179437706
+Main class: net.minecraftforge.installertools.ConsoleTool
+====================================
+Task: SRG_TO_MCP
+Input:  /home/shushu/.gradle/caches/modules-2/files-2.1/curse.maven/mutil-351914/7772906/29a233bbe5b156f16bfe67e402681a490c843062/mutil-351914-7772906.jar
+Output: /home/shushu/.gradle/caches/forge_gradle/deobf_dependencies/curse/maven/mutil-351914/7772906_mapped_official_1.20.1/mutil-351914-7772906_mapped_official_1.20.1.jar
+MCP:    /home/shushu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip
+Loading MCP Data
+Processing ZIP file
+Stripped Manifest of sha digests
+Process complete

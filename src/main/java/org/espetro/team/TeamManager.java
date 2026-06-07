@@ -5,6 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.Team;
 
 /**
  * 队伍管理器
@@ -31,6 +32,7 @@ public class TeamManager {
             attackTeam.setColor(ChatFormatting.RED);
             attackTeam.setDisplayName(Component.literal(ATTACK_DISPLAY_NAME));
         }
+        attackTeam.setNameTagVisibility(Team.Visibility.NEVER);
 
         // 创建防守队伍
         PlayerTeam defendTeam = scoreboard.getPlayerTeam(DEFEND_TEAM_ID);
@@ -39,6 +41,7 @@ public class TeamManager {
             defendTeam.setColor(ChatFormatting.BLUE);
             defendTeam.setDisplayName(Component.literal(DEFEND_DISPLAY_NAME));
         }
+        defendTeam.setNameTagVisibility(Team.Visibility.NEVER);
     }
 
     /**

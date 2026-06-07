@@ -255,10 +255,35 @@ public class FactionDataLoader {
          */
         public String[] commands;
 
+        /** 弹药补给配置（可选） */
+        public ResupplyData resupply;
+
         public int maxPlayers = 5;
         public int healthBonus = 0;
         public float speedBonus = 0f;
         public int troopValue = 1;
+    }
+
+    /**
+     * 弹药补给数据
+     */
+    public static class ResupplyData {
+        /** 补给物品列表 */
+        public ResupplyItem[] items;
+        /** 单局最大补给次数，默认3 */
+        public int maxResupplies = 3;
+    }
+
+    /**
+     * 单个补给物品配置
+     */
+    public static class ResupplyItem {
+        /** 物品注册名，如 "minecraft:arrow" */
+        public String id;
+        /** 每次补给数量 */
+        public int count = 16;
+        /** 背包中该物品数量上限 */
+        public int max = 64;
     }
 
     /**

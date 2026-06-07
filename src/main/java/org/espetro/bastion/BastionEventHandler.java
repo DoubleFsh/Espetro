@@ -1,6 +1,9 @@
 package org.espetro.bastion;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -9,7 +12,11 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
@@ -24,6 +31,8 @@ import org.espetro.bastion.BastionBuildingWandItem;
 import org.espetro.bastion.BastionManager;
 import org.espetro.network.BastionSelectionPacket;
 import org.espetro.team.ClassCountManager;
+import org.espetro.team.FactionDataLoader;
+import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
 import org.espetro.team.SpawnPointConfig;
@@ -78,6 +87,9 @@ public class BastionEventHandler {
         // 记录死亡状态
         BastionManager.getInstance().onPlayerDeath(player.server.overworld(), player.getUUID());
 
+        // 重置弹药补给次数（每次死亡后重新计算）
+        BastionManager.getInstance().resetResupplyCount(player.getUUID());
+
         Espetro.LOGGER.info("玩家 {} 死亡，进入兵站选择状态", player.getName().getString());
     }
 
@@ -102,13 +114,13 @@ public class BastionEventHandler {
             Vec3 lockPos = player.position();
             BastionManager.getInstance().lockPlayerPosition(player.getUUID(), lockPos);
 
-            // 延迟发送兵站选择消息（等玩家完全重生）
+            // 延迟发送统一部署界面（等玩家完全重生）
             ServerPlayer finalPlayer = player;
             player.server.execute(() -> {
                 // 再次检查状态
                 if (BastionManager.getInstance().isWaitingForBastion(finalPlayer.getUUID())) {
-                    // 发送兵站选择消息
-                    BastionSelectionPacket.sendBastionSelectionMessage(finalPlayer);
+                    // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
+                    org.espetro.network.NetworkManager.sendUnifiedDeployScreen(finalPlayer, -1);
                 }
             });
         }
@@ -172,7 +184,7 @@ public class BastionEventHandler {
                     if (bastion.getArmorStandId() != null &&
                         bastion.getArmorStandId().equals(armorStandId)) {
 
-                        bastion.setActive(false);
+                        BastionManager.getInstance().setBastionActive(bastion, false);
                         bastionName = bastion.getName();
                         bastionTeam = bastion.getTeam();
                         found = true;
@@ -207,6 +219,103 @@ public class BastionEventHandler {
                 }
             }
         }
+    }
+
+    /**
+     * 玩家右击兵站潜影盒 - 弹药补给
+     */
+    @SubscribeEvent
+    public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        ServerLevel level = (ServerLevel) event.getLevel();
+        BlockPos clickedPos = event.getPos();
+        BlockState state = level.getBlockState(clickedPos);
+
+        // 检查是否是潜影盒
+        if (!state.is(Blocks.RED_SHULKER_BOX) && !state.is(Blocks.BLUE_SHULKER_BOX)) return;
+
+        // 根据潜影盒位置查找兵站
+        BastionData bastion = BastionManager.getInstance().findBastionByShulkerPos(clickedPos);
+        if (bastion == null) return;
+
+        // 检查是否是同一个队伍
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null || !team.equals(bastion.getTeam())) {
+            return; // 静默，不给敌方提示
+        }
+
+        // 获取玩家职业配置
+        String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
+        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
+        if (classId == null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
+            event.setCanceled(true);
+            return;
+        }
+
+        // 加载补给配置
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        MinecraftServer server = player.getServer();
+        if (server != null) loader.ensureLoaded(server.getResourceManager());
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        if (kit == null || kit.resupply == null || kit.resupply.items == null || kit.resupply.items.length == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业没有配置弹药补给！"));
+            event.setCanceled(true);
+            return;
+        }
+
+        // 只检查冷却（不再限制次数）
+        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
+        if (errorMsg != null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
+            event.setCanceled(true);
+            return;
+        }
+
+        // 智能补给：检查背包已有数量，补充到上限
+        int givenItems = 0;
+        StringBuilder detail = new StringBuilder();
+        for (FactionDataLoader.ResupplyItem ri : kit.resupply.items) {
+            if (ri.id == null || ri.id.isBlank()) continue;
+            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(ri.id));
+            if (item == net.minecraft.world.item.Items.AIR) {
+                Espetro.LOGGER.warn("补给物品不存在: {}", ri.id);
+                continue;
+            }
+            int maxCap = ri.max > 0 ? ri.max : 64;
+            int giveCount = ri.count > 0 ? ri.count : 16;
+
+            // 统计背包中已有数量
+            int current = 0;
+            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                ItemStack stack = player.getInventory().getItem(i);
+                if (stack.is(item)) current += stack.getCount();
+            }
+
+            // 计算可补充数量（不超过上限）
+            int canGive = Math.min(giveCount, maxCap - current);
+            if (canGive > 0) {
+                ItemStack giveStack = new ItemStack(item, canGive);
+                if (!player.getInventory().add(giveStack)) {
+                    player.drop(giveStack, false);
+                }
+                givenItems++;
+                if (!detail.isEmpty()) detail.append(", ");
+                detail.append(item.getDescription().getString()).append(" ×").append(canGive);
+            }
+        }
+
+        if (givenItems == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
+            event.setCanceled(true);
+            return;
+        }
+
+        // 记录补给
+        BastionManager.getInstance().recordResupply(player.getUUID());
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§a▸ 已补充: §f" + detail + "  §7| 冷却5分钟"));
+        event.setCanceled(true);
     }
 
     /**

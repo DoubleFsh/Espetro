@@ -9,6 +9,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.GameType;
+import net.minecraftforge.common.world.ForgeChunkManager;
 import org.espetro.Espetro;
 
 import javax.annotation.Nullable;
@@ -30,6 +32,10 @@ import java.util.stream.Collectors;
  * 管理所有兵站的创建、存储和查询
  */
 public class BastionManager {
+
+    /** 每队最多放置兵站数量 */
+    public static final int MAX_BASTIONS_PER_TEAM = 3;
+    private static final boolean FORCE_TICKING_CHUNKS = true;
 
     private static BastionManager INSTANCE;
 
@@ -48,8 +54,15 @@ public class BastionManager {
     // 玩家位置锁定（等待复活选择时）
     private final Map<UUID, net.minecraft.world.phys.Vec3> playerLockPositions = new HashMap<>();
 
+    // 弹药补给追踪
+    private final Map<UUID, Long> resupplyCooldowns = new HashMap<>(); // playerUUID -> 最后补给时间戳
+    private final Map<UUID, Integer> resupplyCounts = new HashMap<>(); // playerUUID -> 累计补给次数
+
+    /** 弹药补给冷却时间（毫秒） */
+    public static final long RESUPPLY_COOLDOWN_MS = 5 * 60 * 1000;
+
     // 从 JSON 配置读取的值
-    private int cooldownSeconds = 60;
+    private int cooldownSeconds = 800;
     private int requiredPlanks = 640;
     private int armorStandHealth = 500;
     private int destroyTroopPenalty = 20;
@@ -155,6 +168,21 @@ public class BastionManager {
     }
 
     /**
+     * 注册 Forge 强加载区块校验回调，清理不再属于有效兵站的残留 ticket。
+     */
+    public static void registerForcedChunkLoadingCallback() {
+        ForgeChunkManager.setForcedChunkLoadingCallback(Espetro.MOD_ID, (level, ticketHelper) -> {
+            Set<BlockPos> activeOwners = getInstance().getActiveForceLoadOwners(level);
+            for (BlockPos owner : ticketHelper.getBlockTickets().keySet()) {
+                if (!activeOwners.contains(owner)) {
+                    ticketHelper.removeAllTickets(owner);
+                    Espetro.LOGGER.info("已清理无效兵站强加载区块 ticket: {}", owner);
+                }
+            }
+        });
+    }
+
+    /**
      * 创建兵站
      * @param level 世界
      * @param pos 位置
@@ -197,6 +225,7 @@ public class BastionManager {
         bastion.setActive(true);
 
         bastions.put(bastion.getBastionId(), bastion);
+        forceLoadBastionChunks(bastion);
 
         Espetro.LOGGER.info("创建兵站: {} (队伍: {}, 位置: {}, 盔甲架ID: {})",
             name, team, pos, armorStand.getUUID());
@@ -227,6 +256,18 @@ public class BastionManager {
     @Nullable
     public BastionData getBastion(UUID bastionId) {
         return bastions.get(bastionId);
+    }
+
+    /**
+     * 设置兵站启用状态。兵站失效时同步释放它占用的强加载区块。
+     */
+    public void setBastionActive(BastionData bastion, boolean active) {
+        if (!active) {
+            releaseBastionChunks(bastion);
+        } else if (!bastion.isActive()) {
+            forceLoadBastionChunks(bastion);
+        }
+        bastion.setActive(active);
     }
 
     /**
@@ -298,7 +339,7 @@ public class BastionManager {
         List<UUID> toRemove = new ArrayList<>();
         for (BastionData bastion : bastions.values()) {
             if (!bastion.checkArmorStand()) {
-                bastion.setActive(false);
+                setBastionActive(bastion, false);
                 Espetro.LOGGER.info("兵站 {} 的盔甲架已失效，兵站被移除", bastion.getName());
                 toRemove.add(bastion.getBastionId());
             }
@@ -332,12 +373,16 @@ public class BastionManager {
      * 加载所有兵站数据
      */
     public void load(CompoundTag tag, ServerLevel level) {
+        releaseAllBastionChunks();
         bastions.clear();
         ListTag list = tag.getList("bastions", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             CompoundTag bastionTag = list.getCompound(i);
             BastionData bastion = BastionData.load(bastionTag, level);
             bastions.put(bastion.getBastionId(), bastion);
+            if (bastion.isActive()) {
+                forceLoadBastionChunks(bastion);
+            }
         }
         Espetro.LOGGER.info("加载了 {} 个兵站", bastions.size());
     }
@@ -348,6 +393,7 @@ public class BastionManager {
     public void reset() {
         // 移除所有盔甲架
         for (BastionData bastion : bastions.values()) {
+            releaseBastionChunks(bastion);
             if (bastion.getArmorStandId() != null) {
                 Entity entity = bastion.getLevel().getEntity(bastion.getArmorStandId());
                 if (entity != null) {
@@ -359,6 +405,48 @@ public class BastionManager {
         waitingPlayers.clear();
         playerDeployPoints.clear();
         bastionCooldowns.clear();
+        resupplyCooldowns.clear();
+        resupplyCounts.clear();
+    }
+
+    private Set<BlockPos> getActiveForceLoadOwners(ServerLevel level) {
+        return bastions.values().stream()
+            .filter(BastionData::isActive)
+            .filter(bastion -> bastion.getLevel() == level)
+            .map(BastionData::getPosition)
+            .collect(Collectors.toSet());
+    }
+
+    private void forceLoadBastionChunks(BastionData bastion) {
+        setBastionChunksForced(bastion, true);
+    }
+
+    private void releaseBastionChunks(BastionData bastion) {
+        setBastionChunksForced(bastion, false);
+    }
+
+    private void releaseAllBastionChunks() {
+        for (BastionData bastion : bastions.values()) {
+            releaseBastionChunks(bastion);
+        }
+    }
+
+    private void setBastionChunksForced(BastionData bastion, boolean add) {
+        for (ChunkPos chunkPos : bastion.getForceLoadedChunks()) {
+            boolean changed = ForgeChunkManager.forceChunk(
+                bastion.getLevel(),
+                Espetro.MOD_ID,
+                bastion.getPosition(),
+                chunkPos.x,
+                chunkPos.z,
+                add,
+                FORCE_TICKING_CHUNKS
+            );
+            if (changed) {
+                Espetro.LOGGER.debug("{}兵站强加载区块: {} -> {}, {}",
+                    add ? "添加" : "释放", bastion.getName(), chunkPos.x, chunkPos.z);
+            }
+        }
     }
 
     /**
@@ -392,6 +480,72 @@ public class BastionManager {
         int remaining = getBastionCooldownRemaining(playerId);
         if (remaining > 0) {
             return "§c兵站建造冷却中！请等待 " + remaining + " 秒后再试。";
+        }
+        return null;
+    }
+
+    // ==================== 弹药补给 ====================
+
+    /**
+     * 尝试补给弹药
+     * @return null表示成功，String表示失败原因
+     */
+    @Nullable
+    public String tryResupply(UUID playerId) {
+        // 检查冷却
+        Long lastResupply = resupplyCooldowns.get(playerId);
+        if (lastResupply != null) {
+            long remaining = RESUPPLY_COOLDOWN_MS - (System.currentTimeMillis() - lastResupply);
+            if (remaining > 0) {
+                int sec = (int) (remaining / 1000);
+                int min = sec / 60;
+                sec %= 60;
+                return "§c弹药补给冷却中！剩余 " + min + "分" + sec + "秒";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 记录补给成功
+     */
+    public void recordResupply(UUID playerId) {
+        resupplyCooldowns.put(playerId, System.currentTimeMillis());
+        resupplyCounts.merge(playerId, 1, Integer::sum);
+    }
+
+    /**
+     * 获取玩家剩余补给次数（-1 表示无限制）
+     */
+    public int getResupplyCount(UUID playerId) {
+        return resupplyCounts.getOrDefault(playerId, 0);
+    }
+
+    /**
+     * 重置玩家补给次数（死亡时调用）
+     */
+    public void resetResupplyCount(UUID playerId) {
+        resupplyCounts.remove(playerId);
+    }
+
+    /**
+     * 获取玩家补给冷却剩余秒数
+     */
+    public int getResupplyCooldownRemaining(UUID playerId) {
+        Long last = resupplyCooldowns.get(playerId);
+        if (last == null) return 0;
+        return (int) Math.max(0, (RESUPPLY_COOLDOWN_MS - (System.currentTimeMillis() - last)) / 1000);
+    }
+
+    /**
+     * 根据潜影盒位置查找对应兵站
+     */
+    @Nullable
+    public BastionData findBastionByShulkerPos(BlockPos pos) {
+        for (BastionData b : bastions.values()) {
+            if (b.isActive() && pos.equals(b.getShulkerPos())) {
+                return b;
+            }
         }
         return null;
     }

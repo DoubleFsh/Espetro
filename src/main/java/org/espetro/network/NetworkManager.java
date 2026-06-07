@@ -193,6 +193,15 @@ public class NetworkManager {
             DeployPointSelectPacket::read,
             DeployPointSelectPacket::handle
         );
+
+        // 统一部署主界面包（S→C）
+        NET.registerMessage(
+            nextId(),
+            UnifiedDeployScreenPacket.class,
+            UnifiedDeployScreenPacket::write,
+            UnifiedDeployScreenPacket::read,
+            UnifiedDeployScreenPacket::handle
+        );
     }
 
     /**
@@ -349,6 +358,32 @@ public class NetworkManager {
     }
 
     /**
+     * 发送指挥官投票界面给单个指定玩家（用于中途加入者同步）
+     * @param player 目标玩家
+     * @param team 玩家所在队伍 "DEFEND" 或 "ATTACK"
+     * @param timeRemaining 投票剩余时间（秒）
+     */
+    public static void sendCommanderVoteScreenToPlayer(ServerPlayer player, String team, int timeRemaining) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        VoteManager voteManager = VoteManager.getInstance();
+
+        // 收集该队伍玩家名
+        Set<UUID> teamUuids = "ATTACK".equals(team) ? voteManager.getAttackPlayers() : voteManager.getDefendPlayers();
+        List<String> teamPlayers = new ArrayList<>();
+        for (UUID uuid : teamUuids) {
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p != null) {
+                teamPlayers.add(p.getName().getString());
+            }
+        }
+
+        CommanderVotePacket packet = new CommanderVotePacket(team, teamPlayers, timeRemaining);
+        NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    /**
      * 广播编制选择界面给指定队伍的玩家
      * @param team "DEFEND" 或 "ATTACK"
      * @param timeRemaining 剩余时间（秒）
@@ -462,12 +497,54 @@ public class NetworkManager {
     }
 
     /**
-     * 向死亡玩家发送复活点选择界面
+     * 旧复活点选择入口的兼容转发：统一改为发送 mutil 部署面板。
      */
     public static void sendDeployPointSelectScreen(ServerPlayer player) {
-        org.espetro.bastion.BastionManager bm = org.espetro.bastion.BastionManager.getInstance();
-        String team = Espetro.getPlayerTeam(player);
+        sendUnifiedDeployScreen(player, -1);
+    }
 
+    /**
+     * 发送统一部署主界面给指定玩家
+     * 集成：职业选择、复活点选择、载具部署、小队选择、地图
+     */
+    public static void sendUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) return;
+
+        VoteManager voteManager = VoteManager.getInstance();
+        ClassSelectManager selectManager = ClassSelectManager.getInstance();
+        org.espetro.bastion.BastionManager bm = org.espetro.bastion.BastionManager.getInstance();
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+
+        String factionId = "ATTACK".equals(team)
+            ? selectManager.getFinalAttackClass()
+            : selectManager.getFinalDefendClass();
+        if (factionId == null) factionId = team;
+
+        // === 职业数据 ===
+        FactionDataLoader.FactionData factionData = loader.getFaction(factionId);
+        String factionName = factionData != null ? factionData.name : factionId;
+        String factionDesc = factionData != null ? factionData.description : "";
+        String factionIcon = factionData != null ? (factionData.icon != null ? factionData.icon : "") : "";
+
+        java.util.List<UnifiedDeployScreenPacket.ClassInfo> classList = new java.util.ArrayList<>();
+        java.util.Map<String, Integer> classCountMap = new java.util.HashMap<>();
+        FactionDataLoader.ClassKitData[] kits = loader.getClassesForFaction(factionId);
+        if (kits != null) {
+            for (FactionDataLoader.ClassKitData kit : kits) {
+                int count = ClassCountManager.getInstance().getCount(kit.id);
+                classList.add(new UnifiedDeployScreenPacket.ClassInfo(
+                    kit.id, kit.name, kit.description, kit.role,
+                    kit.maxPlayers, count, kit.troopValue, kit.healthBonus, kit.speedBonus
+                ));
+                classCountMap.put(kit.id, count);
+            }
+        }
+
+        // === 复活点 / 部署点数据 ===
         boolean hasDeploy = false;
         String deployPos = "";
         org.espetro.bastion.BastionManager.DeployPoint dp = bm.getPlayerDeployPoint(player.getUUID());
@@ -476,18 +553,48 @@ public class NetworkManager {
             deployPos = dp.pos.getX() + ", " + dp.pos.getY() + ", " + dp.pos.getZ();
         }
 
-        java.util.List<DeployPointSelectPacket.BastionItem> bastionList = new java.util.ArrayList<>();
-        if (team != null) {
-            for (org.espetro.bastion.BastionData bd : bm.getTeamBastions(team)) {
-                bastionList.add(new DeployPointSelectPacket.BastionItem(
-                    bd.getBastionId(),
-                    bd.getName(),
-                    bd.getPosition().getX() + ", " + bd.getPosition().getY() + ", " + bd.getPosition().getZ()
-                ));
+        java.util.List<UnifiedDeployScreenPacket.BastionItem> bastionList = new java.util.ArrayList<>();
+        for (org.espetro.bastion.BastionData bd : bm.getTeamBastions(team)) {
+            bastionList.add(new UnifiedDeployScreenPacket.BastionItem(
+                bd.getBastionId(), bd.getName(),
+                bd.getPosition().getX() + ", " + bd.getPosition().getY() + ", " + bd.getPosition().getZ()
+            ));
+        }
+
+        // === 载具数据（仅指挥官有） ===
+        boolean isCmd = voteManager.isCommanderOf(player.getUUID(), team);
+        java.util.List<UnifiedDeployScreenPacket.VehicleInfo> vehicleList = new java.util.ArrayList<>();
+        if (isCmd) {
+            java.util.Map<String, org.espetro.vehicle.VehicleConfig.VehicleTypeConfig> configs =
+                org.espetro.vehicle.VehicleConfig.getFactionVehicles(factionId);
+            org.espetro.vehicle.VehicleManager vm = org.espetro.vehicle.VehicleManager.getInstance();
+            for (java.util.Map.Entry<String, org.espetro.vehicle.VehicleConfig.VehicleTypeConfig> entry : configs.entrySet()) {
+                String type = entry.getKey();
+                org.espetro.vehicle.VehicleConfig.VehicleTypeConfig cfg = entry.getValue();
+                int current = vm.getActiveCount(factionId, type);
+                long cooldown = vm.getCooldownRemaining(factionId, type);
+                String displayName = org.espetro.vehicle.VehicleManager.getDisplayName(factionId, type);
+                vehicleList.add(new UnifiedDeployScreenPacket.VehicleInfo(
+                    type, displayName, cfg.max, current, (int)(cooldown / 1000), cfg.respawnMinutes));
             }
         }
 
-        NET.send(PacketDistributor.PLAYER.with(() -> player),
-            new DeployPointSelectPacket(hasDeploy, deployPos, bastionList));
+        // === 小队数据（暂用默认6小队） ===
+        java.util.List<UnifiedDeployScreenPacket.SquadInfo> squadList = new java.util.ArrayList<>();
+        String[] squadNames = {"A小队", "B小队", "C小队", "D小队", "E小队", "F小队"};
+        for (int i = 0; i < 6; i++) {
+            squadList.add(new UnifiedDeployScreenPacket.SquadInfo(i, squadNames[i], 0, 9, false));
+        }
+
+        UnifiedDeployScreenPacket packet = new UnifiedDeployScreenPacket(
+            factionId, factionName, factionDesc, factionIcon,
+            classList, classCountMap,
+            hasDeploy, deployPos, bastionList,
+            isCmd, vehicleList,
+            squadList, 0,
+            deployTimeRemaining, team
+        );
+
+        NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
 }
