@@ -1,5 +1,6 @@
 package org.espetro.client.gui;
 
+import com.example.hcrpoints.hud.TacticalMapHUD;
 import se.mickelus.mutil.gui.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -7,16 +8,17 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 
 /**
  * 统一部署/复活主界面 — 基于 mutil GuiElement 树架构
  *
- * 布局：左半屏(职业+部署点) | 右半屏(地图留空)
+ * 布局：左半屏(职业+部署点) | 右半屏(hcrpoints战术地图)
  * ┌─────────────────────────┬──────────────────────────┐
  * │  §l标题行                │                          │
- * ├─────────────────────────┤       战术地图(留空)        │
+ * ├─────────────────────────┤       战术地图              │
  * │ 职业选择  (左上)         │                          │
  * │ [反坦克兵][0/2]          │                          │
  * │ [精确射手][1/2]         │                          │
@@ -351,12 +353,9 @@ public class UnifiedDeployScreen extends Screen {
         }
     }
 
-    // ---------- 战术地图（右半屏，留空）----------
+    // ---------- 战术地图（右半屏，由 hcrpoints 绘制）----------
     private void buildMapPanel() {
-        // 只显示标题
-        PlainText mt = new PlainText(mapX + 4, mapY + 2, "\u00a76\u00a7l战术地图", 0xFFFFAA00);
-        root.addChild(mt);
-        // 地图区完全留空，不加背景、边框、占位文字
+        // 地图内容在 render() 中直接调用 hcrpoints 的 TacticalMapHUD 绘制。
     }
 
     // ---------- 底部状态栏 ----------
@@ -389,7 +388,19 @@ public class UnifiedDeployScreen extends Screen {
         graphics.fill(0, 0, this.width, this.height, 0xE0252a35);
         computeRegions();
         root.draw(graphics, 0, 0, this.width, this.height, mouseX, mouseY, partialTick);
+        renderTacticalMap(graphics, partialTick);
         renderClassTooltip(graphics, mouseX, mouseY);
+    }
+
+    private void renderTacticalMap(GuiGraphics graphics, float partialTick) {
+        TacticalMapHUD.getInstance().renderEmbeddedMap(
+            graphics,
+            mapX - 2,
+            mapY,
+            mapW + 4,
+            mapH,
+            partialTick
+        );
     }
 
     private void renderClassTooltip(GuiGraphics graphics, int mx, int my) {
@@ -446,6 +457,14 @@ public class UnifiedDeployScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_C) {
+            TacticalMapHUD.getInstance().increaseRenderRange();
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_B) {
+            TacticalMapHUD.getInstance().decreaseRenderRange();
+            return true;
+        }
         if (root.onKeyPress(keyCode, scanCode, modifiers)) return true;
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
