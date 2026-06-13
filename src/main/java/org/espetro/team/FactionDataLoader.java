@@ -271,6 +271,7 @@ public class FactionDataLoader {
         /** 补给物品列表 */
         public ResupplyItem[] items;
         /** 单局最大补给次数，默认3 */
+        @SerializedName("max_resupplies")
         public int maxResupplies = 3;
     }
 
@@ -280,6 +281,8 @@ public class FactionDataLoader {
     public static class ResupplyItem {
         /** 物品注册名，如 "minecraft:arrow" */
         public String id;
+        /** 可选 SNBT，如 "{display:{Name:'{\"text\":\"弹药\"}'}}" */
+        public String nbt;
         /** 每次补给数量 */
         public int count = 16;
         /** 背包中该物品数量上限 */

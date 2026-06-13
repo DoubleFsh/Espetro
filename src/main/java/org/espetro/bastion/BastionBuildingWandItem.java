@@ -1,6 +1,7 @@
 package org.espetro.bastion;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -79,10 +80,15 @@ public class BastionBuildingWandItem extends FishingRodItem {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
-        // 检查队伍兵站数量上限（最多3个）
-        int teamBastionCount = BastionManager.getInstance().getTeamBastions(team).size();
-        if (teamBastionCount >= BastionManager.MAX_BASTIONS_PER_TEAM) {
-            serverPlayer.sendSystemMessage(Component.literal("§c你的队伍已达到兵站数量上限（" + BastionManager.MAX_BASTIONS_PER_TEAM + "个），无法继续建造！"));
+        // 检查全局兵站数量上限（最多4个）
+        if (!BastionManager.getInstance().hasBastionCapacity()) {
+            serverPlayer.sendSystemMessage(Component.literal("§c兵站数量已达到上限（" + BastionManager.MAX_BASTIONS + "个），无法继续建造！"));
+            return InteractionResultHolder.fail(player.getItemInHand(hand));
+        }
+
+        int requiredPlanks = BastionManager.getInstance().getRequiredPlanks();
+        if (!serverPlayer.isCreative() && requiredPlanks > 0 && countPlanks(serverPlayer) < requiredPlanks) {
+            serverPlayer.sendSystemMessage(Component.literal("§c建造兵站需要 " + requiredPlanks + " 个木板！"));
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
@@ -106,6 +112,10 @@ public class BastionBuildingWandItem extends FishingRodItem {
         int cooldownSeconds = BastionManager.getInstance().getCooldownSeconds();
 
         if (bastion != null) {
+            if (!serverPlayer.isCreative() && requiredPlanks > 0) {
+                consumePlanks(serverPlayer, requiredPlanks);
+            }
+
             // 设置建造冷却
             BastionManager.getInstance().setBastionCooldown(serverPlayer.getUUID());
 
@@ -134,6 +144,28 @@ public class BastionBuildingWandItem extends FishingRodItem {
      */
     private boolean isCommander(ServerPlayer player) {
         return VoteManager.getInstance().isCommander(player.getUUID());
+    }
+
+    private int countPlanks(ServerPlayer player) {
+        int total = 0;
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.is(ItemTags.PLANKS)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
+    }
+
+    private void consumePlanks(ServerPlayer player, int amount) {
+        int remaining = amount;
+        for (ItemStack stack : player.getInventory().items) {
+            if (remaining <= 0) break;
+            if (!stack.is(ItemTags.PLANKS)) continue;
+
+            int consume = Math.min(stack.getCount(), remaining);
+            stack.shrink(consume);
+            remaining -= consume;
+        }
     }
 
     /**
@@ -242,6 +274,9 @@ public class BastionBuildingWandItem extends FishingRodItem {
         tooltip.add(Component.literal("§6你总不会是战犯吧"));
         tooltip.add(Component.literal("§e右键在目标位置建造兵站"));
         tooltip.add(Component.literal("§7放置一个有" + health + "血的盔甲架作为核心"));
+        if (config.getRequiredPlanks() > 0) {
+            tooltip.add(Component.literal("§7建造消耗: " + config.getRequiredPlanks() + " 木板"));
+        }
         tooltip.add(Component.literal("§c使用冷却: " + cooldown + "秒"));
     }
 }

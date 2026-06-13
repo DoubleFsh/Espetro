@@ -168,6 +168,7 @@ public class GameStateManager {
         deployTickCounter = 0;
         attackDeployPositions.clear();
         deployClassSelected.clear();
+        BastionManager.getInstance().reset();
 
         // 编制选择最终处理
         ClassSelectManager.getInstance().finalizeSelection();

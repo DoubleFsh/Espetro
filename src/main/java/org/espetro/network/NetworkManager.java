@@ -555,9 +555,13 @@ public class NetworkManager {
 
         java.util.List<UnifiedDeployScreenPacket.BastionItem> bastionList = new java.util.ArrayList<>();
         for (org.espetro.bastion.BastionData bd : bm.getTeamBastions(team)) {
+            net.minecraft.core.BlockPos armorStandPos = bm.getRecordedArmorStandPosition(bd);
+            if (armorStandPos == null) {
+                continue;
+            }
             bastionList.add(new UnifiedDeployScreenPacket.BastionItem(
                 bd.getBastionId(), bd.getName(),
-                bd.getPosition().getX() + ", " + bd.getPosition().getY() + ", " + bd.getPosition().getZ()
+                armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ()
             ));
         }
 

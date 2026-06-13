@@ -12,6 +12,7 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
@@ -196,7 +197,6 @@ public class Espetro {
                 org.espetro.team.TroopCountManager.init();
                 // 初始化兵站管理器
                 BastionManager.getInstance();
-                BastionManager.registerForcedChunkLoadingCallback();
             });
         }
 
@@ -250,8 +250,16 @@ public class Espetro {
             reloadAllConfigs();
             // 初始化职业人数记分板
             ClassCountManager.getInstance().initializeAllClassScores();
-            // 重置游戏状态
+            // 重置游戏状态（含兵站清空）
+            BastionManager.getInstance().reset();
             GameStateManager.getInstance().resetGame();
+        }
+
+        @SubscribeEvent
+        public static void onServerStopped(ServerStoppedEvent event) {
+            // 服务器关闭时清空并抹除所有兵站数据记录
+            BastionManager.getInstance().reset();
+            serverInstance = null;
         }
 
         /**

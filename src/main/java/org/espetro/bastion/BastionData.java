@@ -1,18 +1,13 @@
 package org.espetro.bastion;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
 
 import javax.annotation.Nullable;
-import java.util.*;
+import java.util.UUID;
 
 /**
  * 兵站数据类
@@ -26,23 +21,27 @@ public class BastionData {
     private final BlockPos position;
     private final ServerLevel level;
     private UUID armorStandId;
+    private int bastionNumber = -1;
+    private float coreHealth;
+    @Nullable
+    private BlockPos armorStandPosition;
     @Nullable
     private BlockPos shulkerPos; // 弹药补给潜影盒位置
     private boolean active;
 
-    private static final int MAX_ARMOR_STAND_HEALTH = 500;
-    private static final int FORCE_LOAD_MIN_X_OFFSET = -3;
-    private static final int FORCE_LOAD_MAX_X_OFFSET = 1;
-    private static final int FORCE_LOAD_MIN_Z_OFFSET = -1;
-    private static final int FORCE_LOAD_MAX_Z_OFFSET = 2;
-
     public BastionData(String team, String name, BlockPos position, ServerLevel level) {
-        this.bastionId = UUID.randomUUID();
+        this(UUID.randomUUID(), team, name, position, level);
+    }
+
+    public BastionData(UUID bastionId, String team, String name, BlockPos position, ServerLevel level) {
+        this.bastionId = bastionId;
         this.team = team;
         this.name = name;
         this.position = position;
         this.level = level;
+        this.armorStandPosition = position.above();
         this.active = true;
+        this.coreHealth = BastionManager.getInstance().getArmorStandHealth();
     }
 
     public UUID getBastionId() {
@@ -77,6 +76,39 @@ public class BastionData {
         this.armorStandId = armorStandId;
     }
 
+    public float getCoreHealth() {
+        return coreHealth;
+    }
+
+    public void setCoreHealth(float coreHealth) {
+        this.coreHealth = coreHealth;
+    }
+
+    public void resetMissingEntityTicks() {
+        // 保留为空方法，兼容管理器调用语义：核心实体恢复后清除短暂缺失状态。
+    }
+
+    public int getBastionNumber() {
+        return bastionNumber;
+    }
+
+    public void setBastionNumber(int bastionNumber) {
+        this.bastionNumber = bastionNumber;
+    }
+
+    @Nullable
+    public BlockPos getArmorStandPosition() {
+        return armorStandPosition;
+    }
+
+    public void setArmorStandPosition(@Nullable BlockPos armorStandPosition) {
+        this.armorStandPosition = armorStandPosition;
+    }
+
+    public void clearArmorStandPosition() {
+        this.armorStandPosition = null;
+    }
+
     @Nullable
     public BlockPos getShulkerPos() {
         return shulkerPos;
@@ -99,43 +131,22 @@ public class BastionData {
      */
     public boolean checkArmorStand() {
         if (armorStandId == null) return false;
-        if (!isChunkLoaded()) return true;
+        if (!isChunkLoaded()) return armorStandPosition != null;
         Entity entity = level.getEntity(armorStandId);
-        return entity != null && entity.isAlive();
+        if (entity instanceof ArmorStand armorStand && armorStand.isAlive()) {
+            BastionManager.getInstance().syncCoreArmorStand(armorStand);
+            armorStandPosition = entity.blockPosition();
+            resetMissingEntityTicks();
+            return true;
+        }
+        return false;
     }
 
     /**
      * 检查兵站所在区块是否已加载。
      */
     public boolean isChunkLoaded() {
-        return level.hasChunkAt(position);
-    }
-
-    /**
-     * 获取兵站结构占用的全部区块。
-     */
-    public Set<ChunkPos> getForceLoadedChunks() {
-        int minChunkX = SectionPos.blockToSectionCoord(position.getX() + FORCE_LOAD_MIN_X_OFFSET);
-        int maxChunkX = SectionPos.blockToSectionCoord(position.getX() + FORCE_LOAD_MAX_X_OFFSET);
-        int minChunkZ = SectionPos.blockToSectionCoord(position.getZ() + FORCE_LOAD_MIN_Z_OFFSET);
-        int maxChunkZ = SectionPos.blockToSectionCoord(position.getZ() + FORCE_LOAD_MAX_Z_OFFSET);
-
-        Set<ChunkPos> chunks = new HashSet<>();
-        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                chunks.add(new ChunkPos(chunkX, chunkZ));
-            }
-        }
-        return chunks;
-    }
-
-    /**
-     * 主动加载兵站所在区块，用于选择远距离兵站前的最终校验和传送。
-     */
-    public void ensureChunkLoaded() {
-        for (ChunkPos chunkPos : getForceLoadedChunks()) {
-            level.getChunk(chunkPos.x, chunkPos.z);
-        }
+        return level.hasChunkAt(armorStandPosition != null ? armorStandPosition : position);
     }
 
     /**
@@ -161,6 +172,13 @@ public class BastionData {
         tag.putInt("x", position.getX());
         tag.putInt("y", position.getY());
         tag.putInt("z", position.getZ());
+        tag.putInt("bastionNumber", bastionNumber);
+        tag.putFloat("coreHealth", coreHealth);
+        if (armorStandPosition != null) {
+            tag.putInt("armorStandX", armorStandPosition.getX());
+            tag.putInt("armorStandY", armorStandPosition.getY());
+            tag.putInt("armorStandZ", armorStandPosition.getZ());
+        }
         if (armorStandId != null) {
             tag.putUUID("armorStandId", armorStandId);
         }
@@ -177,6 +195,7 @@ public class BastionData {
      * 从NBT加载
      */
     public static BastionData load(CompoundTag tag, ServerLevel level) {
+        UUID bastionId = tag.hasUUID("bastionId") ? tag.getUUID("bastionId") : UUID.randomUUID();
         String team = tag.getString("team");
         String name = tag.getString("name");
         int x = tag.getInt("x");
@@ -184,7 +203,22 @@ public class BastionData {
         int z = tag.getInt("z");
         BlockPos pos = new BlockPos(x, y, z);
 
-        BastionData data = new BastionData(team, name, pos, level);
+        BastionData data = new BastionData(bastionId, team, name, pos, level);
+        if (tag.contains("bastionNumber")) {
+            data.setBastionNumber(tag.getInt("bastionNumber"));
+        }
+        if (tag.contains("coreHealth")) {
+            data.setCoreHealth(tag.getFloat("coreHealth"));
+        }
+        if (tag.contains("armorStandX")) {
+            data.setArmorStandPosition(new BlockPos(
+                tag.getInt("armorStandX"),
+                tag.getInt("armorStandY"),
+                tag.getInt("armorStandZ")
+            ));
+        } else {
+            data.setArmorStandPosition(pos.above());
+        }
 
         if (tag.hasUUID("armorStandId")) {
             data.setArmorStandId(tag.getUUID("armorStandId"));

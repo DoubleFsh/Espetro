@@ -120,7 +120,7 @@ key_key.hotbar.8:key.keyboard.8
 key_key.hotbar.9:key.keyboard.9
 key_key.espetro.team:key.keyboard.k
 key_key.espetro.class:key.keyboard.j
-soundCategory_master:1.0
+soundCategory_master:0.2039735099337748
 soundCategory_music:0.0
 soundCategory_record:1.0
 soundCategory_weather:1.0

@@ -17,7 +17,7 @@ license = "All Rights Reserved"
 # The modid of the mod
 modId = "espetro" #mandatory
 # The version number of the mod
-version = "1.6.0-final" #mandatory
+version = "1.8.0-final" #mandatory
 # A display name for the mod
 displayName = "Espetro" #mandatory
 # A URL to query for updates for this mod. See the JSON update specification https://docs.minecraftforge.net/en/latest/misc/updatechecker/
@@ -76,25 +76,9 @@ ordering = "NONE"
 # Side this dependency is applied on - BOTH, CLIENT, or SERVER
 side = "BOTH"# Here's another dependency
 
-[[mods]]
+[[dependencies."espetro"]]
 modId = "hcrpoints"
-version = "2.0.1"
-displayName = "HCR AAD"
-displayURL = ""
-credits = "Hydroceder"
-authors = "Hydroceder"
-description = '''AI-Generated Mod: A mod that enables attack and defense in Minecraft.'''
-
-[[dependencies.hcrpoints]]
-modId = "forge"
-mandatory = true
-versionRange = "[47,)"
-ordering = "NONE"
-side = "BOTH"
-
-[[dependencies.hcrpoints]]
-modId = "minecraft"
-mandatory = true
-versionRange = "[1.20.1,1.21)"
+mandatory = false
+versionRange = "[2.0.1,)"
 ordering = "NONE"
 side = "BOTH"

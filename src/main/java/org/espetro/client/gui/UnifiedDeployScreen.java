@@ -1,11 +1,11 @@
 package org.espetro.client.gui;
 
-import com.example.hcrpoints.hud.TacticalMapHUD;
 import se.mickelus.mutil.gui.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.espetro.client.HcrTacticalMapBridge;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
 import org.lwjgl.glfw.GLFW;
@@ -393,11 +393,11 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void renderTacticalMap(GuiGraphics graphics, float partialTick) {
-        TacticalMapHUD.getInstance().renderEmbeddedMap(
+        HcrTacticalMapBridge.renderEmbeddedMap(
             graphics,
-            mapX - 2,
+            mapX,
             mapY,
-            mapW + 4,
+            mapW,
             mapH,
             partialTick
         );
@@ -458,11 +458,11 @@ public class UnifiedDeployScreen extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == GLFW.GLFW_KEY_C) {
-            TacticalMapHUD.getInstance().increaseRenderRange();
+            HcrTacticalMapBridge.increaseRenderRange();
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_B) {
-            TacticalMapHUD.getInstance().decreaseRenderRange();
+            HcrTacticalMapBridge.decreaseRenderRange();
             return true;
         }
         if (root.onKeyPress(keyCode, scanCode, modifiers)) return true;
