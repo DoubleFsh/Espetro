@@ -138,6 +138,7 @@ public class ClassSelectPacket {
             ClassCountSyncPacket syncPacket = new ClassCountSyncPacket(
                 countManager.getCountsForFaction(team, teamOrFaction), teamOrFaction);
             NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), syncPacket);
+            NetworkManager.syncSquadsToTeam(team);
         });
         ctx.get().setPacketHandled(true);
     }

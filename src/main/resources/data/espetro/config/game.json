@@ -1,14 +1,15 @@
 {
   "game": {
-    "required_players": 20,
-    "deploy_timeout_seconds": 180,
-    "deploy_warning_seconds": 30,
-    "defend_commander_vote_seconds": 20,
-    "attack_commander_vote_seconds": 20,
-    "defend_faction_select_seconds": 30,
-    "attack_faction_select_seconds": 30,
+    "required_players": 1,
+    "deploy_timeout_seconds": 1,
+    "deploy_warning_seconds": 0,
+    "defend_commander_vote_seconds": 1,
+    "attack_commander_vote_seconds": 1,
+    "defend_faction_select_seconds": 1,
+    "attack_faction_select_seconds": 1,
     "faction_pool_size": 6,
     "respawn_invincibility_ticks": 60,
+    "teammate_name_tag_distance": 10.0,
     "waiting_y": 200
   },
   "troops": {

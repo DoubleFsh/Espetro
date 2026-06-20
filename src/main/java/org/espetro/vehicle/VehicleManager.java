@@ -106,18 +106,10 @@ public class VehicleManager {
             return "§c" + getDisplayName(factionId, vehicleType) + " 刷新冷却中！剩余 " + seconds + " 秒。";
         }
 
-        // 获取部署点
-        BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(commander.getUUID());
-        if (deployPoint == null || deployPoint.pos == null) {
-            return "§c无法获取部署点！";
-        }
-
-        ServerLevel level = commander.server.overworld();
-
-        // 在部署点附近随机位置生成载具
-        BlockPos spawnPos = findSpawnPosition(level, deployPoint.pos);
+        ServerLevel level = resolveDeployLevel(commander, cfg);
+        BlockPos spawnPos = resolveSpawnPosition(commander, level, cfg);
         if (spawnPos == null) {
-            return "§c部署点附近没有合适的位置！";
+            return "§c无法解析载具部署位置，或部署点附近没有合适的位置！";
         }
 
         // 创建载具实体
@@ -176,19 +168,42 @@ public class VehicleManager {
     public void reset() {
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
+            List<UUID> trackedIds = new ArrayList<>();
             for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
                 for (List<UUID> list : typeMap.values()) {
-                    for (UUID id : list) {
-                        Entity entity = server.overworld().getEntity(id);
-                        if (entity != null) {
-                            entity.discard();
-                        }
-                    }
+                    trackedIds.addAll(list);
+                }
+            }
+
+            for (UUID id : trackedIds) {
+                Entity entity = server.overworld().getEntity(id);
+                if (entity != null) {
+                    entity.discard();
                 }
             }
         }
         activeVehicles.clear();
         cooldowns.clear();
+    }
+
+    /**
+     * 清理不再存在的载具记录，避免实体被外部命令移除后仍占用上限。
+     */
+    public void removeInvalidVehicles() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
+            for (List<UUID> list : typeMap.values()) {
+                list.removeIf(id -> {
+                    Entity entity = server.overworld().getEntity(id);
+                    if (entity == null) {
+                        return true;
+                    }
+                    return entity.isRemoved();
+                });
+            }
+        }
     }
 
     /**
@@ -212,22 +227,52 @@ public class VehicleManager {
 
     // ========== 辅助方法 ==========
 
+    private ServerLevel resolveDeployLevel(ServerPlayer commander, VehicleConfig.VehicleTypeConfig cfg) {
+        return commander.server.overworld();
+    }
+
+    @Nullable
+    private BlockPos resolveSpawnPosition(ServerPlayer commander, ServerLevel level, VehicleConfig.VehicleTypeConfig cfg) {
+        VehicleConfig.DeploymentConfig deployment = cfg.deployment;
+        BlockPos base = resolveBasePosition(commander, deployment);
+        if (base == null) return null;
+
+        int[] offset = deployment.offset;
+        BlockPos center = base.offset(offset[0], offset[1], offset[2]);
+        return findSpawnPosition(level, center, deployment);
+    }
+
+    @Nullable
+    private BlockPos resolveBasePosition(ServerPlayer commander, VehicleConfig.DeploymentConfig deployment) {
+        if (deployment.fixed()) {
+            if (deployment.absolute == null || deployment.absolute.length < 3) return null;
+            return new BlockPos(deployment.absolute[0], deployment.absolute[1], deployment.absolute[2]);
+        }
+
+        BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(commander.getUUID());
+        return deployPoint != null ? deployPoint.pos : null;
+    }
+
     /**
-     * 在部署点附近寻找合适的生成位置
+     * 按载具自己的部署配置寻找生成位置。
      */
     @Nullable
-    private BlockPos findSpawnPosition(ServerLevel level, BlockPos center) {
-        int radius = VehicleConfig.SPAWN_RADIUS;
+    private BlockPos findSpawnPosition(ServerLevel level, BlockPos center, VehicleConfig.DeploymentConfig deployment) {
+        if (!deployment.snapToGround) {
+            return level.getBlockState(center).isAir() ? center : null;
+        }
+
+        int radius = Math.max(0, deployment.radius);
         Random random = new Random();
 
-        // 尝试10次寻找合适位置
-        for (int attempt = 0; attempt < 10; attempt++) {
-            int dx = random.nextInt(radius * 2 + 1) - radius;
-            int dz = random.nextInt(radius * 2 + 1) - radius;
+        // 尝试多次寻找合适位置；radius 为 0 时只检查中心点。
+        int attempts = Math.max(1, 12 + radius * 4);
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int dx = radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius;
+            int dz = radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius;
             BlockPos pos = center.offset(dx, 0, dz);
 
-            // 从 center.y+2 向下找地面
-            for (int dy = 2; dy >= -1; dy--) {
+            for (int dy = deployment.verticalScan; dy >= -deployment.verticalScan; dy--) {
                 BlockPos checkPos = pos.offset(0, dy, 0);
                 if (level.getBlockState(checkPos).isAir() &&
                     !level.getBlockState(checkPos.below()).isAir()) {
@@ -236,10 +281,8 @@ public class VehicleManager {
             }
         }
 
-        // 兜底：部署点上方2格
-        BlockPos fallback = center.above(2);
-        if (level.getBlockState(fallback).isAir()) {
-            return fallback;
+        if (level.getBlockState(center).isAir()) {
+            return center;
         }
         return null;
     }
@@ -268,8 +311,11 @@ public class VehicleManager {
         entity.setCustomNameVisible(false);
 
         entity.setPos(x, y, z);
+        entity.setYRot(config.deployment.yaw);
+        entity.setYHeadRot(config.deployment.yaw);
         entity.addTag("espetro_vehicle");
         entity.addTag("espetro_" + vehicleType);
+        entity.addTag("espetro_vehicle_type_" + vehicleType);
         return entity;
     }
 
@@ -281,14 +327,7 @@ public class VehicleManager {
         if (cfg != null && cfg.displayName != null) {
             return cfg.displayName;
         }
-        // 回退：硬编码（向后兼容旧配置）
-        return switch (vehicleType) {
-            case "cow" -> "§6运输卡车(牛)";
-            case "pig" -> "§a装甲车(猪)";
-            case "horse" -> "§e运兵马(马)";
-            case "ghast" -> "§c武装直升机(恶魂)";
-            default -> vehicleType;
-        };
+        return vehicleType;
     }
 
     /**
@@ -302,7 +341,7 @@ public class VehicleManager {
             .append(Component.literal(" ════").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00)).withBold(true))));
         player.sendSystemMessage(Component.literal("编制: ").withStyle(Style.EMPTY.withColor(0xAAAAAA))
             .append(Component.literal(getFactionDisplayName(factionId)).withStyle(Style.EMPTY.withColor(0x00FFAA))));
-        player.sendSystemMessage(Component.literal("载具将部署在原部署点附近。").withStyle(Style.EMPTY.withColor(0x888888)));
+        player.sendSystemMessage(Component.literal("载具将按 JSON 配置的部署位置生成。").withStyle(Style.EMPTY.withColor(0x888888)));
         player.sendSystemMessage(Component.literal(""));
 
         Map<String, VehicleConfig.VehicleTypeConfig> configs = VehicleConfig.getFactionVehicles(factionId);
@@ -329,7 +368,7 @@ public class VehicleManager {
                     .withStyle(Style.EMPTY
                         .withColor(TextColor.fromRgb(0x55FF55))
                         .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/vehicle spawn " + type))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/vehicle spawn " + quoteCommandString(type)))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                             Component.literal("§a点击部署 " + displayName))))
                 )
@@ -353,5 +392,9 @@ public class VehicleManager {
             case "ukraine_irregular" -> "乌萨克非正规武装";
             default -> factionId;
         };
+    }
+
+    private static String quoteCommandString(String value) {
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 }

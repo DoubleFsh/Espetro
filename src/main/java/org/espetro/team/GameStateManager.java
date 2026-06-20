@@ -7,8 +7,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import org.espetro.Espetro;
 import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
@@ -22,8 +23,8 @@ import java.util.*;
  *
  * 阶段流转（按流程图）：
  * WAITING → DEFEND_COMMANDER_VOTE(20s) → ATTACK_COMMANDER_VOTE(20s)
- * → DEFEND_FACTION_SELECT(30s) → ATTACK_FACTION_SELECT(30s)
- * → DEPLOYING(180s, 攻方失明+禁止移动) → BATTLE
+ * → DEFEND_FACTION_SELECT(30s) → ATTACK_FACTION_SELECT(30s) → FACTION_REVEAL(5s)
+ * → DEPLOYING(240s, 守方部署防线/攻方屏障内等待) → BATTLE
  */
 public class GameStateManager {
 
@@ -34,10 +35,15 @@ public class GameStateManager {
 
     // 部署阶段计时器
     private int deployTickCounter = 0;
+    // 双方编制揭示阶段计时器
+    private int factionRevealTickCounter = 0;
     private static final int TICKS_PER_SECOND = 20;
+    private static final int FACTION_REVEAL_SECONDS = 5;
+    private static final int ATTACK_WAITING_BARRIER_SIDE = 200;
+    private static final int ATTACK_WAITING_BARRIER_HEIGHT = 20;
 
-    // 攻方部署阶段固定位置（用于禁止移动）
-    private final Map<UUID, BlockPos> attackDeployPositions = new HashMap<>();
+    // 攻方等待防守部署时临时放置的屏障，记录原方块以便开战后恢复
+    private final Map<BlockPos, BlockState> attackWaitingBarrierBlocks = new HashMap<>();
 
     // 等待选择队伍的玩家
     private final Set<UUID> waitingForTeam = new HashSet<>();
@@ -166,22 +172,40 @@ public class GameStateManager {
     private void startDeploying() {
         setPhase(GamePhase.DEPLOYING);
         deployTickCounter = 0;
-        attackDeployPositions.clear();
+        factionRevealTickCounter = 0;
         deployClassSelected.clear();
         BastionManager.getInstance().reset();
+        removeAttackWaitingBarrier();
 
         // 编制选择最终处理
         ClassSelectManager.getInstance().finalizeSelection();
 
         // 传送所有玩家到复活点
         teleportAllToSpawnPoints();
-
-        int deployTimeout = GameConfig.getDeployTimeoutSeconds();
-        Espetro.broadcastToTeam("ATTACK", "§6===== 攻方已传送到部署点！请等待进攻指令！[" + deployTimeout + "秒] =====");
-        Espetro.broadcastToTeam("DEFEND", "§6===== 守方已传送到部署点！部署防线！[" + deployTimeout + "秒] =====");
+        placeAttackWaitingBarrier();
 
         // 广播职业选择界面给所有玩家（部署阶段可选职业）
         broadcastClassSelectionForDeploy();
+
+        Espetro.LOGGER.info("防守部署阶段开始，持续{}秒，攻方等待区域边长{}格，高{}格",
+            GameConfig.getDeployTimeoutSeconds(), ATTACK_WAITING_BARRIER_SIDE, ATTACK_WAITING_BARRIER_HEIGHT);
+    }
+
+    /**
+     * 开始双方最终编制揭示阶段。
+     */
+    private void startFactionReveal() {
+        setPhase(GamePhase.FACTION_REVEAL);
+        factionRevealTickCounter = 0;
+
+        ClassSelectManager selectManager = ClassSelectManager.getInstance();
+        NetworkManager.broadcastFactionRevealScreen(
+            selectManager.getFinalAttackClass(),
+            selectManager.getFinalDefendClass(),
+            FACTION_REVEAL_SECONDS
+        );
+
+        Espetro.LOGGER.info("双方编制揭示开始，持续{}秒", FACTION_REVEAL_SECONDS);
     }
 
     /**
@@ -191,17 +215,14 @@ public class GameStateManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        int deployTimeout = GameConfig.getDeployTimeoutSeconds();
-
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
             if (team == null) continue;
 
             // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
-            NetworkManager.sendUnifiedDeployScreen(player, deployTimeout);
+            NetworkManager.sendUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
         }
-
-        Espetro.broadcastToAll("§e请选择你的职业！按 §aJ键 §e打开职业选择界面");
+        // 职业选择界面已通过 UnifiedDeployScreen 自动打开，不再发送聊天消息
     }
 
     /**
@@ -227,15 +248,8 @@ public class GameStateManager {
                 // 传送到复活点
                 teleportToTeamSpawn(player, team);
 
-                // 攻方设置失明+记录固定位置，守方移除失明
-                if ("ATTACK".equals(team)) {
-                    int deployTimeout = GameConfig.getDeployTimeoutSeconds();
-                    player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, deployTimeout * TICKS_PER_SECOND, 0, false, false, false));
-                    // 记录攻方固定位置（禁止移动）
-                    attackDeployPositions.put(uuid, player.blockPosition());
-                } else {
-                    player.removeEffect(MobEffects.BLINDNESS);
-                }
+                // 准备阶段双方都允许正常视野和移动；攻方由部署点屏障限制活动范围
+                player.removeEffect(MobEffects.BLINDNESS);
             }
         }
     }
@@ -244,57 +258,130 @@ public class GameStateManager {
      * 部署阶段Tick处理
      */
     public void onDeployTick() {
-        int deployTimeout = GameConfig.getDeployTimeoutSeconds();
-        int secondsRemaining = deployTimeout - (deployTickCounter / TICKS_PER_SECOND);
-
-        MinecraftServer server = Espetro.getServer();
-        if (server != null) {
-            // 攻方禁止移动：每tick检查攻方位置，如果移动了传送回去
-            for (UUID uuid : attackDeployPositions.keySet()) {
-                ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-                if (player != null && player.isAlive()) {
-                    BlockPos fixedPos = attackDeployPositions.get(uuid);
-                    BlockPos currentPos = player.blockPosition();
-                    // 如果移动超过0.5格，传送回固定位置
-                    if (!currentPos.closerThan(fixedPos, 0.5)) {
-                        player.teleportTo(player.serverLevel(), fixedPos.getX() + 0.5, fixedPos.getY(), fixedPos.getZ() + 0.5,
-                            player.getYRot(), player.getXRot());
-                    }
-                }
-            }
-        }
+        int secondsRemaining = getDeployTimeRemainingSeconds();
 
         // 每秒更新一次
         if (deployTickCounter % TICKS_PER_SECOND == 0) {
-            if (secondsRemaining > 0) {
-                Espetro.broadcastToTeam("ATTACK", "§c等待进攻指令！[" + secondsRemaining + "秒]");
-                Espetro.broadcastToTeam("DEFEND", "§9部署防线！[" + secondsRemaining + "秒]");
-            }
-
-            // 部署警告时间提示
-            int deployWarning = GameConfig.getDeployWarningSeconds();
-            if (secondsRemaining == deployWarning) {
-                Espetro.broadcastToAll("§e⚠ 战斗将在" + deployWarning + "秒后开始！");
-            }
+            broadcastDefenseSetupActionBar(secondsRemaining);
         }
 
         // 部署阶段结束 -> 对战开始
-        if (deployTickCounter >= deployTimeout * TICKS_PER_SECOND) {
+        if (deployTickCounter >= GameConfig.getDeployTimeoutSeconds() * TICKS_PER_SECOND) {
             startBattle();
         }
+    }
+
+    public int getDeployTimeRemainingSeconds() {
+        if (currentPhase != GamePhase.DEPLOYING) {
+            return 0;
+        }
+        return Math.max(0, GameConfig.getDeployTimeoutSeconds() - (deployTickCounter / TICKS_PER_SECOND));
+    }
+
+    private void broadcastDefenseSetupActionBar(int secondsRemaining) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        ClassCountManager countManager = ClassCountManager.getInstance();
+        for (UUID uuid : teamSelectedPlayers) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) continue;
+
+            String team = countManager.getPlayerTeam(uuid);
+            if (team == null) {
+                team = getTeamFromFactionStatic(countManager.getPlayerFaction(uuid));
+            }
+
+            String message = "ATTACK".equals(team)
+                ? "§c等待进攻§e[" + secondsRemaining + "秒]"
+                : "§9部署防线§e[" + secondsRemaining + "秒]";
+            NetworkManager.sendWaitingStatus(player, message, true);
+        }
+    }
+
+    private void placeAttackWaitingBarrier() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        removeAttackWaitingBarrier();
+
+        ServerLevel level = server.overworld();
+        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint("ATTACK");
+        BlockPos center = new BlockPos((int) Math.floor(spawn.x), (int) Math.floor(spawn.y), (int) Math.floor(spawn.z));
+
+        int half = ATTACK_WAITING_BARRIER_SIDE / 2;
+        int minX = center.getX() - half;
+        int maxX = minX + ATTACK_WAITING_BARRIER_SIDE - 1;
+        int minZ = center.getZ() - half;
+        int maxZ = minZ + ATTACK_WAITING_BARRIER_SIDE - 1;
+        int baseY = center.getY();
+        int roofY = baseY + ATTACK_WAITING_BARRIER_HEIGHT;
+
+        for (int y = baseY; y < baseY + ATTACK_WAITING_BARRIER_HEIGHT; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                setTemporaryBarrier(level, new BlockPos(x, y, minZ));
+                setTemporaryBarrier(level, new BlockPos(x, y, maxZ));
+            }
+            for (int z = minZ + 1; z < maxZ; z++) {
+                setTemporaryBarrier(level, new BlockPos(minX, y, z));
+                setTemporaryBarrier(level, new BlockPos(maxX, y, z));
+            }
+        }
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                setTemporaryBarrier(level, new BlockPos(x, roofY, z));
+            }
+        }
+
+        Espetro.LOGGER.info("已创建攻方等待屏障: center={}, side={}, height={}, blocks={}",
+            center, ATTACK_WAITING_BARRIER_SIDE, ATTACK_WAITING_BARRIER_HEIGHT, attackWaitingBarrierBlocks.size());
+    }
+
+    private void setTemporaryBarrier(ServerLevel level, BlockPos pos) {
+        BlockState previous = level.getBlockState(pos);
+        if (!previous.isAir() && !previous.getCollisionShape(level, pos).isEmpty()) {
+            return;
+        }
+        if (!attackWaitingBarrierBlocks.containsKey(pos)) {
+            attackWaitingBarrierBlocks.put(pos.immutable(), previous);
+        }
+        level.setBlock(pos, Blocks.BARRIER.defaultBlockState(), 3);
+    }
+
+    private void removeAttackWaitingBarrier() {
+        if (attackWaitingBarrierBlocks.isEmpty()) return;
+
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            attackWaitingBarrierBlocks.clear();
+            return;
+        }
+
+        ServerLevel level = server.overworld();
+        int restored = 0;
+        for (Map.Entry<BlockPos, BlockState> entry : attackWaitingBarrierBlocks.entrySet()) {
+            BlockPos pos = entry.getKey();
+            if (level.getBlockState(pos).is(Blocks.BARRIER)) {
+                level.setBlock(pos, entry.getValue(), 3);
+                restored++;
+            }
+        }
+        attackWaitingBarrierBlocks.clear();
+        Espetro.LOGGER.info("已移除攻方等待屏障，恢复{}个方块", restored);
     }
 
     /**
      * 开始对战
      */
     private void startBattle() {
+        removeAttackWaitingBarrier();
         setPhase(GamePhase.BATTLE);
 
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        // 移除攻方失明效果和禁止移动
-        attackDeployPositions.clear();
+        // 移除准备阶段残留状态
         for (UUID uuid : teamSelectedPlayers) {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
             if (player != null) {
@@ -315,6 +402,13 @@ public class GameStateManager {
         Espetro.broadcastToAll("§6========================================");
 
         Espetro.LOGGER.info("===== 对战开始 =====");
+    }
+
+    private void onFactionRevealTick() {
+        factionRevealTickCounter++;
+        if (factionRevealTickCounter >= FACTION_REVEAL_SECONDS * TICKS_PER_SECOND) {
+            startDeploying();
+        }
     }
 
     // ========== 服务器Tick ==========
@@ -351,8 +445,11 @@ public class GameStateManager {
                 ClassSelectManager.getInstance().onServerTick();
                 if (ClassSelectManager.getInstance().isCurrentSelectTimedOut()) {
                     ClassSelectManager.getInstance().finishCurrentSelecting();
-                    startDeploying();
+                    startFactionReveal();
                 }
+                break;
+            case FACTION_REVEAL:
+                onFactionRevealTick();
                 break;
             case DEPLOYING:
                 onDeployTick();
@@ -413,10 +510,12 @@ public class GameStateManager {
         midGameJoiners.clear();
         deployClassSelected.clear();
         deployTickCounter = 0;
-        attackDeployPositions.clear();
+        factionRevealTickCounter = 0;
+        removeAttackWaitingBarrier();
 
         VoteManager.getInstance().reset();
         ClassSelectManager.getInstance().reset();
+        SquadManager.getInstance().reset();
 
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
@@ -446,7 +545,6 @@ public class GameStateManager {
         teamSelectedPlayers.remove(uuid);
         midGameJoiners.remove(uuid);
         deployClassSelected.remove(uuid);
-        attackDeployPositions.remove(uuid);
     }
 
     public void applyWaitingState(ServerPlayer player) {
@@ -525,16 +623,11 @@ public class GameStateManager {
                 if (team.equals(votingTeam)) {
                     // 正在轮到该队投票 -> 给新玩家发送投票界面
                     NetworkManager.sendCommanderVoteScreenToPlayer(player, team, voteRemaining);
-                    player.sendSystemMessage(Component.literal(
-                        "§6★ 指挥官投票进行中！请投票选择你的指挥官！[§e" + voteRemaining + "秒§6] ★"));
+                    // GUI 已显示投票信息，不再发送聊天消息
                     // ★ 关键：重新广播投票界面给全队，同步新玩家的名字到所有已有客户端
                     NetworkManager.broadcastCommanderVoteScreenForTeam(team, voteRemaining);
                 } else {
-                    // 对方正在投票 -> 显示等待提示
-                    String votingName = "DEFEND".equals(votingTeam) ? "守方" : "攻方";
-                    player.sendSystemMessage(Component.literal(
-                        "§7" + votingName + "正在选择指挥官，请稍候... [§e" + voteRemaining + "秒§7]"));
-                    // 同步对方队伍的等待提示（新玩家名字已加入VoteManager）
+                    // 对方正在投票 -> 同步界面（GUI 中已显示等待信息）
                     NetworkManager.broadcastCommanderVoteScreenForTeam(votingTeam, voteRemaining);
                 }
             }
@@ -551,19 +644,12 @@ public class GameStateManager {
                 if (team.equals(selectingTeam)) {
                     if (isCmd) {
                         NetworkManager.sendClassSelectScreen(player, team, true, selectRemaining);
-                        player.sendSystemMessage(Component.literal(
-                            "§6★ 你是指挥官，请为队伍选择编制！[§e" + selectRemaining + "秒§6] ★"));
-                    } else {
-                        player.sendSystemMessage(Component.literal(
-                            "§7等待指挥官选择编制... [§e" + selectRemaining + "秒§7]"));
+                        // GUI 已显示编制选择信息，不再发送聊天消息
                     }
                     // ★ 重新广播编制界面给全队（含新玩家名字）
                     NetworkManager.broadcastClassSelectScreenForTeam(team, selectRemaining);
                 } else {
-                    String selectingName = "DEFEND".equals(selectingTeam) ? "守方" : "攻方";
-                    player.sendSystemMessage(Component.literal(
-                        "§7" + selectingName + "正在选择编制，请稍候... [§e" + selectRemaining + "秒§7]"));
-                    // 同步对方队伍的编制界面
+                    // 对方正在选择编制 -> 同步界面（GUI 中已显示等待信息）
                     NetworkManager.broadcastClassSelectScreenForTeam(selectingTeam, selectRemaining);
                 }
             }
@@ -575,15 +661,12 @@ public class GameStateManager {
 
                 teleportToTeamSpawn(player, team);
 
-                int deployTimeout = GameConfig.getDeployTimeoutSeconds();
-                if ("ATTACK".equals(team)) {
-                    player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS,
-                        deployTimeout * TICKS_PER_SECOND, 0, false, false, false));
-                    attackDeployPositions.put(player.getUUID(), player.blockPosition());
-                }
-
                 // 发送统一部署主界面
-                NetworkManager.sendUnifiedDeployScreen(player, deployTimeout - (deployTickCounter / TICKS_PER_SECOND));
+                int remaining = getDeployTimeRemainingSeconds();
+                NetworkManager.sendUnifiedDeployScreen(player, remaining);
+                NetworkManager.sendWaitingStatus(player, "ATTACK".equals(team)
+                    ? "§c等待进攻§e[" + remaining + "秒]"
+                    : "§9部署防线§e[" + remaining + "秒]", true);
                 player.sendSystemMessage(Component.literal(
                     "§a✅ 增援到达部署阶段！请在左侧面板选择职业和部署点"));
 

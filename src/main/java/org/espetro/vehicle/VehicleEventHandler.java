@@ -2,6 +2,7 @@ package org.espetro.vehicle;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -25,6 +26,17 @@ public class VehicleEventHandler {
         if (entity.getTags().contains("espetro_vehicle")) {
             VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
             Espetro.LOGGER.debug("载具 {} 已死亡，移除追踪", entity.getUUID());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onVehicleLeaveLevel(EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide()) return;
+
+        Entity entity = event.getEntity();
+        if (entity.getTags().contains("espetro_vehicle")) {
+            VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
+            Espetro.LOGGER.debug("载具 {} 已离开世界，移除追踪", entity.getUUID());
         }
     }
 

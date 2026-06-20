@@ -1,181 +1,226 @@
 package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
+import se.mickelus.mutil.gui.GuiElement;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 指挥官投票界面
- * 仅显示玩家所在队伍的成员，不允许关闭，限时30秒
- * 5×6网格布局
  */
-public class CommanderVoteScreen extends Screen {
+public class CommanderVoteScreen extends MutilScreen {
 
-    private final String team; // "ATTACK" 或 "DEFEND"
+    private final String team;
     private final List<String> players;
     private int timeRemaining;
-    
+    private String opponentTeamName;
+    private String opponentFaction;
+    private int opponentTimeRemaining;
+
     private Map<String, Integer> voteCounts = new HashMap<>();
     private String currentVote = null;
+    private int scrollOffset = 0;
+    private int maxScrollOffset = 0;
 
-    // 网格布局参数
-    private static final int COLUMNS = 5;
-    private static final int ROWS = 6;
-    private static final int BUTTON_WIDTH = 70;
-    private static final int BUTTON_HEIGHT = 18;
-    private static final int H_SPACING = 6;
-    private static final int V_SPACING = 4;
-
-    public CommanderVoteScreen(String team, List<String> players, int timeRemaining) {
+    public CommanderVoteScreen(String team, List<String> players, int timeRemaining,
+                                String opponentTeamName, String opponentFaction,
+                                int opponentTimeRemaining) {
         super(Component.literal("指挥官投票"));
         this.team = team;
         this.players = players;
         this.timeRemaining = timeRemaining;
+        this.opponentTeamName = opponentTeamName;
+        this.opponentFaction = opponentFaction;
+        this.opponentTimeRemaining = opponentTimeRemaining;
     }
 
-    public static void open(String team, List<String> players, int timeRemaining) {
+    public static void open(String team, List<String> players, int timeRemaining,
+                            String opponentTeamName, String opponentFaction,
+                            int opponentTimeRemaining) {
         Minecraft mc = Minecraft.getInstance();
-        mc.setScreen(new CommanderVoteScreen(team, players, timeRemaining));
+        mc.setScreen(new CommanderVoteScreen(team, players, timeRemaining,
+            opponentTeamName, opponentFaction, opponentTimeRemaining));
     }
 
-    public static void updateVoteData(Map<String, Integer> voteCounts, int timeRemaining) {
+    public static void updateVoteData(Map<String, Integer> voteCounts, int timeRemaining, int opponentTimeRemaining) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen instanceof CommanderVoteScreen screen) {
-            screen.voteCounts = voteCounts;
+            screen.voteCounts = voteCounts == null ? new HashMap<>() : new HashMap<>(voteCounts);
             screen.timeRemaining = timeRemaining;
+            screen.opponentTimeRemaining = opponentTimeRemaining;
+            screen.rebuildMutilRoot();
         }
     }
 
+    /** 固定显示60个候选人名字 */
+    private static final int VISIBLE_NAME_COUNT = 60;
+
     @Override
-    protected void init() {
-        super.init();
-        createPlayerButtons();
-    }
+    protected void buildMutilRoot(GuiElement root) {
+        int playerCount = players == null ? 0 : players.size();
 
-    private void createPlayerButtons() {
-        this.clearWidgets();
-        
-        // 计算网格总宽度，居中
-        int totalWidth = COLUMNS * BUTTON_WIDTH + (COLUMNS - 1) * H_SPACING;
-        int startX = (this.width - totalWidth) / 2;
-        int startY = 72;
+        int columns = 4;
+        int gap = this.height < 320 ? 2 : 4;
+        int cardH = this.height < 320 ? 12 : 14;
+        int targetRows = VISIBLE_NAME_COUNT / columns;
+        int headerH = 70;
+        int footerH = 24;
 
-        for (int i = 0; i < players.size(); i++) {
+        // 面板宽度：每列最小150像素，确保名字和票数有足够空间
+        int minCardW = 150;
+        int minPanelW = 24 + columns * minCardW + (columns - 1) * gap;
+        int panelW = Math.min(this.width - 16, Math.max(minPanelW, this.width - 28));
+        int cardW = (panelW - 24 - (columns - 1) * gap) / columns;
+
+        int requestedPanelH = headerH + targetRows * cardH + Math.max(0, targetRows - 1) * gap + footerH;
+        int panelH = Math.min(this.height - 12, requestedPanelH);
+        int panelX = (this.width - panelW) / 2;
+        int panelY = Math.max(6, (this.height - panelH) / 2);
+
+        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
+
+        String teamPrefix = EspetroMutilWidgets.teamPrefix(team);
+        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 6, panelW,
+            "\u00a76\u00a7l指挥官投票 \u00a77| " + teamPrefix + "\u00a7l" + EspetroMutilWidgets.teamName(team),
+            EspetroMutilWidgets.TEXT));
+
+        boolean votingOpen = timeRemaining > 0;
+        int timeColor = timeRemaining <= 10 ? EspetroMutilWidgets.NEGATIVE : EspetroMutilWidgets.GOLD;
+        String timeText = votingOpen ? "剩余时间: " + timeRemaining + "秒" : "\u00a77本方指挥官投票已结束";
+        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
+            timeText, votingOpen ? timeColor : EspetroMutilWidgets.MUTED));
+
+        // 对手投票倒计时 + 已知编制信息
+        int infoY = 36;
+        if (opponentTeamName != null && !opponentTeamName.isEmpty() && opponentTimeRemaining >= 0) {
+            String oppPrefix = "ATTACK".equals(team) ? "\u00a79" : "\u00a7c";
+            int oppTimeColor = opponentTimeRemaining <= 5 ? EspetroMutilWidgets.NEGATIVE : EspetroMutilWidgets.GOLD;
+            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + infoY, panelW,
+                oppPrefix + "\u00a7l" + opponentTeamName + " 指挥官投票剩余: " + opponentTimeRemaining + "秒",
+                oppTimeColor));
+            infoY += 12;
+        }
+
+        if (opponentTeamName != null && !opponentTeamName.isEmpty()
+            && opponentFaction != null && !opponentFaction.isEmpty()) {
+            String oppPrefix = "ATTACK".equals(team) ? "\u00a79" : "\u00a7c";
+            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + infoY, panelW,
+                oppPrefix + "\u00a7l" + opponentTeamName + " 编制: " + opponentFaction,
+                EspetroMutilWidgets.TEXT));
+        }
+        root.addChild(EspetroMutilWidgets.rect(panelX + 12, panelY + 63, panelW - 24, 1, 0x25FFFFFF));
+
+        if (playerCount == 0) {
+            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 76, panelW,
+                "\u00a7c当前队伍没有可投票玩家", EspetroMutilWidgets.NEGATIVE));
+            return;
+        }
+
+        String selfName = Minecraft.getInstance().player == null ? "" : Minecraft.getInstance().player.getName().getString();
+        int startX = panelX + 12;
+        int startY = panelY + headerH;
+
+        // 计算可见范围：优先固定显示4列×15行=60人，小屏幕再自动减少行数并滚动。
+        int listH = Math.max(cardH, panelH - headerH - footerH);
+        int usableRows = Math.max(1, Math.min(targetRows, (listH + gap) / (cardH + gap)));
+        int visibleCount = Math.min(VISIBLE_NAME_COUNT, usableRows * columns);
+        maxScrollOffset = Math.max(0, playerCount - visibleCount);
+        scrollOffset = Math.min(scrollOffset, maxScrollOffset);
+        int maxVisible = Math.min(playerCount, scrollOffset + visibleCount);
+
+        for (int i = scrollOffset; i < maxVisible; i++) {
             String playerName = players.get(i);
             int votes = voteCounts.getOrDefault(playerName, 0);
-            boolean isVoted = playerName.equals(currentVote);
+            boolean isSelf = playerName.equals(selfName);
+            boolean isSelected = playerName.equals(currentVote);
 
-            int col = i % COLUMNS;
-            int row = i / COLUMNS;
-            int x = startX + col * (BUTTON_WIDTH + H_SPACING);
-            int y = startY + row * (BUTTON_HEIGHT + V_SPACING);
+            int localIndex = i - scrollOffset;
+            int col = localIndex % columns;
+            int row = localIndex / columns;
+            int x = startX + col * (cardW + gap);
+            int y = startY + row * (cardH + gap);
 
-            // 按钮文字：名字 + 票数
-            String voteText = votes > 0 ? " §e" + votes : "";
-            String prefix = isVoted ? "§a✓ " : "§f";
-            Component buttonText = Component.literal(prefix + playerName + voteText);
+            String prefix = isSelected ? "\u00a7a\u2713 " : isSelf ? "\u00a78" : "\u00a7f";
+            // 名字旁边显示实时投票数：票数>0黄色，=0灰色
+            String label = prefix + playerName + " \u00a7e[" + votes + "]";
 
-            this.addRenderableWidget(new TransparentTextButton(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, buttonText, () -> {
-                if (!playerName.equals(Minecraft.getInstance().player.getName().getString())) {
-                    if (!playerName.equals(currentVote)) {
-                        currentVote = playerName;
-                        NetworkManager.sendCastVote(playerName);
-                        createPlayerButtons();
-                    }
-                }
-            }));
+            var button = EspetroMutilWidgets.button(x, y, cardW, cardH, label, () -> voteFor(playerName))
+                .setEnabled(votingOpen && !isSelf)
+                .setSelected(isSelected)
+                .setColors(0x00000000, 0x202D3444, 0x30243A27)
+                .setBorderColor(0x00000000);
+            if (isSelf) {
+                button.setTextColor(EspetroMutilWidgets.DIM);
+            }
+            root.addChild(button);
         }
-        
-        // 当前投票提示
-        if (currentVote != null) {
-            String teamColor = "ATTACK".equals(team) ? "§c" : "§9";
-            int centerX = this.width / 2;
-            this.addRenderableWidget(Button.builder(
-                Component.literal(teamColor + "当前投票: §a" + currentVote),
-                btn -> {}
-            ).bounds(centerX - 90, this.height - 35, 180, 22).build());
+
+        if (maxScrollOffset > 0) {
+            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + panelH - 26, panelW,
+                "\u00a78鼠标滚轮切换列表  " + (scrollOffset + 1) + "-" + maxVisible + "/" + playerCount,
+                EspetroMutilWidgets.DIM));
         }
+
+        String voteText = !votingOpen
+            ? "\u00a78等待对方完成指挥官投票"
+            : currentVote == null
+            ? "\u00a78尚未投票"
+            : teamPrefix + "当前投票: \u00a7a" + currentVote;
+        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + panelH - 13, panelW,
+            voteText, EspetroMutilWidgets.TEXT));
     }
 
-    /**
-     * 透明背景的文字按钮
-     */
-    private static class TransparentTextButton extends AbstractWidget {
-        private final Runnable onClick;
-
-        public TransparentTextButton(int x, int y, int width, int height, Component message, Runnable onClick) {
-            super(x, y, width, height, message);
-            this.onClick = onClick;
+    private void voteFor(String playerName) {
+        if (playerName == null || timeRemaining <= 0) {
+            return;
         }
 
-        @Override
-        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
-                && mouseY >= this.getY() && mouseY <= this.getY() + this.getHeight();
-
-            if (hovered) {
-                // hover 时显示半透明背景
-                graphics.fill(this.getX(), this.getY(),
-                    this.getX() + this.getWidth(), this.getY() + this.getHeight(),
-                    0x40FFFFFF);
-            }
-
-            graphics.drawCenteredString(Minecraft.getInstance().font, getMessage(),
-                this.getX() + this.getWidth() / 2,
-                this.getY() + (this.getHeight() - 8) / 2,
-                hovered ? 0xFFFFAA : 0xFFFFFF);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && playerName.equals(mc.player.getName().getString())) {
+            return;
         }
 
-        @Override
-        public void onClick(double mouseX, double mouseY) {
-            this.onClick.run();
+        if (!playerName.equals(currentVote)) {
+            currentVote = playerName;
+            NetworkManager.sendCastVote(playerName);
+            rebuildMutilRoot();
         }
-
-        @Override
-        protected void updateWidgetNarration(NarrationElementOutput output) {}
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        
-        int centerX = this.width / 2;
-        
-        // 标题
-        String teamName = "ATTACK".equals(team) ? "§c§l进攻方" : "§9§l防守方";
-        graphics.drawCenteredString(this.font, 
-            Component.literal("§6§l指挥官投票 §7| " + teamName), centerX, 12, 0xFFFFFF);
-        
-        // 倒计时
-        String timeColor = timeRemaining <= 10 ? "§c" : "§e";
-        graphics.drawCenteredString(this.font, 
-            Component.literal(timeColor + "剩余时间: " + timeRemaining + "秒"), centerX, 30, 0xFFFFFF);
-        
-        // 提示
-        graphics.drawCenteredString(this.font, 
-            Component.literal("§7点击玩家名字投票（不可投给自己）"), centerX, 50, 0x888888);
-        
-        super.render(graphics, mouseX, mouseY, partialTick);
+    public boolean shouldCloseOnEsc() {
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (maxScrollOffset > 0) {
+            int nextOffset = scrollOffset + (delta < 0 ? 1 : -1);
+            nextOffset = Math.max(0, Math.min(maxScrollOffset, nextOffset));
+            if (nextOffset != scrollOffset) {
+                scrollOffset = nextOffset;
+                rebuildMutilRoot();
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public void onClose() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null) {
+            mc.setScreen(new CommanderVoteScreen(team, players, timeRemaining,
+                opponentTeamName, opponentFaction, opponentTimeRemaining));
+        }
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
-    }
-    
-    @Override
-    public void onClose() {
-        // 不允许关闭 - 重新打开界面
-        Minecraft mc = Minecraft.getInstance();
-        if (mc != null) {
-            mc.setScreen(new CommanderVoteScreen(team, players, timeRemaining));
-        }
     }
 }

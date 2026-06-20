@@ -90,8 +90,7 @@ public class VoteManager {
 
         int timeout = GameConfig.getDefendCommanderVoteSeconds();
         Espetro.LOGGER.info("守方指挥官投票开始！限时{}秒", timeout);
-        Espetro.broadcastToTeam("DEFEND", "§6★ 请投票选择指挥官！剩余时间: " + timeout + "秒 ★");
-        Espetro.broadcastToTeam("ATTACK", "§7守方正在选择指挥官，请稍候...");
+        // 消息已通过 CommanderVoteScreen GUI 实时显示，不再发送聊天消息
 
         // 发送投票界面给守方玩家
         org.espetro.network.NetworkManager.broadcastCommanderVoteScreenForTeam("DEFEND", timeout);
@@ -108,8 +107,7 @@ public class VoteManager {
 
         int timeout = GameConfig.getAttackCommanderVoteSeconds();
         Espetro.LOGGER.info("攻方指挥官投票开始！限时{}秒", timeout);
-        Espetro.broadcastToTeam("ATTACK", "§6★ 请投票选择指挥官！剩余时间: " + timeout + "秒 ★");
-        Espetro.broadcastToTeam("DEFEND", "§7攻方正在选择指挥官，请稍候...");
+        // 消息已通过 CommanderVoteScreen GUI 实时显示，不再发送聊天消息
 
         // 发送投票界面给攻方玩家
         org.espetro.network.NetworkManager.broadcastCommanderVoteScreenForTeam("ATTACK", timeout);
@@ -236,6 +234,7 @@ public class VoteManager {
                 Espetro.sendToPlayer(server.getPlayerList().getPlayer(defendCommander), "§a你已被选为§9守方§a指挥官！");
             }
             Espetro.LOGGER.info("守方指挥官投票结束！指挥官: {}", name);
+            org.espetro.network.NetworkManager.syncSquadsToTeam("DEFEND");
         } else {
             attackCommander = getWinningCandidate(attackPlayers, attackVotes);
             String name = getPlayerName(server, attackCommander);
@@ -244,6 +243,7 @@ public class VoteManager {
                 Espetro.sendToPlayer(server.getPlayerList().getPlayer(attackCommander), "§a你已被选为§c攻方§a指挥官！");
             }
             Espetro.LOGGER.info("攻方指挥官投票结束！指挥官: {}", name);
+            org.espetro.network.NetworkManager.syncSquadsToTeam("ATTACK");
         }
 
         return finishedTeam;
@@ -260,15 +260,16 @@ public class VoteManager {
      */
     private void broadcastVoteUpdate() {
         if (!votingActive || currentVotingTeam == null) return;
-        
+
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        Set<UUID> players = "ATTACK".equals(currentVotingTeam) ? attackPlayers : defendPlayers;
+        Set<UUID> activePlayers = "ATTACK".equals(currentVotingTeam) ? attackPlayers : defendPlayers;
+        Set<UUID> waitingPlayers = "ATTACK".equals(currentVotingTeam) ? defendPlayers : attackPlayers;
         Map<UUID, UUID> votes = "ATTACK".equals(currentVotingTeam) ? attackVotes : defendVotes;
 
         java.util.Map<String, Integer> voteCounts = new java.util.HashMap<>();
-        for (UUID uuid : players) {
+        for (UUID uuid : activePlayers) {
             ServerPlayer p = server.getPlayerList().getPlayer(uuid);
             if (p != null) {
                 int count = 0;
@@ -279,12 +280,24 @@ public class VoteManager {
             }
         }
 
-        org.espetro.network.VoteDataPacket packet = new org.espetro.network.VoteDataPacket(voteCounts, getRemainingSeconds());
-        for (UUID uuid : players) {
+        int remaining = getRemainingSeconds();
+        org.espetro.network.VoteDataPacket activePacket =
+            new org.espetro.network.VoteDataPacket(voteCounts, remaining, -1);
+        for (UUID uuid : activePlayers) {
             ServerPlayer p = server.getPlayerList().getPlayer(uuid);
             if (p != null) {
                 org.espetro.network.NetworkManager.NET.send(
-                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p), packet);
+                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p), activePacket);
+            }
+        }
+
+        org.espetro.network.VoteDataPacket waitingPacket =
+            new org.espetro.network.VoteDataPacket(Collections.emptyMap(), 0, remaining);
+        for (UUID uuid : waitingPlayers) {
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p != null) {
+                org.espetro.network.NetworkManager.NET.send(
+                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p), waitingPacket);
             }
         }
     }
@@ -299,19 +312,10 @@ public class VoteManager {
         int timeout = getCurrentTimeoutSeconds();
         int secondsRemaining = timeout - (voteTickCounter / TICKS_PER_SECOND);
 
-        // 每秒更新一次投票状态给当前投票方
-        if (voteTickCounter % TICKS_PER_SECOND == 0) {
-            // 每秒广播投票数据（同步倒计时和票数）
+        // 每0.5秒广播一次投票数据（更实时地同步票数和倒计时）
+        if (voteTickCounter % (TICKS_PER_SECOND / 2) == 0) {
+            // 广播投票数据（同步倒计时和票数）
             broadcastVoteUpdate();
-
-            if (secondsRemaining > 0 && secondsRemaining <= 5) {
-                Espetro.broadcastToTeam(currentVotingTeam, "§e指挥官投票剩余时间: §c" + secondsRemaining + "秒");
-            }
-
-            // 向等待方也显示倒计时
-            String waitingTeam = "DEFEND".equals(currentVotingTeam) ? "ATTACK" : "DEFEND";
-            String waitingName = "DEFEND".equals(currentVotingTeam) ? "守方" : "攻方";
-            Espetro.broadcastToTeam(waitingTeam, "§7" + waitingName + "正在选择指挥官，请稍候... [§e" + secondsRemaining + "秒§7]");
         }
     }
 

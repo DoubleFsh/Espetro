@@ -80,9 +80,10 @@ public class BastionBuildingWandItem extends FishingRodItem {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
-        // 检查全局兵站数量上限（最多4个）
-        if (!BastionManager.getInstance().hasBastionCapacity()) {
-            serverPlayer.sendSystemMessage(Component.literal("§c兵站数量已达到上限（" + BastionManager.MAX_BASTIONS + "个），无法继续建造！"));
+        // 检查当前队伍场上生效兵站数量上限
+        if (!BastionManager.getInstance().hasBastionCapacity(team)) {
+            serverPlayer.sendSystemMessage(Component.literal("§c本方生效兵站数量已达到上限（"
+                + BastionManager.MAX_BASTIONS + "个），无法继续建造！"));
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 

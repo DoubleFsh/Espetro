@@ -42,11 +42,13 @@ public class ClientPacketHandlers {
         if (mc.player == null) return;
 
         if (mc.screen instanceof org.espetro.client.gui.ClassSelectScreen screen) {
-            // 已在编制选择界面，只更新倒计时
-            screen.updateTimeRemaining(packet.getTimeRemaining());
+            // 已在编制选择界面，刷新本方/对方倒计时和当前权限
+            screen.updateFromPacket(packet);
         } else {
             mc.setScreen(new org.espetro.client.gui.ClassSelectScreen(
-                packet.getTeam(), packet.isCommander(), packet.getFactions(), packet.getTimeRemaining()));
+                packet.getTeam(), packet.isCommander(), packet.getFactions(),
+                packet.getTimeRemaining(), packet.getOpponentTeamName(),
+                packet.getOpponentFaction(), packet.getOpponentTimeRemaining()));
         }
     }
 
@@ -70,14 +72,29 @@ public class ClientPacketHandlers {
 
     public static void handleCommanderVote(CommanderVotePacket packet) {
         org.espetro.client.gui.CommanderVoteScreen.open(
-            packet.getTeam(), packet.getPlayers(), packet.getTimeRemaining());
+            packet.getTeam(), packet.getPlayers(), packet.getTimeRemaining(),
+            packet.getOpponentTeamName(), packet.getOpponentFaction(),
+            packet.getOpponentTimeRemaining());
     }
 
     // ==================== VoteDataPacket ====================
 
     public static void handleVoteData(VoteDataPacket packet) {
         org.espetro.client.gui.CommanderVoteScreen.updateVoteData(
-            packet.getVoteCounts(), packet.getTimeRemaining());
+            packet.getVoteCounts(), packet.getTimeRemaining(), packet.getOpponentTimeRemaining());
+    }
+
+    // ==================== FactionRevealPacket ====================
+
+    public static void handleFactionReveal(FactionRevealPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.setScreen(new org.espetro.client.gui.FactionRevealScreen(
+                packet.getAttackFactionName(),
+                packet.getDefendFactionName(),
+                packet.getDurationSeconds()
+            ));
+        }
     }
 
     // ==================== TroopCountSyncPacket ====================
@@ -138,14 +155,35 @@ public class ClientPacketHandlers {
         // 记录当前阵营/编制ID
         org.espetro.client.gui.ClientGameState.setPlayerFactionId(packet.getFactionId());
         org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
+        org.espetro.client.gui.ClientTacticalState.updateSquads(
+            packet.getSquads(), packet.getMySquadId(),
+            packet.getCommanderNames(), packet.getTeammateNameTagDistance());
 
         if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
             // 已在统一界面中，只更新数据
             screen.updateClassCounts(packet.getClassCounts());
             screen.updateTimeRemaining(packet.getDeployTimeRemaining());
+            screen.updateSquads(packet.getSquads(), packet.getMySquadId());
             // 载具部署已分离到 VehicleDeployScreen，通过"载具部署指令"物品单独打开
         } else {
             mc.setScreen(new org.espetro.client.gui.UnifiedDeployScreen(packet));
+        }
+    }
+
+    // ==================== SquadSyncPacket ====================
+
+    public static void handleSquadSync(SquadSyncPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        org.espetro.client.gui.ClientTacticalState.updateSquads(
+            packet.getSquads(), packet.getMySquadId(),
+            packet.getCommanderNames(), packet.getTeammateNameTagDistance());
+
+        if (mc.screen instanceof org.espetro.client.gui.SquadScreen screen) {
+            screen.updateSquads(packet.getSquads(), packet.getMySquadId());
+        } else if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            screen.updateSquads(packet.getSquads(), packet.getMySquadId());
         }
     }
 

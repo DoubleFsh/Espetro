@@ -13,10 +13,9 @@ import java.util.*;
 
 /**
  * 载具配置加载器
- * 从各编制 JSON 的 vehicles 节加载载具配置（无全局配置文件）
+ * 完全从各编制 JSON 的 vehicles 节加载可部署载具。
  */
 public class VehicleConfig {
-
     // factionId -> (vehicleType -> VehicleTypeConfig)
     private static final Map<String, Map<String, VehicleTypeConfig>> VEHICLE_CONFIGS = new LinkedHashMap<>();
 
@@ -29,12 +28,13 @@ public class VehicleConfig {
     public static class VehicleTypeConfig {
         public int max;
         public int respawnMinutes;
-        /** 实体类型注册名，如 "minecraft:cow" */
+        /** 实体类型注册名，如 "minecraft:minecart" 或任意模组实体ID。 */
         @Nullable
         public String entityTypeStr;
         /** 显示名，含颜色代码，如 "§6运输卡车" */
         @Nullable
         public String displayName;
+        public DeploymentConfig deployment = DeploymentConfig.deployPointDefault();
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
             this.max = max;
@@ -52,8 +52,29 @@ public class VehicleConfig {
         @Nullable
         public EntityType<?> getEntityType() {
             if (entityTypeStr == null || entityTypeStr.isEmpty()) return null;
-            ResourceLocation rl = ResourceLocation.parse(entityTypeStr);
+            ResourceLocation rl = ResourceLocation.tryParse(entityTypeStr);
+            if (rl == null) return null;
+            if (!BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) return null;
             return BuiltInRegistries.ENTITY_TYPE.get(rl);
+        }
+    }
+
+    public static class DeploymentConfig {
+        public String mode = "deploy_point";
+        @Nullable
+        public int[] absolute;
+        public int[] offset = new int[] {0, 0, 0};
+        public int radius = SPAWN_RADIUS;
+        public float yaw = 0f;
+        public boolean snapToGround = true;
+        public int verticalScan = 6;
+
+        public static DeploymentConfig deployPointDefault() {
+            return new DeploymentConfig();
+        }
+
+        public boolean fixed() {
+            return "fixed".equalsIgnoreCase(mode) || "absolute".equalsIgnoreCase(mode);
         }
     }
 
@@ -77,9 +98,7 @@ public class VehicleConfig {
                 String vehicleType = vEntry.getKey();
                 FactionDataLoader.VehicleData vd = vEntry.getValue();
 
-                VehicleTypeConfig vtc = new VehicleTypeConfig(vd.max, vd.respawnMinutes);
-                vtc.entityTypeStr = vd.entityTypeStr;
-                vtc.displayName = vd.displayName;
+                VehicleTypeConfig vtc = buildVehicleConfig(vehicleType, vd);
 
                 typeMap.put(vehicleType, vtc);
             }
@@ -88,6 +107,61 @@ public class VehicleConfig {
         }
 
         Espetro.LOGGER.info("载具配置已加载: {} 个编制自定义了载具", VEHICLE_CONFIGS.size());
+    }
+
+    private static VehicleTypeConfig buildVehicleConfig(String vehicleType, FactionDataLoader.VehicleData vd) {
+        int max = vd.max > 0 ? vd.max : FactionDataLoader.VehicleData.DEFAULT_MAX;
+        int respawn = vd.respawnMinutes > 0
+            ? vd.respawnMinutes
+            : FactionDataLoader.VehicleData.DEFAULT_RESPAWN_MINUTES;
+
+        VehicleTypeConfig cfg = new VehicleTypeConfig(max, respawn);
+        cfg.entityTypeStr = vd.entityTypeStr;
+        cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
+        cfg.deployment = buildDeploymentConfig(vd);
+        if (cfg.entityTypeStr == null || cfg.entityTypeStr.isBlank()) {
+            Espetro.LOGGER.warn("载具 {} 未配置 entity_type；请在对应编制 JSON 的 vehicles 节中配置", vehicleType);
+        }
+        return cfg;
+    }
+
+    private static DeploymentConfig buildDeploymentConfig(FactionDataLoader.VehicleData vd) {
+        DeploymentConfig cfg = DeploymentConfig.deployPointDefault();
+
+        FactionDataLoader.VehicleDeploymentData raw = vd.deployment;
+        if (raw != null) {
+            cfg.mode = firstNonBlank(raw.mode, cfg.mode);
+            cfg.absolute = validVector(raw.absolute) ? raw.absolute : cfg.absolute;
+            cfg.offset = validVector(raw.offset) ? raw.offset : cfg.offset;
+            if (raw.radius != null) cfg.radius = Math.max(0, raw.radius);
+            if (raw.yaw != null) cfg.yaw = raw.yaw;
+            if (raw.snapToGround != null) cfg.snapToGround = raw.snapToGround;
+            if (raw.verticalScan != null) cfg.verticalScan = Math.max(1, raw.verticalScan);
+        }
+
+        if (validVector(vd.position)) {
+            cfg.mode = "fixed";
+            cfg.absolute = vd.position;
+        }
+        if (validVector(vd.offset)) {
+            cfg.offset = vd.offset;
+        }
+        if (vd.radius != null) {
+            cfg.radius = Math.max(0, vd.radius);
+        }
+        if (vd.yaw != null) {
+            cfg.yaw = vd.yaw;
+        }
+        return cfg;
+    }
+
+    private static boolean validVector(@Nullable int[] vector) {
+        return vector != null && vector.length >= 3;
+    }
+
+    @Nullable
+    private static String firstNonBlank(@Nullable String first, @Nullable String fallback) {
+        return first != null && !first.isBlank() ? first : fallback;
     }
 
     /**

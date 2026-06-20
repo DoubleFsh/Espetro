@@ -17,7 +17,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * 兵站选择 — 纯编号驱动，不依赖区块加载/盔甲架实体检查
+ * 兵站选择 — 使用兵站记录坐标，不依赖区块加载/盔甲架实体检查
  */
 public class BastionSelectionPacket {
 
@@ -72,7 +72,7 @@ public class BastionSelectionPacket {
     }
 
     /**
-     * 玩家选择兵站复活：只看存储的编号和坐标，不查区块、不查实体。
+     * 玩家选择兵站复活：只看存储坐标，不查区块、不查实体。
      */
     public static boolean handleBastionSelect(ServerPlayer player, UUID bastionId) {
         String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
@@ -82,7 +82,7 @@ public class BastionSelectionPacket {
         if (team == null) return false;
 
         BastionData bastion = BastionManager.getInstance().getBastion(bastionId);
-        if (bastion == null) {
+        if (bastion == null || !bastion.isActive() || !team.equals(bastion.getTeam())) {
             player.sendSystemMessage(Component.literal("§c无效的兵站选择！"));
             return false;
         }
@@ -101,8 +101,7 @@ public class BastionSelectionPacket {
             return false;
         }
 
-        // 只检查编号：读取记录的盔甲架坐标。getRecordedArmorStandPosition
-        // 内部通过 isOwnedSlot 校验编号仍属于该兵站，失败返回 null。
+        // 读取记录的盔甲架坐标，不强制加载远处区块。
         BlockPos targetPos = BastionManager.getInstance().getRecordedArmorStandPosition(bastion);
         if (targetPos == null) {
             player.sendSystemMessage(Component.literal("§c该兵站缺少记录坐标或已失效，无法部署！"));

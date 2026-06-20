@@ -105,8 +105,6 @@ public class FactionDataLoader {
                         Map<String, VehicleData> vMap = new LinkedHashMap<>();
                         for (Map.Entry<String, VehicleData> vEntry : data.vehicles.entrySet()) {
                             VehicleData vd = vEntry.getValue();
-                            // 确保默认值
-                            if (vd.respawnMinutes == 0) vd.respawnMinutes = VehicleData.DEFAULT_RESPAWN_MINUTES;
                             vMap.put(vEntry.getKey(), vd);
                         }
                         this.factionVehicles.put(factionId, vMap);
@@ -255,6 +253,33 @@ public class FactionDataLoader {
          */
         public String[] commands;
 
+        /**
+         * 直接装备到玩家装备栏的物品配置，值沿用 /give 的参数格式。
+         * <p>
+         * 支持槽位键：
+         * head/helmet/armor.head, chest/chestplate/armor.chest,
+         * legs/leggings/armor.legs, feet/boots/armor.feet,
+         * mainhand/weapon.mainhand, offhand/weapon.offhand。
+         * <p>
+         * 示例：
+         * <pre>{@code
+         * "equipment": {
+         *   "head": "minecraft:diamond_helmet 1",
+         *   "chest": "minecraft:diamond_chestplate{display:{Name:'{\"text\":\"重甲\"}'}} 1"
+         * }
+         * }</pre>
+         */
+        @SerializedName(value = "equipment", alternate = {"equipment_slots", "equipmentSlots"})
+        public Map<String, String> equipment;
+
+        /** equipment 的语义别名，便于只配置可穿戴装备。 */
+        @SerializedName(value = "wearable_equipment", alternate = {"wearableEquipment"})
+        public Map<String, String> wearableEquipment;
+
+        /** 是否自动把 commands 发到背包里的可穿戴物品穿上，默认开启。 */
+        @SerializedName(value = "auto_equip_wearables", alternate = {"autoEquipWearables"})
+        public Boolean autoEquipWearables;
+
         /** 弹药补给配置（可选） */
         public ResupplyData resupply;
 
@@ -291,7 +316,7 @@ public class FactionDataLoader {
 
     /**
      * 编制自定义载具数据（来自 faction JSON 的 vehicles 节）
-     * 每个编制可自定义其载具种类、实体类型、显示名、上限和冷却时间
+     * 每个编制可自定义其载具种类、实体类型、部署位置、显示名、上限和冷却时间
      */
     public static class VehicleData {
         /** 默认刷新冷却时间(分钟) */
@@ -299,16 +324,48 @@ public class FactionDataLoader {
         /** 默认载具上限 */
         public static final int DEFAULT_MAX = 1;
 
-        /** Minecraft实体注册名，如 "minecraft:cow" */
+        /** Minecraft实体注册名，如 "minecraft:minecart" 或任意模组实体ID。 */
         @SerializedName("entity_type")
         public String entityTypeStr;
         /** 显示名，含颜色代码，如 "§6运输卡车" */
         @SerializedName("display_name")
         public String displayName;
         /** 该类型同时部署上限 */
-        public int max = DEFAULT_MAX;
+        public int max = 0;
         /** 单辆刷新冷却时间(分钟) */
         @SerializedName("respawn_minutes")
-        public int respawnMinutes = DEFAULT_RESPAWN_MINUTES;
+        public int respawnMinutes = 0;
+        /** 单类载具的部署位置配置。 */
+        public VehicleDeploymentData deployment;
+        /** deployment.offset 的旧式快捷写法。 */
+        public int[] offset;
+        /** deployment.radius 的旧式快捷写法。 */
+        public Integer radius;
+        /** deployment.absolute 的旧式快捷写法。 */
+        public int[] position;
+        /** deployment.yaw 的旧式快捷写法。 */
+        public Float yaw;
+    }
+
+    /**
+     * 单类载具部署位置配置。
+     */
+    public static class VehicleDeploymentData {
+        /** deploy_point: 以玩家当前部署点为基准；fixed: 使用 absolute 固定坐标。 */
+        public String mode;
+        /** 固定坐标 [x, y, z]。 */
+        public int[] absolute;
+        /** 相对基准点偏移 [x, y, z]。 */
+        public int[] offset;
+        /** 在偏移后的基准点周围随机寻找落点半径。 */
+        public Integer radius;
+        /** 朝向角度。 */
+        public Float yaw;
+        /** true 时尝试自动找地面，默认 true。 */
+        @SerializedName("snap_to_ground")
+        public Boolean snapToGround;
+        /** 寻找可用地面时向上/向下扫描格数。 */
+        @SerializedName("vertical_scan")
+        public Integer verticalScan;
     }
 }

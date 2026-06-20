@@ -33,9 +33,9 @@ import java.util.stream.Collectors;
  */
 public class BastionManager {
 
-    /** 全局最多记录兵站数量 */
+    /** 每个队伍最多同时生效的兵站数量 */
     public static final int MAX_BASTIONS = 4;
-    /** 兼容旧调用，实际已改为全局上限。 */
+    /** 兼容旧调用，实际含义为每个队伍的上限。 */
     @Deprecated
     public static final int MAX_BASTIONS_PER_TEAM = MAX_BASTIONS;
     private static BastionManager INSTANCE;
@@ -43,9 +43,8 @@ public class BastionManager {
     // 所有兵站列表
     private final Map<UUID, BastionData> bastions = new HashMap<>();
 
-    // 固定 4 槽兵站记录表：槽位即隐藏兵站编号，坐标为盔甲架最新位置
-    private final UUID[] bastionSlots = new UUID[MAX_BASTIONS];
-    private final BlockPos[] bastionSlotPositions = new BlockPos[MAX_BASTIONS];
+    // 兵站记录表：部署传送只依赖记录坐标，不依赖区块当前是否加载。
+    private final Map<UUID, BlockPos> bastionRecordPositions = new HashMap<>();
 
     // 正在等待复活选择的玩家
     private final Map<UUID, UUID> waitingPlayers = new HashMap<>(); // playerUUID -> bastionChoiceRequestId
@@ -181,11 +180,17 @@ public class BastionManager {
      * @return 创建的兵站数据，失败返回null
      */
     public BastionData createBastion(ServerLevel level, BlockPos pos, String team, String name) {
+        if (!hasBastionCapacity(team)) {
+            Espetro.LOGGER.warn("队伍 {} 的生效兵站数量已达到上限 {}，拒绝创建: {} ({})",
+                team, MAX_BASTIONS, name, pos);
+            return null;
+        }
+
         BastionData bastion = new BastionData(team, name, pos, level);
         bastion.setArmorStandPosition(pos.above());
 
         if (!registerBastionRecord(bastion)) {
-            Espetro.LOGGER.warn("兵站数量已达到上限 {}，拒绝创建: {} ({})", MAX_BASTIONS, name, pos);
+            Espetro.LOGGER.warn("兵站记录失败，拒绝创建: {} ({})", name, pos);
             return null;
         }
         bastion.setCoreHealth(armorStandHealth);
@@ -207,7 +212,7 @@ public class BastionManager {
 
         bastions.put(bastion.getBastionId(), bastion);
 
-        Espetro.LOGGER.info("创建兵站: {} (队伍: {}, 编号槽: {}, 盔甲架位置: {}, 盔甲架ID: {})",
+        Espetro.LOGGER.info("创建兵站: {} (队伍: {}, 编号: {}, 盔甲架位置: {}, 盔甲架ID: {})",
             name, team, bastion.getBastionNumber(), bastion.getArmorStandPosition(), armorStand.getUUID());
 
         return bastion;
@@ -252,7 +257,7 @@ public class BastionManager {
     }
 
     /**
-     * 设置兵站启用状态。兵站失效时同步清空记录坐标并释放隐藏编号。
+     * 设置兵站启用状态。兵站失效时同步清空记录坐标。
      */
     public void setBastionActive(BastionData bastion, boolean active) {
         if (!active) {
@@ -261,9 +266,16 @@ public class BastionManager {
             return;
         }
 
+        if (!bastion.isActive() && !hasBastionCapacity(bastion.getTeam())) {
+            bastion.setActive(false);
+            Espetro.LOGGER.warn("兵站 {} 无法重新激活：队伍 {} 的生效兵站数量已达上限",
+                bastion.getName(), bastion.getTeam());
+            return;
+        }
+
         if (!registerBastionRecord(bastion)) {
             bastion.setActive(false);
-            Espetro.LOGGER.warn("兵站 {} 无法重新激活：编号槽已满", bastion.getName());
+            Espetro.LOGGER.warn("兵站 {} 无法重新激活：记录坐标失败", bastion.getName());
             return;
         }
         bastion.setActive(active);
@@ -322,16 +334,7 @@ public class BastionManager {
         String bastionName = bastion.getName();
         String bastionTeam = bastion.getTeam();
 
-        // 强制移除盔甲架实体（无论区块是否加载）
-        if (bastion.getArmorStandId() != null) {
-            BlockPos entityPos = bastion.getArmorStandPosition();
-            if (entityPos == null) entityPos = bastion.getPosition().above();
-            bastion.getLevel().getChunkAt(entityPos);
-            Entity entity = bastion.getLevel().getEntity(bastion.getArmorStandId());
-            if (entity != null) {
-                entity.kill();
-            }
-        }
+        removeCoreEntityIfLoaded(bastion, true);
 
         setBastionActive(bastion, false);
 
@@ -443,21 +446,25 @@ public class BastionManager {
     }
 
     /**
-     * 重置所有兵站（清空所有数据记录，不持久化）
+     * 重置所有兵站。只清理已加载区块内的核心实体，避免重置或退出世界时同步加载远处区块。
      */
     public void reset() {
-        // 移除所有盔甲架（强制加载区块）
+        reset(true);
+    }
+
+    /**
+     * 仅清理运行时状态，不访问世界实体。用于服务器已停止后的兜底清理。
+     */
+    public void clearRuntimeState() {
+        reset(false);
+    }
+
+    private void reset(boolean removeLoadedEntities) {
         for (BastionData bastion : bastions.values()) {
-            releaseBastionRecord(bastion);
-            if (bastion.getArmorStandId() != null) {
-                BlockPos entityPos = bastion.getArmorStandPosition();
-                if (entityPos == null) entityPos = bastion.getPosition().above();
-                bastion.getLevel().getChunkAt(entityPos);
-                Entity entity = bastion.getLevel().getEntity(bastion.getArmorStandId());
-                if (entity != null) {
-                    entity.kill();
-                }
+            if (removeLoadedEntities) {
+                removeCoreEntityIfLoaded(bastion, false);
             }
+            releaseBastionRecord(bastion);
         }
         bastions.clear();
         waitingPlayers.clear();
@@ -468,8 +475,35 @@ public class BastionManager {
         clearBastionRecords();
     }
 
+    private void removeCoreEntityIfLoaded(BastionData bastion, boolean kill) {
+        if (bastion == null || bastion.getArmorStandId() == null) {
+            return;
+        }
+
+        BlockPos entityPos = bastion.getArmorStandPosition();
+        if (entityPos == null) {
+            entityPos = bastion.getPosition().above();
+        }
+
+        ServerLevel level = bastion.getLevel();
+        if (level == null || !isChunkLoaded(level, entityPos)) {
+            return;
+        }
+
+        Entity entity = level.getEntity(bastion.getArmorStandId());
+        if (entity == null) {
+            return;
+        }
+
+        if (kill) {
+            entity.kill();
+        } else {
+            entity.discard();
+        }
+    }
+
     /**
-     * 获取当前已占用的兵站记录槽数量。
+     * 获取当前所有队伍生效兵站数量。
      */
     public int getActiveBastionCount() {
         return (int) bastions.values().stream()
@@ -478,10 +512,28 @@ public class BastionManager {
     }
 
     /**
-     * 是否还有可用的兵站记录槽。
+     * 获取指定队伍当前生效兵站数量。
      */
+    public int getActiveBastionCount(String team) {
+        return (int) bastions.values().stream()
+            .filter(BastionData::isActive)
+            .filter(b -> Objects.equals(team, b.getTeam()))
+            .count();
+    }
+
+    /**
+     * 兼容旧调用：只检查所有队伍总数。
+     */
+    @Deprecated
     public boolean hasBastionCapacity() {
         return getActiveBastionCount() < MAX_BASTIONS;
+    }
+
+    /**
+     * 指定队伍是否还能建造兵站。上限只统计当前场上同队伍生效兵站。
+     */
+    public boolean hasBastionCapacity(String team) {
+        return getActiveBastionCount(team) < MAX_BASTIONS;
     }
 
     /**
@@ -489,33 +541,27 @@ public class BastionManager {
      */
     @Nullable
     public BlockPos getRecordedArmorStandPosition(BastionData bastion) {
-        int slot = bastion.getBastionNumber() - 1;
-        if (isOwnedSlot(slot, bastion.getBastionId())) {
-            BlockPos slotPos = bastionSlotPositions[slot];
-            if (slotPos != null) {
-                return slotPos;
-            }
+        BlockPos recordPos = bastionRecordPositions.get(bastion.getBastionId());
+        if (recordPos != null) {
+            return recordPos;
         }
         BlockPos recorded = bastion.getArmorStandPosition();
         return recorded != null ? recorded : bastion.getPosition().above();
     }
 
     /**
-     * 更新兵站盔甲架坐标，并同步到对应编号槽。
+     * 更新兵站盔甲架坐标，并同步到记录表。
      */
     public void updateBastionArmorStandPosition(BastionData bastion, BlockPos pos) {
         bastion.setArmorStandPosition(pos);
-        int slot = bastion.getBastionNumber() - 1;
-        if (isOwnedSlot(slot, bastion.getBastionId())) {
-            bastionSlotPositions[slot] = pos;
-        }
+        bastionRecordPositions.put(bastion.getBastionId(), pos);
     }
 
     private boolean isBastionUsable(BastionData bastion) {
         if (!bastion.isActive()) {
             return false;
         }
-        if (findBastionSlot(bastion.getBastionId()) < 0 && !registerBastionRecord(bastion)) {
+        if (!bastionRecordPositions.containsKey(bastion.getBastionId()) && !registerBastionRecord(bastion)) {
             return false;
         }
         if (bastion.checkArmorStand()) {
@@ -572,6 +618,10 @@ public class BastionManager {
         if (level == null || pos == null) {
             return false;
         }
+        return isChunkLoaded(level, pos);
+    }
+
+    private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
         ChunkPos chunkPos = new ChunkPos(pos);
         return level.getChunkSource().hasChunk(chunkPos.x, chunkPos.z);
     }
@@ -626,78 +676,54 @@ public class BastionManager {
     }
 
     private boolean registerBastionRecord(BastionData bastion) {
-        int existingSlot = findBastionSlot(bastion.getBastionId());
-        if (existingSlot >= 0) {
-            occupyBastionSlot(bastion, existingSlot);
-            return true;
-        }
-
-        int savedSlot = bastion.getBastionNumber() - 1;
-        if (isFreeSlot(savedSlot)) {
-            occupyBastionSlot(bastion, savedSlot);
-            return true;
-        }
-
-        int startSlot = hashBastionId(bastion.getBastionId());
-        for (int offset = 0; offset < MAX_BASTIONS; offset++) {
-            int slot = (startSlot + offset) % MAX_BASTIONS;
-            if (isFreeSlot(slot)) {
-                occupyBastionSlot(bastion, slot);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void occupyBastionSlot(BastionData bastion, int slot) {
         BlockPos armorStandPos = bastion.getArmorStandPosition();
         if (armorStandPos == null) {
             armorStandPos = bastion.getPosition().above();
             bastion.setArmorStandPosition(armorStandPos);
         }
 
-        bastionSlots[slot] = bastion.getBastionId();
-        bastionSlotPositions[slot] = armorStandPos;
-        bastion.setBastionNumber(slot + 1);
+        bastionRecordPositions.put(bastion.getBastionId(), armorStandPos);
+        bastion.setBastionNumber(findAvailableBastionNumber(bastion));
+        return true;
     }
 
     private void releaseBastionRecord(BastionData bastion) {
-        int slot = findBastionSlot(bastion.getBastionId());
-        if (slot >= 0) {
-            bastionSlots[slot] = null;
-            bastionSlotPositions[slot] = null;
-            Espetro.LOGGER.debug("释放兵站编号槽 {}: {}", slot + 1, bastion.getName());
-        }
+        bastionRecordPositions.remove(bastion.getBastionId());
+        Espetro.LOGGER.debug("释放兵站记录: {}", bastion.getName());
         bastion.setBastionNumber(-1);
         bastion.clearArmorStandPosition();
     }
 
     private void clearBastionRecords() {
-        Arrays.fill(bastionSlots, null);
-        Arrays.fill(bastionSlotPositions, null);
+        bastionRecordPositions.clear();
     }
 
-    private int hashBastionId(UUID bastionId) {
-        return Math.floorMod(bastionId.hashCode(), MAX_BASTIONS);
-    }
-
-    private int findBastionSlot(UUID bastionId) {
-        for (int i = 0; i < MAX_BASTIONS; i++) {
-            if (bastionId.equals(bastionSlots[i])) {
-                return i;
+    private int findAvailableBastionNumber(BastionData bastion) {
+        boolean[] used = new boolean[MAX_BASTIONS + 1];
+        for (BastionData other : bastions.values()) {
+            if (other.getBastionId().equals(bastion.getBastionId())) {
+                continue;
+            }
+            if (!other.isActive() || !Objects.equals(other.getTeam(), bastion.getTeam())) {
+                continue;
+            }
+            int number = other.getBastionNumber();
+            if (number >= 1 && number <= MAX_BASTIONS) {
+                used[number] = true;
             }
         }
-        return -1;
-    }
 
-    private boolean isFreeSlot(int slot) {
-        return slot >= 0 && slot < MAX_BASTIONS && bastionSlots[slot] == null;
-    }
+        int savedNumber = bastion.getBastionNumber();
+        if (savedNumber >= 1 && savedNumber <= MAX_BASTIONS && !used[savedNumber]) {
+            return savedNumber;
+        }
 
-    private boolean isOwnedSlot(int slot, UUID bastionId) {
-        return slot >= 0
-            && slot < MAX_BASTIONS
-            && bastionId.equals(bastionSlots[slot]);
+        for (int number = 1; number <= MAX_BASTIONS; number++) {
+            if (!used[number]) {
+                return number;
+            }
+        }
+        return MAX_BASTIONS;
     }
 
     /**

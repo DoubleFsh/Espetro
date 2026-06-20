@@ -26,6 +26,7 @@ public class DeployPointSelectScreen extends Screen {
     private static final int VERTICAL_SPACING = 5;
     private static final int START_Y = 55;
     private int startX;
+    private ScreenFadeIn fadeIn;
 
     public DeployPointSelectScreen(boolean hasDeployPoint, String deployPointPos,
                                    List<DeployPointSelectPacket.BastionItem> bastions) {
@@ -38,6 +39,7 @@ public class DeployPointSelectScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        fadeIn = new ScreenFadeIn();
         startX = (this.width - BUTTON_WIDTH) / 2;
 
         int y = START_Y;
@@ -79,7 +81,10 @@ public class DeployPointSelectScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+        float offsetY = fadeIn != null ? fadeIn.preRender(graphics) : 0;
+        if (offsetY != 0) ScreenFadeIn.translateY(graphics, offsetY);
+
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
 
         // 标题
         graphics.drawCenteredString(this.font,
@@ -88,9 +93,14 @@ public class DeployPointSelectScreen extends Screen {
 
         graphics.drawCenteredString(this.font,
             Component.literal("§e请选择你要复活的位置"),
-            this.width / 2, 32, 0xAAAAAA);
+            this.width / 2, 32, EspetroMutilWidgets.MUTED);
 
         super.render(graphics, mouseX, mouseY, partialTick);
+
+        if (fadeIn != null) {
+            if (offsetY != 0) graphics.pose().translate(0, -offsetY, 0);
+            fadeIn.postRender();
+        }
     }
 
     @Override

@@ -7,10 +7,34 @@
     "color": "AA3333"
   },
   "vehicles": {
-    "cow": { "entity_type": "minecraft:cow", "display_name": "§6运输卡车", "max": 2, "respawn_minutes": 5 },
-    "pig": { "entity_type": "minecraft:cow", "display_name": "§a装甲车", "max": 1, "respawn_minutes": 5 },
-    "ghast": { "entity_type": "minecraft:ghast", "display_name": "§c武装直升机", "max": 1, "respawn_minutes": 5 },
-    "horse": { "entity_type": "minecraft:horse", "display_name": "§e运兵马", "max": 3, "respawn_minutes": 5 }
+    "transport_truck": {
+      "entity_type": "minecraft:minecart",
+      "display_name": "§6运输卡车",
+      "max": 2,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [8, 0, 0], "radius": 5, "yaw": 90 }
+    },
+    "apc": {
+      "entity_type": "minecraft:camel",
+      "display_name": "§a装甲运兵车",
+      "max": 1,
+      "respawn_minutes": 8,
+      "deployment": { "mode": "deploy_point", "offset": [-8, 0, 0], "radius": 5, "yaw": 270 }
+    },
+    "attack_helicopter": {
+      "entity_type": "minecraft:ghast",
+      "display_name": "§c武装直升机",
+      "max": 1,
+      "respawn_minutes": 10,
+      "deployment": { "mode": "deploy_point", "offset": [0, 8, 12], "radius": 8, "snap_to_ground": false, "yaw": 180 }
+    },
+    "recon_mount": {
+      "entity_type": "minecraft:horse",
+      "display_name": "§e侦察机动载具",
+      "max": 3,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [0, 0, -8], "radius": 4, "yaw": 0 }
+    }
   },
   "classes": {
     "RUS_ARMY_COMMANDER": {

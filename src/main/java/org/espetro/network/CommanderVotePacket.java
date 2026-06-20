@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 /**
  * 指挥官投票数据包
  * 通知客户端打开投票界面（仅显示玩家所在队伍）
+ * 同时携带对手队伍已确定的编制信息（如果已定）
  */
 public class CommanderVotePacket {
 
@@ -19,13 +20,24 @@ public class CommanderVotePacket {
     private final String team;
     // 同队伍玩家列表
     private final List<String> players;
-    // 投票时限
+    // 投票时限（当前投票队伍的剩余时间）
     private final int timeRemaining;
+    // 对手队伍名称（如 "进攻方"）
+    private final String opponentTeamName;
+    // 对手编制名称（如 "步兵连"），null 表示尚未确定
+    private final String opponentFaction;
+    // 对手阶段剩余时间（秒），-1 表示无对手阶段
+    private final int opponentTimeRemaining;
 
-    public CommanderVotePacket(String team, List<String> players, int timeRemaining) {
+    public CommanderVotePacket(String team, List<String> players, int timeRemaining,
+                                String opponentTeamName, String opponentFaction,
+                                int opponentTimeRemaining) {
         this.team = team;
         this.players = players;
         this.timeRemaining = timeRemaining;
+        this.opponentTeamName = opponentTeamName;
+        this.opponentFaction = opponentFaction;
+        this.opponentTimeRemaining = opponentTimeRemaining;
     }
 
     public static CommanderVotePacket read(FriendlyByteBuf buf) {
@@ -36,7 +48,11 @@ public class CommanderVotePacket {
             players.add(buf.readUtf());
         }
         int timeRemaining = buf.readInt();
-        return new CommanderVotePacket(team, players, timeRemaining);
+        String opponentTeamName = buf.readUtf();
+        String opponentFaction = buf.readUtf();
+        int opponentTimeRemaining = buf.readInt();
+        return new CommanderVotePacket(team, players, timeRemaining,
+            opponentTeamName, opponentFaction, opponentTimeRemaining);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -46,6 +62,9 @@ public class CommanderVotePacket {
             buf.writeUtf(name);
         }
         buf.writeInt(timeRemaining);
+        buf.writeUtf(opponentTeamName != null ? opponentTeamName : "");
+        buf.writeUtf(opponentFaction != null ? opponentFaction : "");
+        buf.writeInt(opponentTimeRemaining);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -71,5 +90,17 @@ public class CommanderVotePacket {
 
     public int getTimeRemaining() {
         return timeRemaining;
+    }
+
+    public String getOpponentTeamName() {
+        return opponentTeamName;
+    }
+
+    public String getOpponentFaction() {
+        return opponentFaction;
+    }
+
+    public int getOpponentTimeRemaining() {
+        return opponentTimeRemaining;
     }
 }
