@@ -2,44 +2,48 @@ package org.espetro.bastion;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.entity.projectile.ThrownTrident;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
-import org.espetro.bastion.BastionBuildingWandItem;
-import org.espetro.bastion.BastionManager;
-import org.espetro.network.BastionSelectionPacket;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.FactionDataLoader;
 import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
 import org.espetro.team.SpawnPointConfig;
-import org.espetro.team.TroopCountManager;
 
 import javax.annotation.Nullable;
-import java.util.List;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.UUID;
 
 /**
@@ -47,9 +51,6 @@ import java.util.UUID;
  */
 @Mod.EventBusSubscriber(modid = Espetro.MOD_ID)
 public class BastionEventHandler {
-
-    // 死亡限制时间（tick），防止多次触发
-    private static final int DEATH_COOLDOWN_TICKS = 20;
 
     /**
      * 玩家死亡时触发
@@ -143,81 +144,87 @@ public class BastionEventHandler {
         }
     }
 
-    /**
-     * 盔甲架受伤事件 - 用于检测兵站核心受损
-     */
     @SubscribeEvent
-    public static void onArmorStandHurt(LivingHurtEvent event) {
-        Entity entity = event.getEntity();
-
-        // 检查是否是兵站盔甲架
-        if (entity instanceof ArmorStand armorStand) {
-            if (armorStand.getTags().contains("bastion_armor_stand")) {
-                Espetro.LOGGER.debug("兵站盔甲架受伤: 伤害={}, 当前血量={}, 剩余血量={}",
-                    event.getAmount(), armorStand.getHealth(), armorStand.getHealth() - event.getAmount());
-
-                // 检查是否即将死亡
-                if (armorStand.getHealth() - event.getAmount() <= 0) {
-                    // 标记为即将被摧毁，下一个Tick处理
-                    armorStand.addTag("bastion_about_to_destroy");
-                }
-            }
+    public static void onBastionCorePlayerAttack(AttackEntityEvent event) {
+        if (!(event.getTarget() instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
         }
+
+        event.setCanceled(true);
+        if (armorStand.level().isClientSide || !(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion == null || !bastion.isActive()) {
+            return;
+        }
+
+        float damage = (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE);
+        float attackScale = player.getAttackStrengthScale(0.5F);
+        damage *= 0.2F + attackScale * attackScale * 0.8F;
+        BastionManager.getInstance().damageBastionCore(bastion, Math.max(1.0F, damage), player);
+        player.resetAttackStrengthTicker();
+    }
+
+    @SubscribeEvent
+    public static void onBastionCoreInteract(PlayerInteractEvent.EntityInteract event) {
+        cancelBastionCoreInteract(event, event.getTarget());
+    }
+
+    @SubscribeEvent
+    public static void onBastionCoreInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        cancelBastionCoreInteract(event, event.getTarget());
+    }
+
+    private static void cancelBastionCoreInteract(PlayerInteractEvent event, Entity target) {
+        if (!(target instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
+        }
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+    }
+
+    @SubscribeEvent
+    public static void onBastionCoreProjectileImpact(ProjectileImpactEvent event) {
+        if (event.getRayTraceResult().getType() != HitResult.Type.ENTITY) {
+            return;
+        }
+
+        Entity target = ((EntityHitResult) event.getRayTraceResult()).getEntity();
+        if (!(target instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
+        }
+
+        event.setImpactResult(ProjectileImpactEvent.ImpactResult.STOP_AT_CURRENT_NO_DAMAGE);
+        if (armorStand.level().isClientSide) {
+            return;
+        }
+
+        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion == null || !bastion.isActive()) {
+            return;
+        }
+
+        Entity projectile = event.getProjectile();
+        float damage = estimateProjectileDamage(projectile);
+        BastionManager.getInstance().damageBastionCore(bastion, damage, event.getProjectile().getOwner());
     }
 
     /**
-     * 盔甲架死亡事件 - 兵站失效
+     * 兜底处理火焰、爆炸等仍会进入 LivingHurtEvent 的伤害，防止原版盔甲架逻辑绕过核心血量。
      */
     @SubscribeEvent
-    public static void onArmorStandDeath(LivingDeathEvent event) {
+    public static void onBastionCoreHurt(LivingHurtEvent event) {
         Entity entity = event.getEntity();
+        if (!(entity instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
+        }
 
-        // 检查是否是兵站盔甲架
-        if (entity instanceof ArmorStand armorStand) {
-            if (armorStand.getTags().contains("bastion_armor_stand")) {
-                // 找到对应的兵站并失效
-                UUID armorStandId = armorStand.getUUID();
-                String bastionName = "";
-                String bastionTeam = "";
-                boolean found = false;
-                for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
-                    if (bastion.getArmorStandId() != null &&
-                        bastion.getArmorStandId().equals(armorStandId)) {
-
-                        BastionManager.getInstance().setBastionActive(bastion, false);
-                        bastionName = bastion.getName();
-                        bastionTeam = bastion.getTeam();
-                        found = true;
-                        Espetro.LOGGER.info("兵站 {} 被摧毁！", bastion.getName());
-
-                        // 广播消息给队伍成员
-                        Espetro.broadcastToTeam(bastion.getTeam(),
-                            "§c[兵站] §e" + bastion.getName() + " §c已被摧毁！");
-
-                        break;
-                    }
-                }
-
-                if (found) {
-                    // 扣除队伍兵力
-                    int penalty = BastionManager.getInstance().getDestroyTroopPenalty();
-                    TroopCountManager troopManager = TroopCountManager.getInstance();
-                    if ("ATTACK".equals(bastionTeam)) {
-                        troopManager.modifyAttackTroops(-penalty);
-                    } else {
-                        troopManager.modifyDefendTroops(-penalty);
-                    }
-                    Espetro.broadcastToTeam(bastionTeam, "§c[兵站] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
-
-                    // 通知在场的队伍玩家
-                    ServerPlayer commander = findCommanderForTeam(bastionTeam);
-                    if (commander != null) {
-                        commander.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                            "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
-                        ));
-                    }
-                }
-            }
+        event.setCanceled(true);
+        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion != null && bastion.isActive()) {
+            BastionManager.getInstance().damageBastionCore(bastion, event.getAmount(), event.getSource().getEntity());
         }
     }
 
@@ -241,6 +248,7 @@ public class BastionEventHandler {
         // 检查是否是同一个队伍
         String team = Espetro.getPlayerTeam(player);
         if (team == null || !team.equals(bastion.getTeam())) {
+            event.setCanceled(true);
             return; // 静默，不给敌方提示
         }
 
@@ -264,8 +272,7 @@ public class BastionEventHandler {
             return;
         }
 
-        // 只检查冷却（不再限制次数）
-        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
+        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID(), kit.resupply.maxResupplies);
         if (errorMsg != null) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
             event.setCanceled(true);
@@ -277,7 +284,11 @@ public class BastionEventHandler {
         StringBuilder detail = new StringBuilder();
         for (FactionDataLoader.ResupplyItem ri : kit.resupply.items) {
             if (ri.id == null || ri.id.isBlank()) continue;
-            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(ri.id));
+            ItemStack template = createResupplyStack(ri);
+            if (template.isEmpty()) {
+                continue;
+            }
+            Item item = template.getItem();
             if (item == net.minecraft.world.item.Items.AIR) {
                 Espetro.LOGGER.warn("补给物品不存在: {}", ri.id);
                 continue;
@@ -289,19 +300,20 @@ public class BastionEventHandler {
             int current = 0;
             for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
                 ItemStack stack = player.getInventory().getItem(i);
-                if (stack.is(item)) current += stack.getCount();
+                if (matchesResupplyItem(stack, template)) current += stack.getCount();
             }
 
             // 计算可补充数量（不超过上限）
             int canGive = Math.min(giveCount, maxCap - current);
             if (canGive > 0) {
-                ItemStack giveStack = new ItemStack(item, canGive);
+                ItemStack giveStack = template.copy();
+                giveStack.setCount(canGive);
                 if (!player.getInventory().add(giveStack)) {
                     player.drop(giveStack, false);
                 }
                 givenItems++;
                 if (!detail.isEmpty()) detail.append(", ");
-                detail.append(item.getDescription().getString()).append(" ×").append(canGive);
+                detail.append(giveStack.getHoverName().getString()).append(" ×").append(canGive);
             }
         }
 
@@ -318,22 +330,64 @@ public class BastionEventHandler {
         event.setCanceled(true);
     }
 
-    /**
-     * 查找队伍的指挥官
-     */
-    @Nullable
-    private static ServerPlayer findCommanderForTeam(String team) {
-        var server = Espetro.getServer();
-        if (server == null) return null;
-
-        var voteManager = org.espetro.team.VoteManager.getInstance();
-        java.util.UUID commanderId = "ATTACK".equals(team) ?
-            voteManager.getAttackCommander() : voteManager.getDefendCommander();
-
-        if (commanderId != null) {
-            return server.getPlayerList().getPlayer(commanderId);
+    private static ItemStack createResupplyStack(FactionDataLoader.ResupplyItem ri) {
+        String id = ri.id.trim();
+        String nbt = ri.nbt;
+        int tagStart = id.indexOf('{');
+        if (tagStart >= 0) {
+            if (nbt == null || nbt.isBlank()) {
+                nbt = id.substring(tagStart);
+            }
+            id = id.substring(0, tagStart);
         }
-        return null;
+
+        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
+        if (item == net.minecraft.world.item.Items.AIR) {
+            Espetro.LOGGER.warn("补给物品不存在: {}", id);
+            return ItemStack.EMPTY;
+        }
+
+        ItemStack stack = new ItemStack(item);
+        if (nbt != null && !nbt.isBlank()) {
+            try {
+                CompoundTag tag = TagParser.parseTag(nbt);
+                stack.setTag(tag);
+            } catch (CommandSyntaxException e) {
+                Espetro.LOGGER.warn("补给物品 NBT 格式错误: id={}, nbt={}, error={}", id, nbt, e.getMessage());
+                return ItemStack.EMPTY;
+            }
+        }
+        return stack;
+    }
+
+    private static boolean matchesResupplyItem(ItemStack stack, ItemStack template) {
+        if (template.hasTag()) {
+            return ItemStack.isSameItemSameTags(stack, template);
+        }
+        return stack.is(template.getItem());
+    }
+
+    private static boolean isBastionCore(ArmorStand armorStand) {
+        return armorStand.getTags().contains("bastion_armor_stand");
+    }
+
+    private static float estimateProjectileDamage(Entity projectile) {
+        if (projectile instanceof AbstractArrow arrow) {
+            double speed = arrow.getDeltaMovement().length();
+            int damage = net.minecraft.util.Mth.ceil(net.minecraft.util.Mth.clamp(
+                speed * arrow.getBaseDamage(),
+                0.0D,
+                (double) Integer.MAX_VALUE
+            ));
+            if (arrow.isCritArrow()) {
+                damage += Math.max(1, damage / 2);
+            }
+            return Math.max(1.0F, damage);
+        }
+        if (projectile instanceof ThrownTrident) {
+            return 8.0F;
+        }
+        return 4.0F;
     }
 
     /**

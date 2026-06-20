@@ -76,25 +76,9 @@ ordering = "NONE"
 # Side this dependency is applied on - BOTH, CLIENT, or SERVER
 side = "BOTH"# Here's another dependency
 
-[[mods]]
+[[dependencies."${mod_id}"]]
 modId = "hcrpoints"
-version = "2.0.1"
-displayName = "HCR AAD"
-displayURL = ""
-credits = "Hydroceder"
-authors = "Hydroceder"
-description = '''AI-Generated Mod: A mod that enables attack and defense in Minecraft.'''
-
-[[dependencies.hcrpoints]]
-modId = "forge"
-mandatory = true
-versionRange = "${forge_version_range}"
-ordering = "NONE"
-side = "BOTH"
-
-[[dependencies.hcrpoints]]
-modId = "minecraft"
-mandatory = true
-versionRange = "${minecraft_version_range}"
+mandatory = false
+versionRange = "[2.0.1,)"
 ordering = "NONE"
 side = "BOTH"

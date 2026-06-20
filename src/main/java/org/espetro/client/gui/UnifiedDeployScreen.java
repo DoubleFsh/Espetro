@@ -1,11 +1,11 @@
 package org.espetro.client.gui;
 
-import com.example.hcrpoints.hud.TacticalMapHUD;
 import se.mickelus.mutil.gui.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.espetro.client.HcrTacticalMapBridge;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
 import org.lwjgl.glfw.GLFW;
@@ -35,6 +35,7 @@ public class UnifiedDeployScreen extends Screen {
     private static final int STATUS_BAR_H = 15;
     private static final int SECTION_TITLE_H = 14;
     private static final int INNER_PADDING = 4;
+    private static final int SCROLLBAR_RESERVED_W = 8;
 
     // EspButton 颜色
     private static final int BTN_BG_NORMAL   = 0xC0101010;
@@ -61,10 +62,15 @@ public class UnifiedDeployScreen extends Screen {
 
     // ===== Element 树 =====
     private GuiElement root;
+    private ScreenFadeIn fadeIn;
 
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
     private final List<EspButton> deployButtons = new ArrayList<>();
+
+    // ===== 滚轮列表 =====
+    private ScrollableList classScrollList;
+    private ScrollableList deployScrollList;
 
     // ===== 区域边界 =====
     private int leftX, leftY, leftW, leftH;
@@ -84,7 +90,7 @@ public class UnifiedDeployScreen extends Screen {
         this.deployPointPos = data.getDeployPointPos();
         this.bastions = data.getBastions();
         this.isCommander = data.isCommander();
-        this.squads = data.getSquads();
+        this.squads = new ArrayList<>(data.getSquads());
         this.mySquadId = data.getMySquadId();
         this.deployTimeRemaining = data.getDeployTimeRemaining();
         this.team = data.getTeam();
@@ -98,6 +104,17 @@ public class UnifiedDeployScreen extends Screen {
 
     public void updateTimeRemaining(int seconds) {
         this.deployTimeRemaining = seconds;
+    }
+
+    public void updateSquads(List<UnifiedDeployScreenPacket.SquadInfo> updatedSquads, int updatedMySquadId) {
+        this.squads.clear();
+        if (updatedSquads != null) {
+            this.squads.addAll(updatedSquads);
+        }
+        this.mySquadId = updatedMySquadId;
+        if (root != null) {
+            rebuildGui();
+        }
     }
 
     // ==================== 自定义按钮 ====================
@@ -123,27 +140,17 @@ public class UnifiedDeployScreen extends Screen {
 
         @Override
         public boolean onMouseClick(int mx, int my, int button) {
-            if (!enabled || !isVisible()) return false;
-            if (mx >= getX() && mx <= getX() + getWidth() && my >= getY() && my <= getY() + getHeight()) {
-                if (action != null) action.run();
-                return true;
-            }
-            return false;
-        }
-
-        @Override
-        public void updateFocusState(int mx, int my, int w, int h) {
-            hovered = enabled && isVisible()
-                && mx >= getX() && mx <= getX() + getWidth()
-                && my >= getY() && my <= getY() + getHeight();
+            if (button != 0 || !enabled || !isVisible() || !hasFocus()) return false;
+            if (action != null) action.run();
+            return true;
         }
 
         @Override
         public void draw(GuiGraphics graphics, int x, int y, int w, int h, int mx, int my, float tick) {
             if (!isVisible()) return;
-            updateFocusState(mx, my, w, h);
+            hovered = enabled && hasFocus();
 
-            int bx = getX(), by = getY(), bw = getWidth(), bh = getHeight();
+            int bx = x + getX(), by = y + getY(), bw = getWidth(), bh = getHeight();
 
             int bgCol;
             if (!enabled) bgCol = BTN_BG_DISABLED;
@@ -180,7 +187,7 @@ public class UnifiedDeployScreen extends Screen {
         public void draw(GuiGraphics graphics, int x, int y, int w, int h, int mx, int my, float tick) {
             if (!isVisible()) return;
             graphics.drawString(Minecraft.getInstance().font, Component.literal(text),
-                getX(), getY(), color, false);
+                x + getX(), y + getY(), color, false);
         }
     }
 
@@ -191,6 +198,7 @@ public class UnifiedDeployScreen extends Screen {
         super.init();
         rebuildGui();
         NetworkManager.requestClassCounts(factionId);
+        fadeIn = new ScreenFadeIn();
     }
 
     private void rebuildGui() {
@@ -200,10 +208,7 @@ public class UnifiedDeployScreen extends Screen {
         buildTitleBar();
         buildDividerLine(TITLE_H);
 
-        // 左半屏区域背景（与按钮底色一致）
-        root.addChild(new GuiRect(leftX - 2, leftY, leftW + 4, leftH, 0xE0252a35));
-        // 地图区域背景（与按钮底色一致）
-        root.addChild(new GuiRect(mapX - 2, mapY, mapW + 4, mapH, 0xE0252a35));
+        // 不填充区域背景色，保持透明
 
         buildClassSection();
         buildDividerLine(deployAreaY);
@@ -263,7 +268,7 @@ public class UnifiedDeployScreen extends Screen {
         root.addChild(new GuiRect(4, y, this.width - 8, 1, 0x50FFFFFF));
     }
 
-    // ---------- 职业选择（左上）----------
+    // ---------- 职业选择（左上，滚轮列表）----------
     private void buildClassSection() {
         int sx = classAreaX, sy = classAreaY;
         int areaW = classAreaW, areaH = classAreaH;
@@ -271,9 +276,18 @@ public class UnifiedDeployScreen extends Screen {
         PlainText ct = new PlainText(sx, sy, "\u00a76职业选择", 0xFFFFAA00);
         root.addChild(ct);
 
+        // 滚轮列表区域：标题下方，占满剩余空间
+        int listY = sy + SECTION_TITLE_H + 2;
+        int listH = areaH - SECTION_TITLE_H - 4;
+
+        classScrollList = new ScrollableList(sx, listY, areaW, listH)
+            .setScrollStep(BTN_H + 2)
+            .setAlwaysShowScrollbar(true);
+        root.addChild(classScrollList);
+
         classButtons.clear();
-        int gridY = sy + SECTION_TITLE_H + 2;
-        int btnW = (areaW - 6) / 2;
+        int contentW = areaW - SCROLLBAR_RESERVED_W;
+        int btnW = (contentW - 6) / 2;
         int btnH = BTN_H;
         int spacing = 2;
         int cols = 2;
@@ -287,19 +301,19 @@ public class UnifiedDeployScreen extends Screen {
 
             int col = i % cols;
             int row = i / cols;
-            int bx = sx + col * (btnW + spacing);
-            int by = gridY + row * (btnH + spacing);
+            int bx = col * (btnW + spacing);
+            int by = row * (btnH + spacing);
 
             final int idx = i;
             EspButton btn = new EspButton(bx, by, btnW, btnH, label, () -> selectClass(idx));
             btn.setEnabled(!full);
             if (full) { btn.hoverColor = 0xD0403050; btn.normalColor = 0xB0252035; }
-            root.addChild(btn);
+            classScrollList.addChild(btn);
             classButtons.add(btn);
         }
     }
 
-    // ---------- 部署点（左下，无滚轮，直接排列）----------
+    // ---------- 部署点（左下，滚轮列表）----------
     private void buildDeploySection() {
         int sx = deployAreaX, sy = deployAreaY;
         int areaW = deployAreaW, areaH = deployAreaH;
@@ -317,37 +331,42 @@ public class UnifiedDeployScreen extends Screen {
 
         root.addChild(new GuiRect(sx, sy + SECTION_TITLE_H + 2, areaW, 1, 0x30FFFFFF));
 
-        // 按钮区域起始
-        int btnX = sx + 2;
-        int btnBaseY = sy + SECTION_TITLE_H + 4;
-        int btnW = areaW - 4;
-        int btnSpacing = 2;
-        int row = 0;
+        // 滚轮列表区域
+        int listY = sy + SECTION_TITLE_H + 4;
+        int listH = areaH - SECTION_TITLE_H - 6;
+
+        deployScrollList = new ScrollableList(sx, listY, areaW, listH)
+            .setScrollStep(BTN_H + 2)
+            .setAlwaysShowScrollbar(true);
+        root.addChild(deployScrollList);
 
         deployButtons.clear();
+        int btnW = areaW - SCROLLBAR_RESERVED_W - 4;
+        int btnSpacing = 2;
+        int row = 0;
 
         // 原部署点
         if (hasDeployPoint) {
             String deployLabel = "\u00a7e\u25c6 原部署点 \u00a77(" + deployPointPos + ")";
             EspButton btn = new EspButton(
-                btnX, btnBaseY + row * (BTN_H + btnSpacing), btnW, BTN_H,
+                2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                 deployLabel,
                 () -> { var p = Minecraft.getInstance().player; if (p != null) p.connection.sendCommand("bastion deploy"); }
             );
-            root.addChild(btn);
+            deployScrollList.addChild(btn);
             deployButtons.add(btn);
             row++;
         }
 
-        // 兵站列表（最多4个，不需要滚轮）
+        // 兵站列表
         for (var b : bastions) {
             final var bid = b.id;
             EspButton btn = new EspButton(
-                btnX, btnBaseY + row * (BTN_H + btnSpacing), btnW, BTN_H,
+                2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                 "\u00a79\u25c6 " + b.name,
                 () -> { var p = Minecraft.getInstance().player; if (p != null) p.connection.sendCommand("bastion select " + bid); }
             );
-            root.addChild(btn);
+            deployScrollList.addChild(btn);
             deployButtons.add(btn);
             row++;
         }
@@ -378,26 +397,42 @@ public class UnifiedDeployScreen extends Screen {
             PlainText timer = new PlainText(this.width - 50, barY + 1, ts, 0xFFFFFF);
             root.addChild(timer);
         }
+
+        int squadButtonX = deployTimeRemaining >= 0 ? this.width - 130 : this.width - 78;
+        squadButtonX = Math.max(6, squadButtonX);
+        EspButton squadButton = new EspButton(squadButtonX, barY + 1, 72, STATUS_BAR_H - 2,
+            "\u00a7e班组小队",
+            () -> Minecraft.getInstance().setScreen(new SquadScreen(new ArrayList<>(squads), mySquadId, team, this)));
+        root.addChild(squadButton);
     }
 
     // ==================== 渲染 ====================
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 使用与按钮一致的底色填充全屏背景
-        graphics.fill(0, 0, this.width, this.height, 0xE0252a35);
+        // 渐入动画
+        float offsetY = fadeIn != null ? fadeIn.preRender(graphics) : 0;
+        if (offsetY != 0) ScreenFadeIn.translateY(graphics, offsetY);
+
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
         computeRegions();
+        root.updateFocusState(0, 0, mouseX, mouseY);
         root.draw(graphics, 0, 0, this.width, this.height, mouseX, mouseY, partialTick);
         renderTacticalMap(graphics, partialTick);
         renderClassTooltip(graphics, mouseX, mouseY);
+
+        if (fadeIn != null) {
+            if (offsetY != 0) graphics.pose().translate(0, -offsetY, 0);
+            fadeIn.postRender();
+        }
     }
 
     private void renderTacticalMap(GuiGraphics graphics, float partialTick) {
-        TacticalMapHUD.getInstance().renderEmbeddedMap(
+        HcrTacticalMapBridge.renderEmbeddedMap(
             graphics,
-            mapX - 2,
+            mapX,
             mapY,
-            mapW + 4,
+            mapW,
             mapH,
             partialTick
         );
@@ -444,6 +479,7 @@ public class UnifiedDeployScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        root.updateFocusState(0, 0, (int) mx, (int) my);
         if (root.onMouseClick((int) mx, (int) my, button))
             return true;
         return super.mouseClicked(mx, my, button);
@@ -456,13 +492,22 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double mx, double my, double delta) {
+        root.updateFocusState(0, 0, (int) mx, (int) my);
+        if (root.onMouseScroll(mx, my, delta)) {
+            return true;
+        }
+        return super.mouseScrolled(mx, my, delta);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == GLFW.GLFW_KEY_C) {
-            TacticalMapHUD.getInstance().increaseRenderRange();
+            HcrTacticalMapBridge.increaseRenderRange();
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_B) {
-            TacticalMapHUD.getInstance().decreaseRenderRange();
+            HcrTacticalMapBridge.decreaseRenderRange();
             return true;
         }
         if (root.onKeyPress(keyCode, scanCode, modifiers)) return true;

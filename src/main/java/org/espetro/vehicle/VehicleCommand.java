@@ -27,7 +27,7 @@ public class VehicleCommand {
             Commands.literal("vehicle")
                 .requires(source -> source.hasPermission(0)) // 非作弊玩家也可以用
                 .then(Commands.literal("spawn")
-                    .then(Commands.argument("type", StringArgumentType.word())
+                    .then(Commands.argument("type", StringArgumentType.string())
                         .suggests((context, builder) -> {
                             VehicleConfig.getAllVehicleTypeKeys().forEach(builder::suggest);
                             return builder.buildFuture();

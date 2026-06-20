@@ -124,16 +124,19 @@ public class BastionCommand {
             player.sendSystemMessage(Component.literal("§c你不在等待复活状态！"));
             return 0;
         }
+        BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(player.getUUID());
+        if (deployPoint == null) {
+            player.sendSystemMessage(Component.literal("§c无法找到原部署点！"));
+            return 0;
+        }
 
         // 执行原部署点复活
         if (BastionManager.getInstance().respawnAtDeployPoint(player.server.overworld(), player)) {
             // 战局中加入：部署完成后触发职业选择
             onDeployComplete(player);
             return 1;
-        } else {
-            player.sendSystemMessage(Component.literal("§c无法找到原部署点！"));
-            return 0;
         }
+        return 0;
     }
 
     /**
@@ -168,7 +171,11 @@ public class BastionCommand {
 
         player.sendSystemMessage(Component.literal("§6=== 可用兵站列表 ==="));
         for (BastionData bastion : bastions) {
-            var pos = bastion.getPosition();
+            BastionManager manager = BastionManager.getInstance();
+            var pos = manager.getRecordedArmorStandPosition(bastion);
+            if (pos == null) {
+                continue;
+            }
             Component clickable = Component.literal("§a- §e" + bastion.getName() + " §7(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")")
                 .withStyle(style -> style
                     .withClickEvent(new net.minecraft.network.chat.ClickEvent(

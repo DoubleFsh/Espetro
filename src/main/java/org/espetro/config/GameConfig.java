@@ -20,7 +20,7 @@ public class GameConfig {
 
     // ========== 游戏参数 (带默认值) ==========
     private static int requiredPlayers = 20;
-    private static int deployTimeoutSeconds = 180;
+    private static int deployTimeoutSeconds = 240;
     private static int deployWarningSeconds = 30;
     private static int defendCommanderVoteSeconds = 20;
     private static int attackCommanderVoteSeconds = 20;
@@ -28,6 +28,7 @@ public class GameConfig {
     private static int attackFactionSelectSeconds = 30;
     private static int factionPoolSize = 6;
     private static int respawnInvincibilityTicks = 60;
+    private static double teammateNameTagDistance = 10.0;
     private static double waitingY = 200.0;
 
     // ========== 兵力参数 ==========
@@ -63,6 +64,7 @@ public class GameConfig {
                         attackFactionSelectSeconds = getInt(game, "attack_faction_select_seconds", attackFactionSelectSeconds);
                         factionPoolSize = getInt(game, "faction_pool_size", factionPoolSize);
                         respawnInvincibilityTicks = getInt(game, "respawn_invincibility_ticks", respawnInvincibilityTicks);
+                        teammateNameTagDistance = getDouble(game, "teammate_name_tag_distance", teammateNameTagDistance);
                         waitingY = getDouble(game, "waiting_y", waitingY);
                     }
 
@@ -113,7 +115,7 @@ public class GameConfig {
     public static void reloadConfig(MinecraftServer server) {
         // 重置为默认值，确保缺少的字段不会被旧值残留
         requiredPlayers = 20;
-        deployTimeoutSeconds = 180;
+        deployTimeoutSeconds = 240;
         deployWarningSeconds = 30;
         defendCommanderVoteSeconds = 20;
         attackCommanderVoteSeconds = 20;
@@ -121,6 +123,7 @@ public class GameConfig {
         attackFactionSelectSeconds = 30;
         factionPoolSize = 6;
         respawnInvincibilityTicks = 60;
+        teammateNameTagDistance = 10.0;
         waitingY = 200.0;
         initialAttackTroops = 280;
         initialDefendTroops = 1200;
@@ -165,6 +168,10 @@ public class GameConfig {
 
     public static int getRespawnInvincibilityTicks() {
         return respawnInvincibilityTicks;
+    }
+
+    public static double getTeammateNameTagDistance() {
+        return teammateNameTagDistance;
     }
 
     public static double getWaitingY() {

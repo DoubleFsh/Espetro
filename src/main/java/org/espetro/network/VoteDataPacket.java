@@ -15,10 +15,16 @@ public class VoteDataPacket {
 
     private final Map<String, Integer> voteCounts;
     private final int timeRemaining;
+    private final int opponentTimeRemaining;
 
     public VoteDataPacket(Map<String, Integer> voteCounts, int timeRemaining) {
+        this(voteCounts, timeRemaining, -1);
+    }
+
+    public VoteDataPacket(Map<String, Integer> voteCounts, int timeRemaining, int opponentTimeRemaining) {
         this.voteCounts = voteCounts;
         this.timeRemaining = timeRemaining;
+        this.opponentTimeRemaining = opponentTimeRemaining;
     }
 
     public static VoteDataPacket read(FriendlyByteBuf buf) {
@@ -30,7 +36,8 @@ public class VoteDataPacket {
             voteCounts.put(name, count);
         }
         int timeRemaining = buf.readInt();
-        return new VoteDataPacket(voteCounts, timeRemaining);
+        int opponentTimeRemaining = buf.readInt();
+        return new VoteDataPacket(voteCounts, timeRemaining, opponentTimeRemaining);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -40,6 +47,7 @@ public class VoteDataPacket {
             buf.writeInt(entry.getValue());
         }
         buf.writeInt(timeRemaining);
+        buf.writeInt(opponentTimeRemaining);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -61,5 +69,9 @@ public class VoteDataPacket {
 
     public int getTimeRemaining() {
         return timeRemaining;
+    }
+
+    public int getOpponentTimeRemaining() {
+        return opponentTimeRemaining;
     }
 }

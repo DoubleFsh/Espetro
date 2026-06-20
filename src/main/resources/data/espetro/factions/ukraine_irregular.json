@@ -7,9 +7,27 @@
     "color": "5588DD"
   },
   "vehicles": {
-    "cow": { "entity_type": "minecraft:cow", "display_name": "§6运输卡车", "max": 1, "respawn_minutes": 5 },
-    "pig": { "entity_type": "minecraft:pig", "display_name": "§a装甲车", "max": 1, "respawn_minutes": 5 },
-    "horse": { "entity_type": "minecraft:horse", "display_name": "§e运兵马", "max": 2, "respawn_minutes": 5 }
+    "utility_truck": {
+      "entity_type": "minecraft:minecart",
+      "display_name": "§6通用运输车",
+      "max": 1,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [8, 0, 0], "radius": 5, "yaw": 90 }
+    },
+    "light_vehicle": {
+      "entity_type": "minecraft:boat",
+      "display_name": "§a轻型机动车",
+      "max": 1,
+      "respawn_minutes": 4,
+      "deployment": { "mode": "deploy_point", "offset": [-8, 0, 0], "radius": 5, "yaw": 270 }
+    },
+    "recon_mount": {
+      "entity_type": "minecraft:horse",
+      "display_name": "§e侦察机动载具",
+      "max": 2,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [0, 0, -8], "radius": 4, "yaw": 0 }
+    }
   },
   "classes": {
     "UA_IRREGULAR_COMMANDER": {

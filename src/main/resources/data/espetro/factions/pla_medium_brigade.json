@@ -7,29 +7,33 @@
     "color": "55AA55"
   },
   "vehicles": {
-    "cow": {
-      "entity_type": "minecraft:cow",
+    "transport_truck": {
+      "entity_type": "minecraft:minecart",
       "display_name": "§6运输卡车",
       "max": 1,
-      "respawn_minutes": 5
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [8, 0, 0], "radius": 5, "yaw": 90 }
     },
-    "pig": {
-      "entity_type": "minecraft:pig",
-      "display_name": "§a装甲车",
+    "apc": {
+      "entity_type": "minecraft:camel",
+      "display_name": "§a装甲运兵车",
       "max": 1,
-      "respawn_minutes": 5
+      "respawn_minutes": 8,
+      "deployment": { "mode": "deploy_point", "offset": [-8, 0, 0], "radius": 5, "yaw": 270 }
     },
-    "ghast": {
+    "attack_helicopter": {
       "entity_type": "minecraft:ghast",
       "display_name": "§c武装直升机",
       "max": 1,
-      "respawn_minutes": 5
+      "respawn_minutes": 10,
+      "deployment": { "mode": "deploy_point", "offset": [0, 8, 12], "radius": 8, "snap_to_ground": false, "yaw": 180 }
     },
-    "horse": {
+    "recon_mount": {
       "entity_type": "minecraft:horse",
-      "display_name": "§e运兵马",
+      "display_name": "§e侦察机动载具",
       "max": 2,
-      "respawn_minutes": 5
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [0, 0, -8], "radius": 4, "yaw": 0 }
     }
   },
   "classes": {

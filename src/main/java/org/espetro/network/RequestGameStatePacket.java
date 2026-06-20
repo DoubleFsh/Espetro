@@ -50,11 +50,8 @@ public class RequestGameStatePacket {
                         timeRemaining = VoteManager.getInstance().getRemainingSeconds();
                     case DEFEND_FACTION_SELECT, ATTACK_FACTION_SELECT ->
                         timeRemaining = ClassSelectManager.getInstance().getRemainingSeconds();
-                    case DEPLOYING -> {
-                        int deployTimeout = org.espetro.config.GameConfig.getDeployTimeoutSeconds();
-                        // GameStateManager 用 deployTickCounter 计数，这里近似计算
-                        timeRemaining = Math.max(0, deployTimeout);
-                    }
+                    case DEPLOYING ->
+                        timeRemaining = gsm.getDeployTimeRemainingSeconds();
                     default -> timeRemaining = 0;
                 }
 

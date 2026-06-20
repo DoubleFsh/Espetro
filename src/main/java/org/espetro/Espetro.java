@@ -6,12 +6,20 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
@@ -28,11 +36,13 @@ import org.espetro.team.FactionDataLoader;
 import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.VoteManager;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.vehicle.VehicleCommand;
 import org.espetro.vehicle.VehicleConfig;
+import org.espetro.vehicle.VehicleManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +118,8 @@ public class Espetro {
 
         // 5. 热重载载具配置（依赖 faction 数据，放在最后）
         VehicleConfig.loadConfig(server);
+        NetworkManager.syncSquadsToTeam("ATTACK");
+        NetworkManager.syncSquadsToTeam("DEFEND");
 
         LOGGER.info("Espetro 所有配置已热重载完成");
     }
@@ -194,9 +206,10 @@ public class Espetro {
                 GameStateManager.init();
                 // 初始化兵力统计管理器
                 org.espetro.team.TroopCountManager.init();
+                // 初始化班组小队管理器
+                SquadManager.init();
                 // 初始化兵站管理器
                 BastionManager.getInstance();
-                BastionManager.registerForcedChunkLoadingCallback();
             });
         }
 
@@ -237,10 +250,72 @@ public class Espetro {
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             // 玩家离开时清空装备并减少职业人数
             ClassEquipment.clearEquipment(event.getEntity());
+            String squadTeam = SquadManager.getInstance().removePlayer(event.getEntity().getUUID());
             ClassCountManager.getInstance().removePlayer(event.getEntity());
+            if (squadTeam != null) {
+                NetworkManager.syncSquadsToTeam(squadTeam);
+            }
 
             // 从游戏状态管理器移除
             GameStateManager.getInstance().onPlayerLeave(event.getEntity().getUUID());
+        }
+
+        @SubscribeEvent
+        public static void onItemToss(ItemTossEvent event) {
+            if (event.getPlayer() instanceof ServerPlayer player && !player.hasPermissions(2)) {
+                event.setCanceled(true);
+                if (ClassEquipment.isEquipmentMutation(player)) {
+                    return;
+                }
+                returnTossedItem(player, event.getEntity().getItem());
+                player.sendSystemMessage(Component.literal("§c非管理员无法丢弃物品！"));
+            }
+        }
+
+        @SubscribeEvent
+        public static void onLivingDrops(LivingDropsEvent event) {
+            if (event.getEntity() instanceof ServerPlayer player && !player.hasPermissions(2)) {
+                event.getDrops().clear();
+            }
+        }
+
+        @SubscribeEvent
+        public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+            if (event.getLevel().isClientSide() || event.loadedFromDisk()) return;
+            if (!(event.getEntity() instanceof ItemEntity itemEntity)) return;
+
+            Entity owner = itemEntity.getOwner();
+            if (owner instanceof ServerPlayer player && !player.hasPermissions(2)) {
+                event.setCanceled(true);
+                if (ClassEquipment.isEquipmentMutation(player)) {
+                    return;
+                }
+                returnTossedItem(player, itemEntity.getItem());
+                player.sendSystemMessage(Component.literal("§c非管理员无法丢弃物品！"));
+            }
+        }
+
+        private static void returnTossedItem(ServerPlayer player, ItemStack stack) {
+            if (stack.isEmpty()) return;
+
+            ItemStack copy = stack.copy();
+            player.getInventory().add(copy);
+            if (!copy.isEmpty()) {
+                ItemStack carried = player.containerMenu.getCarried();
+                if (carried.isEmpty()) {
+                    player.containerMenu.setCarried(copy.copyAndClear());
+                } else if (ItemStack.isSameItemSameTags(carried, copy)) {
+                    int room = carried.getMaxStackSize() - carried.getCount();
+                    int moved = Math.min(room, copy.getCount());
+                    if (moved > 0) {
+                        carried.grow(moved);
+                        copy.shrink(moved);
+                    }
+                }
+            }
+            player.getInventory().setChanged();
+            player.inventoryMenu.broadcastChanges();
+            player.containerMenu.broadcastChanges();
         }
 
         @SubscribeEvent
@@ -250,8 +325,22 @@ public class Espetro {
             reloadAllConfigs();
             // 初始化职业人数记分板
             ClassCountManager.getInstance().initializeAllClassScores();
-            // 重置游戏状态
+            // 重置游戏状态（含兵站清空）
+            BastionManager.getInstance().reset();
             GameStateManager.getInstance().resetGame();
+        }
+
+        @SubscribeEvent
+        public static void onServerStopping(ServerStoppingEvent event) {
+            // 停服保存前清理已加载区块中的兵站实体，但不强制加载未加载区块。
+            BastionManager.getInstance().reset();
+        }
+
+        @SubscribeEvent
+        public static void onServerStopped(ServerStoppedEvent event) {
+            // 服务器已停止后只清理内存状态，避免在世界卸载阶段访问区块或实体。
+            BastionManager.getInstance().clearRuntimeState();
+            serverInstance = null;
         }
 
         /**
@@ -292,6 +381,7 @@ public class Espetro {
                 GameStateManager.getInstance().onServerTick();
                 // 更新兵站状态
                 BastionManager.getInstance().removeInvalidBastions();
+                VehicleManager.getInstance().removeInvalidVehicles();
 
             }
         }

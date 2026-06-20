@@ -98,8 +98,14 @@ public class ClassSelectPacket {
 
             // 3) 检查兵站周边
             if (!inRange) {
+                String team = countManager.getEffectivePlayerTeam(player.getUUID());
                 for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
-                    if (bastion.isActive() && playerPos.closerThan(bastion.getPosition(), 6)) {
+                    BlockPos bastionPos = BastionManager.getInstance().getRecordedArmorStandPosition(bastion);
+                    if (team != null
+                        && team.equals(bastion.getTeam())
+                        && bastion.isActive()
+                        && bastionPos != null
+                        && playerPos.closerThan(bastionPos, 6)) {
                         inRange = true;
                         break;
                     }
@@ -132,6 +138,7 @@ public class ClassSelectPacket {
             ClassCountSyncPacket syncPacket = new ClassCountSyncPacket(
                 countManager.getCountsForFaction(team, teamOrFaction), teamOrFaction);
             NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), syncPacket);
+            NetworkManager.syncSquadsToTeam(team);
         });
         ctx.get().setPacketHandled(true);
     }

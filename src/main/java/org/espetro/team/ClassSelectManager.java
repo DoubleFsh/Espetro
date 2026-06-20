@@ -77,8 +77,7 @@ public class ClassSelectManager {
 
         int timeout = GameConfig.getDefendFactionSelectSeconds();
         Espetro.LOGGER.info("守方编制选择开始！限时{}秒", timeout);
-        Espetro.broadcastToTeam("DEFEND", "§6★ 指挥官请选择队伍编制！剩余时间: " + timeout + "秒 ★");
-        Espetro.broadcastToTeam("ATTACK", "§7守方正在选择编制，请稍候...");
+        // 消息已通过 ClassSelectScreen GUI 实时显示，不再发送聊天消息
 
         // 发送编制选择界面给守方指挥官
         org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam("DEFEND", timeout);
@@ -96,8 +95,7 @@ public class ClassSelectManager {
 
         int timeout = GameConfig.getAttackFactionSelectSeconds();
         Espetro.LOGGER.info("攻方编制选择开始！限时{}秒", timeout);
-        Espetro.broadcastToTeam("ATTACK", "§6★ 指挥官请选择队伍编制！剩余时间: " + timeout + "秒 ★");
-        Espetro.broadcastToTeam("DEFEND", "§7攻方正在选择编制，请稍候...");
+        // 消息已通过 ClassSelectScreen GUI 实时显示，不再发送聊天消息
 
         // 发送编制选择界面给攻方指挥官
         org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam("ATTACK", timeout);
@@ -303,19 +301,6 @@ public class ClassSelectManager {
         if (selectTickCounter % TICKS_PER_SECOND == 0) {
             // 每秒广播编制选择界面（同步倒计时）
             org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam(currentSelectingTeam, secondsRemaining);
-
-            if (secondsRemaining > 0 && secondsRemaining <= 5) {
-                String status = "ATTACK".equals(currentSelectingTeam)
-                    ? (attackCommanderClass != null ? "已选" : "待选")
-                    : (defendCommanderClass != null ? "已选" : "待选");
-                Espetro.broadcastToTeam(currentSelectingTeam,
-                    "§e编制选择剩余: §c" + secondsRemaining + "秒 §7| 状态:" + status);
-            }
-
-            // 向等待方也显示倒计时
-            String waitingTeam = "DEFEND".equals(currentSelectingTeam) ? "ATTACK" : "DEFEND";
-            String selectingName = "DEFEND".equals(currentSelectingTeam) ? "守方" : "攻方";
-            Espetro.broadcastToTeam(waitingTeam, "§7" + selectingName + "正在选择编制，请稍候... [§e" + secondsRemaining + "秒§7]");
         }
     }
 

@@ -7,8 +7,20 @@
     "color": "AA8833"
   },
   "vehicles": {
-    "cow": { "entity_type": "minecraft:cow", "display_name": "§6改装皮卡", "max": 1, "respawn_minutes": 5 },
-    "horse": { "entity_type": "minecraft:horse", "display_name": "§e运兵马", "max": 8, "respawn_minutes": 5 }
+    "technical": {
+      "entity_type": "minecraft:minecart",
+      "display_name": "§6改装皮卡",
+      "max": 1,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [7, 0, 0], "radius": 5, "yaw": 90 }
+    },
+    "motorized_squad": {
+      "entity_type": "minecraft:horse",
+      "display_name": "§e机动小队载具",
+      "max": 8,
+      "respawn_minutes": 5,
+      "deployment": { "mode": "deploy_point", "offset": [-7, 0, 0], "radius": 5, "yaw": 270 }
+    }
   },
   "classes": {
     "ME_MILITIA_CREW": {

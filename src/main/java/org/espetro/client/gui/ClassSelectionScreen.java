@@ -41,6 +41,8 @@ public class ClassSelectionScreen extends Screen {
     // 错误消息
     private String errorMessage = null;
     private int errorDisplayTime = 0;
+    // 渐入动画
+    private ScreenFadeIn fadeIn;
 
     // 按钮布局参数
     private final int buttonWidth = 90;
@@ -78,6 +80,7 @@ public class ClassSelectionScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        fadeIn = new ScreenFadeIn();
 
         if (serverClasses != null && !serverClasses.isEmpty()) {
             // 使用服务端数据
@@ -225,7 +228,7 @@ public class ClassSelectionScreen extends Screen {
         int panelY = 35;
         int panelWidth = this.width - panelX - 10;
 
-        graphics.fill(panelX - 4, panelY - 4, panelX + panelWidth, panelY + 180, 0xCC000000);
+        graphics.fill(panelX - 4, panelY - 4, panelX + panelWidth, panelY + 180, 0x00000000);
 
         int lineY = panelY;
         int lineHeight = 11;
@@ -257,9 +260,17 @@ public class ClassSelectionScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+    public void renderBackground(GuiGraphics graphics) {
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    }
 
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 渐入动画
+        float offsetY = fadeIn != null ? fadeIn.preRender(graphics) : 0;
+        if (offsetY != 0) ScreenFadeIn.translateY(graphics, offsetY);
+
+        this.renderBackground(graphics);
         updateHoveredButton(mouseX, mouseY);
 
         // 阵营标题
@@ -312,6 +323,11 @@ public class ClassSelectionScreen extends Screen {
         }
 
         super.render(graphics, mouseX, mouseY, partialTick);
+
+        if (fadeIn != null) {
+            if (offsetY != 0) graphics.pose().translate(0, -offsetY, 0);
+            fadeIn.postRender();
+        }
     }
 
     @Override

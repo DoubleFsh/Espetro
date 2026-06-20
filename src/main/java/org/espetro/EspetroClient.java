@@ -75,12 +75,9 @@ public class EspetroClient {
     }
 
     /**
-     * 隐藏所有玩家头顶的名字标签（完全取消渲染）
-     * 注意：服务端 PlayerTeam.setNameTagVisibility(NEVER) 作为主要手段处理此问题
+     * 按战术规则显示队友头顶名牌。
      */
     private static void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {
-        if (event.getEntity() instanceof net.minecraft.world.entity.player.Player) {
-            event.setContent(net.minecraft.network.chat.Component.empty());
-        }
+        org.espetro.client.TeammateNameTagRenderer.onRenderNameTag(event);
     }
 }

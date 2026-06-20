@@ -36,6 +36,8 @@ public class UnifiedDeployScreenPacket {
     // === 小队选择数据 ===
     private final List<SquadInfo> squads;
     private final int mySquadId;
+    private final List<String> commanderNames;
+    private final double teammateNameTagDistance;
 
     // === 通用 ===
     private final int deployTimeRemaining;
@@ -48,6 +50,20 @@ public class UnifiedDeployScreenPacket {
             boolean isCommander, List<VehicleInfo> vehicles,
             List<SquadInfo> squads, int mySquadId,
             int deployTimeRemaining, String team) {
+        this(factionId, factionName, factionDescription, factionIcon,
+            classes, classCounts, hasDeployPoint, deployPointPos, bastions,
+            isCommander, vehicles, squads, mySquadId, deployTimeRemaining, team,
+            new ArrayList<>(), 10.0);
+    }
+
+    public UnifiedDeployScreenPacket(
+            String factionId, String factionName, String factionDescription, String factionIcon,
+            List<ClassInfo> classes, Map<String, Integer> classCounts,
+            boolean hasDeployPoint, String deployPointPos, List<BastionItem> bastions,
+            boolean isCommander, List<VehicleInfo> vehicles,
+            List<SquadInfo> squads, int mySquadId,
+            int deployTimeRemaining, String team,
+            List<String> commanderNames, double teammateNameTagDistance) {
         this.factionId = factionId;
         this.factionName = factionName;
         this.factionDescription = factionDescription;
@@ -63,6 +79,8 @@ public class UnifiedDeployScreenPacket {
         this.mySquadId = mySquadId;
         this.deployTimeRemaining = deployTimeRemaining;
         this.team = team;
+        this.commanderNames = commanderNames != null ? commanderNames : new ArrayList<>();
+        this.teammateNameTagDistance = teammateNameTagDistance;
     }
 
     public UnifiedDeployScreenPacket(FriendlyByteBuf buf) {
@@ -109,6 +127,13 @@ public class UnifiedDeployScreenPacket {
         this.mySquadId = buf.readVarInt();
         this.deployTimeRemaining = buf.readVarInt();
         this.team = buf.readUtf();
+
+        int commanderSize = buf.readVarInt();
+        this.commanderNames = new ArrayList<>();
+        for (int i = 0; i < commanderSize; i++) {
+            this.commanderNames.add(buf.readUtf());
+        }
+        this.teammateNameTagDistance = buf.readDouble();
     }
 
     public static UnifiedDeployScreenPacket read(FriendlyByteBuf buf) {
@@ -147,6 +172,11 @@ public class UnifiedDeployScreenPacket {
         buf.writeVarInt(mySquadId);
         buf.writeVarInt(deployTimeRemaining);
         buf.writeUtf(team);
+        buf.writeVarInt(commanderNames.size());
+        for (String commanderName : commanderNames) {
+            buf.writeUtf(commanderName);
+        }
+        buf.writeDouble(teammateNameTagDistance);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -178,6 +208,8 @@ public class UnifiedDeployScreenPacket {
     public int getMySquadId() { return mySquadId; }
     public int getDeployTimeRemaining() { return deployTimeRemaining; }
     public String getTeam() { return team; }
+    public List<String> getCommanderNames() { return commanderNames; }
+    public double getTeammateNameTagDistance() { return teammateNameTagDistance; }
 
     // ============ Inner Classes ============
 
@@ -296,13 +328,22 @@ public class UnifiedDeployScreenPacket {
         public final int memberCount;
         public final int maxMembers;
         public final boolean isLocked;
+        public final String leaderName;
+        public final List<SquadMemberInfo> members;
 
         public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked) {
+            this(id, name, memberCount, maxMembers, isLocked, "", new ArrayList<>());
+        }
+
+        public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked,
+                         String leaderName, List<SquadMemberInfo> members) {
             this.id = id;
             this.name = name;
             this.memberCount = memberCount;
             this.maxMembers = maxMembers;
             this.isLocked = isLocked;
+            this.leaderName = leaderName == null ? "" : leaderName;
+            this.members = members != null ? members : new ArrayList<>();
         }
 
         public SquadInfo(FriendlyByteBuf buf) {
@@ -311,6 +352,13 @@ public class UnifiedDeployScreenPacket {
             this.memberCount = buf.readVarInt();
             this.maxMembers = buf.readVarInt();
             this.isLocked = buf.readBoolean();
+            this.leaderName = buf.readUtf();
+
+            int memberSize = buf.readVarInt();
+            this.members = new ArrayList<>();
+            for (int i = 0; i < memberSize; i++) {
+                this.members.add(new SquadMemberInfo(buf));
+            }
         }
 
         public void write(FriendlyByteBuf buf)    {
@@ -319,6 +367,43 @@ public class UnifiedDeployScreenPacket {
             buf.writeVarInt(memberCount);
             buf.writeVarInt(maxMembers);
             buf.writeBoolean(isLocked);
+            buf.writeUtf(leaderName);
+            buf.writeVarInt(members.size());
+            for (SquadMemberInfo member : members) {
+                member.write(buf);
+            }
+        }
+    }
+
+    public static class SquadMemberInfo {
+        public final String playerName;
+        public final String className;
+        public final boolean leader;
+        public final boolean commander;
+
+        public SquadMemberInfo(String playerName, String className, boolean leader) {
+            this(playerName, className, leader, false);
+        }
+
+        public SquadMemberInfo(String playerName, String className, boolean leader, boolean commander) {
+            this.playerName = playerName == null ? "" : playerName;
+            this.className = className == null ? "" : className;
+            this.leader = leader;
+            this.commander = commander;
+        }
+
+        public SquadMemberInfo(FriendlyByteBuf buf) {
+            this.playerName = buf.readUtf();
+            this.className = buf.readUtf();
+            this.leader = buf.readBoolean();
+            this.commander = buf.readBoolean();
+        }
+
+        public void write(FriendlyByteBuf buf) {
+            buf.writeUtf(playerName);
+            buf.writeUtf(className);
+            buf.writeBoolean(leader);
+            buf.writeBoolean(commander);
         }
     }
 }

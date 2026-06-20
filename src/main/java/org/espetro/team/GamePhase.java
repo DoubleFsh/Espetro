@@ -2,7 +2,7 @@ package org.espetro.team;
 
 /**
  * 游戏阶段枚举
- * 按流程图顺序：等待→守方指挥官投票→攻方指挥官投票→守方编制选择→攻方编制选择→部署→对战
+ * 按流程图顺序：等待→守方指挥官投票→攻方指挥官投票→守方编制选择→攻方编制选择→编制揭示→部署→对战
  */
 public enum GamePhase {
     WAITING_FOR_PLAYERS("等待玩家集结"),
@@ -10,6 +10,7 @@ public enum GamePhase {
     ATTACK_COMMANDER_VOTE("攻方指挥官投票"),
     DEFEND_FACTION_SELECT("守方编制选择"),
     ATTACK_FACTION_SELECT("攻方编制选择"),
+    FACTION_REVEAL("双方编制揭示"),
     DEPLOYING("部署阶段"),
     BATTLE("对战开始");
 
