@@ -1,0 +1,11 @@
+{
+  "faction": {
+    "name": "PLA快速反应部队",
+    "description": "待定编制",
+    "icon": "⚡",
+    "team": "ATTACK",
+    "color": "55FF55"
+  },
+  "classes": {},
+  "vehicles": {}
+}
