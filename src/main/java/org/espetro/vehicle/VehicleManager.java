@@ -107,7 +107,7 @@ public class VehicleManager {
         }
 
         ServerLevel level = resolveDeployLevel(commander, cfg);
-        BlockPos spawnPos = resolveSpawnPosition(commander, level, cfg);
+        BlockPos spawnPos = resolveSpawnPosition(level, cfg, commander, null);
         if (spawnPos == null) {
             return "§c无法解析载具部署位置，或部署点附近没有合适的位置！";
         }
@@ -134,6 +134,53 @@ public class VehicleManager {
             commander.getName().getString(), vehicleType, factionId, spawnPos);
 
         return null;
+    }
+
+    /**
+     * 部署阶段开始时，为本局选中的编制预先部署每种已配置载具各一辆。
+     * 该入口不向聊天栏发送消息；生成的载具会写入 activeVehicles，从而占用部署上限。
+     *
+     * @return 成功预部署的载具数量
+     */
+    public int deployInitialVehicles(String factionId, ServerLevel level, BlockPos deployPointBase) {
+        Map<String, VehicleConfig.VehicleTypeConfig> configs = VehicleConfig.getFactionVehicles(factionId);
+        if (configs.isEmpty()) {
+            return 0;
+        }
+
+        int deployed = 0;
+        for (Map.Entry<String, VehicleConfig.VehicleTypeConfig> entry : configs.entrySet()) {
+            String vehicleType = entry.getKey();
+            VehicleConfig.VehicleTypeConfig cfg = entry.getValue();
+
+            int current = getActiveCount(factionId, vehicleType);
+            if (current >= cfg.max) {
+                Espetro.LOGGER.debug("初始载具预部署跳过: {} / {} 已达上限 ({}/{})",
+                    factionId, vehicleType, current, cfg.max);
+                continue;
+            }
+
+            BlockPos spawnPos = resolveSpawnPosition(level, cfg, null, deployPointBase);
+            if (spawnPos == null) {
+                Espetro.LOGGER.warn("初始载具预部署失败: 无法解析 {} / {} 的部署位置", factionId, vehicleType);
+                continue;
+            }
+
+            Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg);
+            if (vehicleEntity == null) {
+                Espetro.LOGGER.warn("初始载具预部署失败: 无法创建 {} / {} 的实体", factionId, vehicleType);
+                continue;
+            }
+
+            level.addFreshEntity(vehicleEntity);
+            getList(factionId, vehicleType).add(vehicleEntity.getUUID());
+            deployed++;
+
+            Espetro.LOGGER.info("初始载具已预部署: {} / {} 位置: {} ({}/{})",
+                factionId, vehicleType, spawnPos, current + 1, cfg.max);
+        }
+
+        return deployed;
     }
 
     /**
@@ -232,9 +279,14 @@ public class VehicleManager {
     }
 
     @Nullable
-    private BlockPos resolveSpawnPosition(ServerPlayer commander, ServerLevel level, VehicleConfig.VehicleTypeConfig cfg) {
+    private BlockPos resolveSpawnPosition(
+        ServerLevel level,
+        VehicleConfig.VehicleTypeConfig cfg,
+        @Nullable ServerPlayer commander,
+        @Nullable BlockPos deployPointBase
+    ) {
         VehicleConfig.DeploymentConfig deployment = cfg.deployment;
-        BlockPos base = resolveBasePosition(commander, deployment);
+        BlockPos base = resolveBasePosition(commander, deployPointBase, deployment);
         if (base == null) return null;
 
         int[] offset = deployment.offset;
@@ -243,10 +295,22 @@ public class VehicleManager {
     }
 
     @Nullable
-    private BlockPos resolveBasePosition(ServerPlayer commander, VehicleConfig.DeploymentConfig deployment) {
+    private BlockPos resolveBasePosition(
+        @Nullable ServerPlayer commander,
+        @Nullable BlockPos deployPointBase,
+        VehicleConfig.DeploymentConfig deployment
+    ) {
         if (deployment.fixed()) {
             if (deployment.absolute == null || deployment.absolute.length < 3) return null;
             return new BlockPos(deployment.absolute[0], deployment.absolute[1], deployment.absolute[2]);
+        }
+
+        if (deployPointBase != null) {
+            return deployPointBase;
+        }
+
+        if (commander == null) {
+            return null;
         }
 
         BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(commander.getUUID());

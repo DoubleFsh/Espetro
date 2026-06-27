@@ -14,6 +14,7 @@ import org.espetro.Espetro;
 import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
 import org.espetro.network.NetworkManager;
+import org.espetro.vehicle.VehicleManager;
 
 import java.util.*;
 
@@ -175,6 +176,7 @@ public class GameStateManager {
         factionRevealTickCounter = 0;
         deployClassSelected.clear();
         BastionManager.getInstance().reset();
+        VehicleManager.getInstance().reset();
         removeAttackWaitingBarrier();
 
         // 编制选择最终处理
@@ -182,6 +184,7 @@ public class GameStateManager {
 
         // 传送所有玩家到复活点
         teleportAllToSpawnPoints();
+        deployInitialFactionVehicles();
         placeAttackWaitingBarrier();
 
         // 广播职业选择界面给所有玩家（部署阶段可选职业）
@@ -223,6 +226,36 @@ public class GameStateManager {
             NetworkManager.sendUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
         }
         // 职业选择界面已通过 UnifiedDeployScreen 自动打开，不再发送聊天消息
+    }
+
+    /**
+     * 部署阶段开始时，为本局最终攻守编制各预部署一轮 JSON 中配置的载具。
+     */
+    private void deployInitialFactionVehicles() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        ServerLevel level = server.overworld();
+        ClassSelectManager selectManager = ClassSelectManager.getInstance();
+        int attackCount = deployInitialFactionVehiclesForTeam("ATTACK", selectManager.getFinalAttackClass(), level);
+        int defendCount = deployInitialFactionVehiclesForTeam("DEFEND", selectManager.getFinalDefendClass(), level);
+
+        Espetro.LOGGER.info("初始载具预部署完成: 攻方{}辆，守方{}辆", attackCount, defendCount);
+    }
+
+    private int deployInitialFactionVehiclesForTeam(String team, String factionId, ServerLevel level) {
+        if (factionId == null || factionId.isBlank()) {
+            return 0;
+        }
+
+        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
+        BlockPos deployBase = new BlockPos(
+            (int) Math.floor(spawn.x),
+            (int) Math.floor(spawn.y),
+            (int) Math.floor(spawn.z)
+        );
+
+        return VehicleManager.getInstance().deployInitialVehicles(factionId, level, deployBase);
     }
 
     /**

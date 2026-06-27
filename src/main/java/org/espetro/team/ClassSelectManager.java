@@ -135,6 +135,63 @@ public class ClassSelectManager {
     }
 
     /**
+     * 获取指定队伍当前可选择的编制列表。
+     * 攻方选择时会排除守方已确定的编制，避免双方使用同一编制。
+     */
+    public List<String> getAvailableFactionPoolForTeam(String team) {
+        List<String> source = selectedFactionPool != null && !selectedFactionPool.isEmpty()
+            ? selectedFactionPool
+            : getAllPlayableFactionIds();
+
+        List<String> available = new ArrayList<>();
+        for (String factionId : source) {
+            if (isFactionAvailableForTeam(team, factionId)) {
+                available.add(factionId);
+            }
+        }
+        return available;
+    }
+
+    /**
+     * 检查编制是否在当前队伍可选列表中。服务端选择入口使用该校验，避免绕过客户端列表。
+     */
+    public boolean isFactionSelectableForTeam(String team, String factionId) {
+        if (team == null || factionId == null || factionId.isBlank()) {
+            return false;
+        }
+        return getAvailableFactionPoolForTeam(team).contains(factionId);
+    }
+
+    private boolean isFactionAvailableForTeam(String team, String factionId) {
+        if (factionId == null || factionId.isBlank()) {
+            return false;
+        }
+        if ("ATTACK".equals(team) && factionId.equals(finalDefendClass)) {
+            return false;
+        }
+        if ("DEFEND".equals(team) && factionId.equals(finalAttackClass)) {
+            return false;
+        }
+        return true;
+    }
+
+    private List<String> getAllPlayableFactionIds() {
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        List<String> ids = new ArrayList<>();
+
+        for (FactionDataLoader.FactionData faction : loader.getFactionArray()) {
+            if (faction == null || faction.id == null || faction.id.isEmpty()) {
+                continue;
+            }
+            if (loader.getClassesForFaction(faction.id).length == 0) {
+                continue;
+            }
+            ids.add(faction.id);
+        }
+        return ids;
+    }
+
+    /**
      * 指挥官选择编制（可重新选择，只保留最后一次）
      */
     public boolean selectClass(ServerPlayer commander, String classId) {
@@ -157,6 +214,11 @@ public class ClassSelectManager {
         // 检查当前阶段是否允许该队伍选择
         if (!team.equals(currentSelectingTeam)) {
             Espetro.sendToPlayer(commander, "§c当前不是你的编制选择时间！");
+            return false;
+        }
+
+        if (!isFactionSelectableForTeam(team, classId)) {
+            Espetro.sendToPlayer(commander, "§c该编制当前不可选，可能已被对方选择或不在本局候选池中！");
             return false;
         }
 
@@ -215,14 +277,14 @@ public class ClassSelectManager {
         if ("DEFEND".equals(finishedTeam)) {
             finalDefendClass = defendCommanderClass != null
                 ? defendCommanderClass
-                : getRandomFactionFromPool();
+                : getRandomFactionFromPool(finishedTeam);
             String name = getClassDisplayName(finalDefendClass);
             Espetro.broadcastToTeam("DEFEND", "§6===== 守方编制已确定: §9" + name + "§6 =====");
             Espetro.LOGGER.info("守方编制选择结束！编制: {}", name);
         } else {
             finalAttackClass = attackCommanderClass != null
                 ? attackCommanderClass
-                : getRandomFactionFromPool();
+                : getRandomFactionFromPool(finishedTeam);
             String name = getClassDisplayName(finalAttackClass);
             Espetro.broadcastToTeam("ATTACK", "§6===== 攻方编制已确定: §c" + name + "§6 =====");
             Espetro.LOGGER.info("攻方编制选择结束！编制: {}", name);
@@ -234,12 +296,13 @@ public class ClassSelectManager {
     /**
      * 从本局编制池随机选取一个编制
      */
-    private String getRandomFactionFromPool() {
-        if (selectedFactionPool == null || selectedFactionPool.isEmpty()) {
-            Espetro.LOGGER.warn("编制池为空，无可用编制");
+    private String getRandomFactionFromPool(String team) {
+        List<String> available = getAvailableFactionPoolForTeam(team);
+        if (available.isEmpty()) {
+            Espetro.LOGGER.warn("{} 方无可用编制，无法随机选择", team);
             return null;
         }
-        return selectedFactionPool.get(new Random().nextInt(selectedFactionPool.size()));
+        return available.get(new Random().nextInt(available.size()));
     }
 
     /**

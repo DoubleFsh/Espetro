@@ -57,7 +57,6 @@ public class EspetroClient {
             if (org.espetro.client.gui.ClientGameState.canOpenClassSelection()) {
                 String playerTeam = org.espetro.client.gui.ClientGameState.getPlayerTeam();
                 if (playerTeam == null) {
-                    // 未选择队伍，请求游戏状态
                     org.espetro.network.NetworkManager.requestGameState();
                 } else {
                     String factionId = org.espetro.client.gui.ClientGameState.getPlayerFactionId();

@@ -610,17 +610,6 @@ public class BastionManager {
         return true;
     }
 
-    /**
-     * 传送前的非加载检查。只接受当前已加载区块，避免 ServerPlayer.teleportTo
-     * 在主线程同步等待远处区块生成/读取，复现旧强加载实现的卡死路径。
-     */
-    public boolean isTeleportTargetLoaded(ServerLevel level, BlockPos pos) {
-        if (level == null || pos == null) {
-            return false;
-        }
-        return isChunkLoaded(level, pos);
-    }
-
     private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
         ChunkPos chunkPos = new ChunkPos(pos);
         return level.getChunkSource().hasChunk(chunkPos.x, chunkPos.z);
@@ -885,19 +874,10 @@ public class BastionManager {
             return false;
         }
 
-        if (!isTeleportTargetLoaded(deployPoint.level, deployPoint.pos)) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c原部署点所在区块尚未加载，已取消本次复活以避免服务器卡顿。请靠近该区域或稍后重试。"
-            ));
-            Espetro.LOGGER.warn("拒绝将玩家 {} 传送到未加载原部署点区块: {} ({})",
-                player.getName().getString(), deployPoint.pos, deployPoint.level.dimension().location());
-            return false;
-        }
-
         // 清除等待状态
         clearWaiting(player.getUUID());
 
-        // 传送玩家到原部署点
+        // 传送玩家到原部署点。该坐标由队伍复活点 JSON 配置保存，不再因目标区块未加载而取消。
         player.teleportTo(deployPoint.level, deployPoint.pos.getX() + 0.5, deployPoint.pos.getY() + 0.1, deployPoint.pos.getZ() + 0.5, 0f, 0f);
 
         // 设置生存模式

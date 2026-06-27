@@ -324,27 +324,17 @@ public class NetworkManager {
 
     /**
      * 根据队伍获取可选编制列表（服务端调用）
-     * 攻守双方使用同一个随机编制池
+     * 攻守双方使用同一个随机编制池，但排除对方已确定的编制。
      */
     private static List<ClassSelectScreenPacket.FactionInfo> getFactionListForTeam(String team) {
-        List<String> pool = ClassSelectManager.getInstance().getSelectedFactionPool();
+        List<String> pool = ClassSelectManager.getInstance().getAvailableFactionPoolForTeam(team);
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
         List<ClassSelectScreenPacket.FactionInfo> list = new ArrayList<>();
 
-        if (pool != null && !pool.isEmpty()) {
-            for (String id : pool) {
-                FactionDataLoader.FactionData faction = loader.getFaction(id);
-                String name = faction != null ? faction.name : id;
-                list.add(new ClassSelectScreenPacket.FactionInfo(id, name));
-            }
-            return list;
-        }
-        // fallback：如果编制池未生成，返回所有编制
-        for (FactionDataLoader.FactionData faction : loader.getFactionArray()) {
-            if (faction != null && faction.id != null && !faction.id.isEmpty()) {
-                if (loader.getClassesForFaction(faction.id).length == 0) continue;
-                list.add(new ClassSelectScreenPacket.FactionInfo(faction.id, faction.name));
-            }
+        for (String id : pool) {
+            FactionDataLoader.FactionData faction = loader.getFaction(id);
+            String name = faction != null ? faction.name : id;
+            list.add(new ClassSelectScreenPacket.FactionInfo(id, name));
         }
         return list;
     }

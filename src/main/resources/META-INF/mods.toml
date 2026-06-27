@@ -79,6 +79,6 @@ side = "BOTH"# Here's another dependency
 [[dependencies."${mod_id}"]]
 modId = "hcrpoints"
 mandatory = false
-versionRange = "[2.0.1,)"
+versionRange = "[1.0.0-final,)"
 ordering = "NONE"
 side = "BOTH"
