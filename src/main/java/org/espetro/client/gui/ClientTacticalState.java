@@ -81,6 +81,10 @@ public final class ClientTacticalState {
         return teammateNameTagDistance;
     }
 
+    public static boolean isInSquad() {
+        return mySquadId != NO_SQUAD;
+    }
+
     private static String key(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT);
     }
