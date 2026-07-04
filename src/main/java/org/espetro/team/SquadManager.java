@@ -144,6 +144,26 @@ public class SquadManager {
         return playerSquads.getOrDefault(uuid, NO_SQUAD);
     }
 
+    public boolean isSquadLeader(UUID uuid) {
+        Integer squadId = playerSquads.get(uuid);
+        if (squadId == null) {
+            return false;
+        }
+
+        for (LinkedHashMap<Integer, Squad> squads : squadsByTeam.values()) {
+            Squad squad = squads.get(squadId);
+            if (squad != null) {
+                return uuid.equals(squad.leader);
+            }
+        }
+        return false;
+    }
+
+    public boolean hasSquad(String team, int squadId) {
+        LinkedHashMap<Integer, Squad> squads = squadsByTeam.get(team);
+        return squads != null && squads.containsKey(squadId);
+    }
+
     public List<SquadSnapshot> getSquadSnapshots(String team) {
         List<SquadSnapshot> result = new ArrayList<>();
         LinkedHashMap<Integer, Squad> squads = squadsByTeam.get(team);

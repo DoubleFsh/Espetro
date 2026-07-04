@@ -11,7 +11,7 @@ import java.util.Map;
 
 /**
  * 编制选择界面
- * 指挥官选择队伍编制，非指挥官只能观看。
+ * 当前阵营全体玩家投票选择队伍编制。
  */
 public class ClassSelectScreen extends MutilScreen {
 
@@ -30,7 +30,7 @@ public class ClassSelectScreen extends MutilScreen {
 
     public ClassSelectScreen(String team, boolean isCommander, List<ClassSelectScreenPacket.FactionInfo> factions,
                               int timeRemaining, String opponentTeamName, String opponentFaction,
-                              int opponentTimeRemaining) {
+                              int opponentTimeRemaining, String selectedFactionId) {
         super(Component.literal("编制选择"));
         this.team = team;
         this.isCommander = isCommander;
@@ -39,6 +39,8 @@ public class ClassSelectScreen extends MutilScreen {
         this.opponentTeamName = opponentTeamName;
         this.opponentFaction = opponentFaction;
         this.opponentTimeRemaining = opponentTimeRemaining;
+        this.lastSelectedFaction = selectedFactionId == null || selectedFactionId.isEmpty()
+            ? null : selectedFactionId;
     }
 
     @Override
@@ -65,15 +67,14 @@ public class ClassSelectScreen extends MutilScreen {
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
 
         String teamPrefix = EspetroMutilWidgets.teamPrefix(team);
-        String roleText = isCommander ? "\u00a7a指挥官" : "\u00a77队员";
         root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 6, panelW,
-            teamPrefix + "\u00a7l" + EspetroMutilWidgets.teamName(team) + " 编制选择 \u00a77[" + roleText + "\u00a77]",
+            teamPrefix + "\u00a7l" + EspetroMutilWidgets.teamName(team) + " 编制投票 \u00a77[全员投票]",
             EspetroMutilWidgets.TEXT));
 
         boolean selectingOpen = timeRemaining > 0;
         String prompt = !selectingOpen
             ? "\u00a77本方编制已确定，等待对方选择编制"
-            : isCommander ? "\u00a7e点击选择本方编制，最后选择项会高亮" : "\u00a77请等待指挥官选择编制";
+            : "\u00a7e点击投票，可随时改票，票数实时同步";
         root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
             prompt, EspetroMutilWidgets.MUTED));
 
@@ -128,16 +129,16 @@ public class ClassSelectScreen extends MutilScreen {
             int y = startY + row * (cardH + cardGap);
 
             boolean selected = faction.id != null && faction.id.equals(lastSelectedFaction);
-            String prefix = selected ? "\u00a76★ " : isCommander ? "\u00a7f" : "\u00a78";
-            String label = prefix + faction.name;
+            String prefix = selected ? "\u00a7a✓ " : "\u00a7f";
+            String label = prefix + faction.name + " \u00a7e[" + faction.voteCount + "]";
 
             var button = EspetroMutilWidgets.button(x, y, cardW, cardH, label, () -> selectFaction(faction.id))
-                .setEnabled(isCommander && selectingOpen)
+                .setEnabled(selectingOpen)
                 .setSelected(selected)
                 .setColors(0x00000000, 0x202C3544, 0x303B3020)
                 .setBorderColor(0x00000000);
 
-            if (!isCommander || !selectingOpen) {
+            if (!selectingOpen) {
                 button.setTextColor(EspetroMutilWidgets.DIM);
             }
 
@@ -149,7 +150,7 @@ public class ClassSelectScreen extends MutilScreen {
     }
 
     private void selectFaction(String factionId) {
-        if (!isCommander || timeRemaining <= 0 || factionId == null || factionId.isEmpty()) {
+        if (timeRemaining <= 0 || factionId == null || factionId.isEmpty()) {
             return;
         }
 
@@ -166,6 +167,8 @@ public class ClassSelectScreen extends MutilScreen {
         this.opponentTeamName = packet.getOpponentTeamName();
         this.opponentFaction = packet.getOpponentFaction();
         this.opponentTimeRemaining = packet.getOpponentTimeRemaining();
+        this.lastSelectedFaction = packet.getSelectedFactionId().isEmpty()
+            ? null : packet.getSelectedFactionId();
         if (this.root != null) {
             rebuildMutilRoot();
         }

@@ -61,15 +61,16 @@ public class SpawnPointConfig {
         try {
             ResourceManager resourceManager = server.getResourceManager();
             
-            // 先尝试从数据包加载
+            // 优先使用存档内 datapacks 数据包，再回退模组内置
             ResourceLocation configLocation = ResourceLocation.fromNamespaceAndPath("espetro", "config/spawn_points.json");
-            
-            var resourceOptional = resourceManager.getResource(configLocation);
+
+            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(resourceManager, configLocation);
             if (resourceOptional.isPresent()) {
                 try (var inputStream = resourceOptional.get().open()) {
                     String json = new String(inputStream.readAllBytes());
                     parseAndApplyConfig(json);
-                    Espetro.LOGGER.info("成功从数据包加载复活点配置");
+                    Espetro.LOGGER.info("成功从 {} 加载复活点配置",
+                        org.espetro.data.EspetroDataResources.describeSource(resourceOptional.get()));
                     return;
                 }
             }

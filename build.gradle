@@ -97,8 +97,12 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 sourceSets.main.java.exclude 'com/example/hcrpoints/**'
 sourceSets.main.resources.exclude 'assets/hcrpoints/**'
+sourceSets.main.resources.exclude 'data/hcrpoints/**'
 
 repositories {
+    flatDir {
+        dirs '../ds/build/libs'
+    }
     repositories {
         maven {
             url "https://cursemaven.com"
@@ -112,6 +116,13 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     implementation fg.deobf("curse.maven:mutil-351914:7772906")
+
+    // HCR AAD depends on Espetro, so Espetro uses reflection at compile time and
+    // only adds the sibling project's latest jar to local development runs.
+    def localHcrAadJar = file("../ds/build/libs/espoints-${hcr_aad_version}.jar")
+    if (localHcrAadJar.exists()) {
+        runtimeOnly fg.deobf("local:espoints:${hcr_aad_version}")
+    }
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -119,7 +130,8 @@ tasks.named('processResources', ProcessResources).configure {
                              forge_version       : forge_version, forge_version_range: forge_version_range,
                              loader_version_range: loader_version_range,
                              mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-                             mod_authors         : mod_authors, mod_description: mod_description,]
+                             mod_authors         : mod_authors, mod_description: mod_description,
+                             hcr_aad_version     : hcr_aad_version,]
 
     inputs.properties replaceProperties
 
@@ -131,6 +143,7 @@ tasks.named('processResources', ProcessResources).configure {
 tasks.named('jar', Jar).configure {
     exclude 'com/example/hcrpoints/**'
     exclude 'assets/hcrpoints/**'
+    exclude 'data/hcrpoints/**'
 
     manifest {
         attributes(["Specification-Title"     : mod_id,

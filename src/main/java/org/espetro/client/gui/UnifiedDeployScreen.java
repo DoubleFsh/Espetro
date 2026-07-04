@@ -11,11 +11,13 @@ import org.espetro.network.UnifiedDeployScreenPacket;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 统一部署/复活主界面 — 基于 mutil GuiElement 树架构
  *
- * 布局：左半屏(职业+部署点) | 右半屏(hcrpoints战术地图)
+ * 布局：左半屏(职业+部署点) | 右半屏(HCR AAD / ESPoints 战术地图)
  * ┌─────────────────────────┬──────────────────────────┐
  * │  §l标题行                │                          │
  * ├─────────────────────────┤       战术地图              │
@@ -43,6 +45,8 @@ public class UnifiedDeployScreen extends Screen {
     private static final int BTN_BG_DISABLED = 0xA01A1A28;
     private static final int BTN_BORDER      = 0xFF606088;
     private static final int BTN_TEXT        = 0xFFFFFF;
+    private static final Pattern COORDINATE_PATTERN =
+        Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
 
     // 数据字段
     private final String factionId;
@@ -59,6 +63,8 @@ public class UnifiedDeployScreen extends Screen {
     private int mySquadId;
     private int deployTimeRemaining;
     private final String team;
+    private boolean waitingForDeploySelection;
+    private long outpostRedeployCooldownEndsAt;
 
     // ===== Element 树 =====
     private GuiElement root;
@@ -67,6 +73,10 @@ public class UnifiedDeployScreen extends Screen {
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
     private final List<EspButton> deployButtons = new ArrayList<>();
+    private EspButton outpostRedeployButton;
+    private PlainText statusText;
+    private PlainText deployTitleText;
+    private PlainText statusTimerText;
 
     // ===== 滚轮列表 =====
     private ScrollableList classScrollList;
@@ -94,6 +104,9 @@ public class UnifiedDeployScreen extends Screen {
         this.mySquadId = data.getMySquadId();
         this.deployTimeRemaining = data.getDeployTimeRemaining();
         this.team = data.getTeam();
+        this.waitingForDeploySelection = data.isWaitingForDeploySelection();
+        this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
+            + data.getOutpostRedeployCooldownRemaining() * 1000L;
     }
 
     public void updateClassCounts(Map<String, Integer> counts) {
@@ -104,6 +117,19 @@ public class UnifiedDeployScreen extends Screen {
 
     public void updateTimeRemaining(int seconds) {
         this.deployTimeRemaining = seconds;
+        if (deployTitleText != null) {
+            deployTitleText.setText(buildDeployTitle());
+        }
+        if (statusTimerText != null) {
+            statusTimerText.setText(formatTime(seconds));
+        }
+    }
+
+    public void updateDeploymentState(boolean waitingForSelection, int redeployCooldownRemaining) {
+        this.waitingForDeploySelection = waitingForSelection;
+        this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
+            + Math.max(0, redeployCooldownRemaining) * 1000L;
+        refreshDeployButtonStates();
     }
 
     public void updateSquads(List<UnifiedDeployScreenPacket.SquadInfo> updatedSquads, int updatedMySquadId) {
@@ -112,8 +138,8 @@ public class UnifiedDeployScreen extends Screen {
             this.squads.addAll(updatedSquads);
         }
         this.mySquadId = updatedMySquadId;
-        if (root != null) {
-            rebuildGui();
+        if (statusText != null) {
+            statusText.setText(buildStatusText());
         }
     }
 
@@ -172,7 +198,7 @@ public class UnifiedDeployScreen extends Screen {
 
     /** 直接用 Minecraft Font 渲染的文本元素，亮度和按钮文字一致 */
     private static class PlainText extends GuiElement {
-        private final String text;
+        private String text;
         private int color;
 
         PlainText(int x, int y, String text, int color) {
@@ -182,6 +208,7 @@ public class UnifiedDeployScreen extends Screen {
         }
 
         void setColor(int c) { color = c; }
+        void setText(String value) { text = value == null ? "" : value; }
 
         @Override
         public void draw(GuiGraphics graphics, int x, int y, int w, int h, int mx, int my, float tick) {
@@ -197,12 +224,17 @@ public class UnifiedDeployScreen extends Screen {
     protected void init() {
         super.init();
         rebuildGui();
-        NetworkManager.requestClassCounts(factionId);
+        // 打开包已携带服务端最新人数，后续变更也由服务端主动推送，
+        // 不再打开界面后立即发起第二次请求。
         fadeIn = new ScreenFadeIn();
     }
 
     private void rebuildGui() {
         this.root = new GuiElement(0, 0, this.width, this.height);
+        this.outpostRedeployButton = null;
+        this.statusText = null;
+        this.deployTitleText = null;
+        this.statusTimerText = null;
         computeRegions();
 
         buildTitleBar();
@@ -319,15 +351,8 @@ public class UnifiedDeployScreen extends Screen {
         int areaW = deployAreaW, areaH = deployAreaH;
 
         // 标题 + 倒计时
-        String titleStr = "\u00a76\u00a7l部署点";
-        if (deployTimeRemaining >= 0) {
-            String ts = deployTimeRemaining > 60
-                ? (deployTimeRemaining / 60) + ":" + String.format("%02d", deployTimeRemaining % 60)
-                : deployTimeRemaining + "s";
-            titleStr += "  \u00a7e\u23f1 " + ts;
-        }
-        PlainText dt = new PlainText(sx, sy, titleStr, 0xFFFFAA00);
-        root.addChild(dt);
+        deployTitleText = new PlainText(sx, sy, buildDeployTitle(), 0xFFFFAA00);
+        root.addChild(deployTitleText);
 
         root.addChild(new GuiRect(sx, sy + SECTION_TITLE_H + 2, areaW, 1, 0x30FFFFFF));
 
@@ -351,30 +376,103 @@ public class UnifiedDeployScreen extends Screen {
             EspButton btn = new EspButton(
                 2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                 deployLabel,
-                () -> { var p = Minecraft.getInstance().player; if (p != null) p.connection.sendCommand("bastion deploy"); }
+                () -> selectDeploymentPoint(deployPointPos, "bastion deploy")
             );
+            btn.setEnabled(waitingForDeploySelection);
             deployScrollList.addChild(btn);
             deployButtons.add(btn);
             row++;
         }
 
-        // 兵站列表
+        // 兵站/前哨列表。重新部署入口放在底部状态栏。
         for (var b : bastions) {
             final var bid = b.id;
-            EspButton btn = new EspButton(
-                2, row * (BTN_H + btnSpacing), btnW, BTN_H,
-                "\u00a79\u25c6 " + b.name,
-                () -> { var p = Minecraft.getInstance().player; if (p != null) p.connection.sendCommand("bastion select " + bid); }
-            );
-            deployScrollList.addChild(btn);
-            deployButtons.add(btn);
+            if (b.isOutpost()) {
+                String deployCmd = "outpost deploy " + (b.getOutpostIndex() + 1);
+                EspButton selectButton = new EspButton(
+                    2, row * (BTN_H + btnSpacing), btnW, BTN_H,
+                    "\u00a7d\u25c6 " + b.name,
+                    () -> selectDeploymentPoint(b.pos, deployCmd)
+                );
+                selectButton.setEnabled(waitingForDeploySelection);
+                deployScrollList.addChild(selectButton);
+                deployButtons.add(selectButton);
+            } else {
+                String cmd = "bastion select " + bid;
+                EspButton btn = new EspButton(
+                    2, row * (BTN_H + btnSpacing), btnW, BTN_H,
+                    "\u00a79\u25c6 " + b.name,
+                    () -> selectDeploymentPoint(b.pos, cmd)
+                );
+                btn.setEnabled(waitingForDeploySelection);
+                deployScrollList.addChild(btn);
+                deployButtons.add(btn);
+            }
             row++;
         }
     }
 
-    // ---------- 战术地图（右半屏，由 hcrpoints 绘制）----------
+    private int getRedeployCooldownRemaining() {
+        long remainingMillis = outpostRedeployCooldownEndsAt - System.currentTimeMillis();
+        return remainingMillis <= 0 ? 0 : (int) ((remainingMillis + 999L) / 1000L);
+    }
+
+    private void selectDeploymentPoint(String positionText, String command) {
+        double[] coordinates = parseDeploymentCoordinates(positionText);
+        if (coordinates != null) {
+            HcrTacticalMapBridge.setSelectedDeploymentPoint(coordinates[0], coordinates[1]);
+        } else {
+            HcrTacticalMapBridge.clearSelectedDeploymentPoint();
+        }
+
+        var player = Minecraft.getInstance().player;
+        if (player != null) {
+            player.connection.sendCommand(command);
+        }
+    }
+
+    private static double[] parseDeploymentCoordinates(String positionText) {
+        if (positionText == null || positionText.isBlank()) {
+            return null;
+        }
+
+        Matcher matcher = COORDINATE_PATTERN.matcher(positionText);
+        double[] values = new double[3];
+        int count = 0;
+        while (matcher.find() && count < values.length) {
+            try {
+                values[count++] = Double.parseDouble(matcher.group());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return count >= 3 ? new double[] {values[0], values[2]} : null;
+    }
+
+    private String buildRedeployLabel() {
+        int remaining = getRedeployCooldownRemaining();
+        return remaining > 0 ? "\u00a77重新部署 " + remaining + "s" : "\u00a7c重新部署";
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (outpostRedeployButton != null) {
+            outpostRedeployButton.setLabel(buildRedeployLabel());
+            outpostRedeployButton.setEnabled(
+                !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
+        }
+    }
+
+    @Override
+    public void removed() {
+        HcrTacticalMapBridge.clearSelectedDeploymentPoint();
+        super.removed();
+    }
+
+    // ---------- 战术地图（右半屏，由 HCR AAD / ESPoints 绘制）----------
     private void buildMapPanel() {
-        // 地图内容在 render() 中直接调用 hcrpoints 的 TacticalMapHUD 绘制。
+        // 地图内容在 render() 中通过反射调用 ESPoints 的 TacticalMapHUD 绘制。
     }
 
     // ---------- 底部状态栏 ----------
@@ -382,28 +480,73 @@ public class UnifiedDeployScreen extends Screen {
         int barY = this.height - STATUS_BAR_H;
         root.addChild(new GuiRect(0, barY, this.width, STATUS_BAR_H, 0xDD000000));
 
-        String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
-        String teamName = "ATTACK".equals(team) ? "进攻方" : "防守方";
-        String squadStr = "";
-        for (var s : squads) { if (s.id == mySquadId) { squadStr = " | \u00a7a" + s.name; break; } }
-        String status = teamColor + teamName + squadStr + " \u00a7f| " + factionName;
-        PlainText st = new PlainText(6, barY + 1, status, BTN_TEXT);
-        root.addChild(st);
+        statusText = new PlainText(6, barY + 1, buildStatusText(), BTN_TEXT);
+        root.addChild(statusText);
 
         if (deployTimeRemaining >= 0) {
-            String ts = deployTimeRemaining > 60
-                ? (deployTimeRemaining / 60) + ":" + String.format("%02d", deployTimeRemaining % 60)
-                : deployTimeRemaining + "s";
-            PlainText timer = new PlainText(this.width - 50, barY + 1, ts, 0xFFFFFF);
-            root.addChild(timer);
+            statusTimerText = new PlainText(this.width - 50, barY + 1,
+                formatTime(deployTimeRemaining), 0xFFFFFF);
+            root.addChild(statusTimerText);
         }
 
         int squadButtonX = deployTimeRemaining >= 0 ? this.width - 130 : this.width - 78;
         squadButtonX = Math.max(6, squadButtonX);
+
+        boolean hasOutpost = bastions.stream().anyMatch(UnifiedDeployScreenPacket.BastionItem::isOutpost);
+        if (deployTimeRemaining >= 0 && "DEFEND".equals(team) && hasOutpost) {
+            int redeployW = Math.min(100, squadButtonX - mapX - 4);
+            if (redeployW >= 60) {
+                int redeployX = squadButtonX - redeployW - 4;
+                outpostRedeployButton = new EspButton(
+                    redeployX, barY + 1, redeployW, STATUS_BAR_H - 2,
+                    buildRedeployLabel(),
+                    () -> { var p = Minecraft.getInstance().player; if (p != null) p.connection.sendCommand("outpost redeploy"); }
+                );
+                outpostRedeployButton.setEnabled(
+                    !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
+                root.addChild(outpostRedeployButton);
+            }
+        }
+
         EspButton squadButton = new EspButton(squadButtonX, barY + 1, 72, STATUS_BAR_H - 2,
             "\u00a7e班组小队",
             () -> Minecraft.getInstance().setScreen(new SquadScreen(new ArrayList<>(squads), mySquadId, team, this)));
         root.addChild(squadButton);
+    }
+
+    private String buildDeployTitle() {
+        return "\u00a76\u00a7l部署点";
+    }
+
+    private String formatTime(int seconds) {
+        int safeSeconds = Math.max(0, seconds);
+        return safeSeconds > 60
+            ? (safeSeconds / 60) + ":" + String.format("%02d", safeSeconds % 60)
+            : safeSeconds + "s";
+    }
+
+    private String buildStatusText() {
+        String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
+        String teamName = "ATTACK".equals(team) ? "进攻方" : "防守方";
+        String squadStr = "";
+        for (var squad : squads) {
+            if (squad.id == mySquadId) {
+                squadStr = " | \u00a7a" + squad.name;
+                break;
+            }
+        }
+        return teamColor + teamName + squadStr + " \u00a7f| " + factionName;
+    }
+
+    private void refreshDeployButtonStates() {
+        for (EspButton button : deployButtons) {
+            button.setEnabled(waitingForDeploySelection);
+        }
+        if (outpostRedeployButton != null) {
+            outpostRedeployButton.setLabel(buildRedeployLabel());
+            outpostRedeployButton.setEnabled(
+                !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
+        }
     }
 
     // ==================== 渲染 ====================

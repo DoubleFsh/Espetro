@@ -312,9 +312,9 @@ public class VoteManager {
         int timeout = getCurrentTimeoutSeconds();
         int secondsRemaining = timeout - (voteTickCounter / TICKS_PER_SECOND);
 
-        // 每0.5秒广播一次投票数据（更实时地同步票数和倒计时）
-        if (voteTickCounter % (TICKS_PER_SECOND / 2) == 0) {
-            // 广播投票数据（同步倒计时和票数）
+        // The UI displays whole seconds, so publish every second instead of
+        // skipping directly from N to N - 2.
+        if (voteTickCounter % TICKS_PER_SECOND == 0) {
             broadcastVoteUpdate();
         }
     }

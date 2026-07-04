@@ -10,6 +10,7 @@ import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.TeamPackManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,8 +84,7 @@ public class BastionSelectionPacket {
 
         BastionData bastion = BastionManager.getInstance().getBastion(bastionId);
         if (bastion == null || !bastion.isActive() || !team.equals(bastion.getTeam())) {
-            player.sendSystemMessage(Component.literal("§c无效的兵站选择！"));
-            return false;
+            return TeamPackManager.getInstance().respawnAtTeamPack(player, bastionId);
         }
 
         // 准备阶段也允许部署（加局加入）

@@ -55,4 +55,12 @@ public class ClientGameState {
     public static boolean canOpenClassSelection() {
         return currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE;
     }
+
+    /**
+     * 检查是否允许打开指挥官技能面板（Y键）
+     * 在部署阶段和战斗阶段允许
+     */
+    public static boolean canOpenCommanderSkill() {
+        return currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE;
+    }
 }

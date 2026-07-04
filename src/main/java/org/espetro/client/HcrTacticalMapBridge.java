@@ -9,19 +9,22 @@ import org.espetro.Espetro;
 import java.lang.reflect.Method;
 
 /**
- * Optional bridge to HCRpoints' tactical map HUD.
+ * Optional bridge to HCR AAD / ESPoints' tactical map HUD.
  *
- * Espetro must not compile against HCRpoints because HCRpoints now depends on Espetro.
+ * Espetro must not compile against ESPoints because ESPoints depends on Espetro.
  */
 public final class HcrTacticalMapBridge {
-    private static final String HUD_CLASS_NAME = "com.example.hcrpoints.hud.TacticalMapHUD";
+    private static final String HUD_CLASS_NAME = "com.example.espoints.hud.TacticalMapHUD";
 
     private static Class<?> hudClass;
     private static Method getInstanceMethod;
     private static Method renderEmbeddedMapMethod;
     private static Method increaseRenderRangeMethod;
     private static Method decreaseRenderRangeMethod;
-    private static Boolean hcrpointsLoaded;
+    private static Method setSelectedDeploymentPointMethod;
+    private static Method clearSelectedDeploymentPointMethod;
+    private static Object hudInstance;
+    private static Boolean espointsLoaded;
     private static boolean unavailableLogged;
 
     private HcrTacticalMapBridge() {
@@ -58,6 +61,28 @@ public final class HcrTacticalMapBridge {
         invokeRangeMethod(false);
     }
 
+    public static void setSelectedDeploymentPoint(double x, double z) {
+        if (!isAvailable()) {
+            return;
+        }
+        try {
+            setSelectedDeploymentPointMethod().invoke(getHudInstance(), x, z);
+        } catch (Throwable e) {
+            logUnavailable(e);
+        }
+    }
+
+    public static void clearSelectedDeploymentPoint() {
+        if (!isAvailable()) {
+            return;
+        }
+        try {
+            clearSelectedDeploymentPointMethod().invoke(getHudInstance());
+        } catch (Throwable e) {
+            logUnavailable(e);
+        }
+    }
+
     private static void invokeRangeMethod(boolean increase) {
         try {
             Method method = increase ? increaseRenderRangeMethod() : decreaseRenderRangeMethod();
@@ -68,7 +93,10 @@ public final class HcrTacticalMapBridge {
     }
 
     private static Object getHudInstance() throws ReflectiveOperationException {
-        return getInstanceMethod().invoke(null);
+        if (hudInstance == null) {
+            hudInstance = getInstanceMethod().invoke(null);
+        }
+        return hudInstance;
     }
 
     private static Class<?> hudClass() throws ClassNotFoundException {
@@ -79,10 +107,10 @@ public final class HcrTacticalMapBridge {
     }
 
     private static boolean isAvailable() {
-        if (hcrpointsLoaded == null) {
-            hcrpointsLoaded = ModList.get().isLoaded("hcrpoints");
+        if (espointsLoaded == null) {
+            espointsLoaded = ModList.get().isLoaded("espoints");
         }
-        return hcrpointsLoaded;
+        return espointsLoaded;
     }
 
     private static Method getInstanceMethod() throws ReflectiveOperationException {
@@ -121,6 +149,21 @@ public final class HcrTacticalMapBridge {
         return decreaseRenderRangeMethod;
     }
 
+    private static Method setSelectedDeploymentPointMethod() throws ReflectiveOperationException {
+        if (setSelectedDeploymentPointMethod == null) {
+            setSelectedDeploymentPointMethod = hudClass().getMethod(
+                "setSelectedDeploymentPoint", double.class, double.class);
+        }
+        return setSelectedDeploymentPointMethod;
+    }
+
+    private static Method clearSelectedDeploymentPointMethod() throws ReflectiveOperationException {
+        if (clearSelectedDeploymentPointMethod == null) {
+            clearSelectedDeploymentPointMethod = hudClass().getMethod("clearSelectedDeploymentPoint");
+        }
+        return clearSelectedDeploymentPointMethod;
+    }
+
     private static void renderFallback(GuiGraphics graphics, int x, int y, int width, int height) {
         graphics.fill(x, y, x + width, y + height, 0xCC202020);
         graphics.renderOutline(x, y, width, height, 0xFF000000);
@@ -142,6 +185,6 @@ public final class HcrTacticalMapBridge {
             return;
         }
         unavailableLogged = true;
-        Espetro.LOGGER.warn("HCRpoints 战术地图桥接不可用，部署界面将显示占位地图: {}", e.toString());
+        Espetro.LOGGER.warn("HCR AAD / ESPoints 战术地图桥接不可用，部署界面将显示占位地图: {}", e.toString());
     }
 }

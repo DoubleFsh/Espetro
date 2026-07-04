@@ -62,7 +62,7 @@ public class BastionCommand {
                     if (player == null) return 0;
                     player.sendSystemMessage(Component.literal("§6=== 兵站命令帮助 ==="));
                     player.sendSystemMessage(Component.literal("§e/bastion list §7- 查看可用兵站列表"));
-                    player.sendSystemMessage(Component.literal("§e/bastion select <id> §7- 在指定兵站复活"));
+                    player.sendSystemMessage(Component.literal("§e/bastion select <id> §7- 在指定兵站或队伍集结点复活"));
                     player.sendSystemMessage(Component.literal("§e/bastion deploy §7- 在原部署点复活"));
                     player.sendSystemMessage(Component.literal("§7(点击聊天中的链接可直接选择)"));
                     return 1;
@@ -185,6 +185,22 @@ public class BastionCommand {
                     .withHoverEvent(new net.minecraft.network.chat.HoverEvent(
                         net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
                         Component.literal("§e点击选择此兵站")
+                    ))
+                );
+            player.sendSystemMessage(clickable);
+        }
+
+        for (org.espetro.network.UnifiedDeployScreenPacket.BastionItem item :
+            org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player)) {
+            Component clickable = Component.literal("§d- §f" + item.name + " §7(" + item.pos + ")")
+                .withStyle(style -> style
+                    .withClickEvent(new net.minecraft.network.chat.ClickEvent(
+                        net.minecraft.network.chat.ClickEvent.Action.SUGGEST_COMMAND,
+                        "/bastion select " + item.id
+                    ))
+                    .withHoverEvent(new net.minecraft.network.chat.HoverEvent(
+                        net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+                        Component.literal("§e点击选择此队伍集结点")
                     ))
                 );
             player.sendSystemMessage(clickable);

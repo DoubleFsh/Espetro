@@ -4,5 +4,5 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.shuai</groupId>
   <artifactId>espetro</artifactId>
-  <version>1.9.1-snapshot</version>
+  <version>1.0.0-final</version>
 </project>

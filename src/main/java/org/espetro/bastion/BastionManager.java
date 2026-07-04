@@ -25,7 +25,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 兵站管理器
@@ -58,9 +57,8 @@ public class BastionManager {
     // 玩家位置锁定（等待复活选择时）
     private final Map<UUID, net.minecraft.world.phys.Vec3> playerLockPositions = new HashMap<>();
 
-    // 弹药补给追踪
+    // 弹药补给追踪（仅冷却，无次数限制）
     private final Map<UUID, Long> resupplyCooldowns = new HashMap<>(); // playerUUID -> 最后补给时间戳
-    private final Map<UUID, Integer> resupplyCounts = new HashMap<>(); // playerUUID -> 累计补给次数
 
     /** 弹药补给冷却时间（毫秒） */
     public static final long RESUPPLY_COOLDOWN_MS = 5 * 60 * 1000;
@@ -88,7 +86,7 @@ public class BastionManager {
             }
 
             net.minecraft.resources.ResourceLocation location = net.minecraft.resources.ResourceLocation.parse("espetro:config/bastion.json");
-            var resourceOptional = server.getResourceManager().getResource(location);
+            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(server.getResourceManager(), location);
 
             if (!resourceOptional.isPresent()) {
                 Espetro.LOGGER.warn("未找到 bastion.json 配置文件，使用默认值");
@@ -222,10 +220,14 @@ public class BastionManager {
      * 获取玩家所属队伍的兵站列表
      */
     public List<BastionData> getTeamBastions(String team) {
-        return bastions.values().stream()
-            .filter(b -> b.getTeam().equals(team) && isBastionUsable(b))
-            .sorted(Comparator.comparing(BastionData::getName))
-            .collect(Collectors.toList());
+        List<BastionData> result = new ArrayList<>(MAX_BASTIONS);
+        for (BastionData bastion : bastions.values()) {
+            if (bastion.getTeam().equals(team) && isBastionUsable(bastion)) {
+                result.add(bastion);
+            }
+        }
+        result.sort(Comparator.comparing(BastionData::getName));
+        return result;
     }
 
     /**
@@ -348,6 +350,8 @@ public class BastionManager {
 
         Espetro.LOGGER.info("兵站 {} 被摧毁！攻击者={}", bastionName, attacker == null ? "unknown" : attacker.getName().getString());
         Espetro.broadcastToTeam(bastionTeam, "§c[兵站] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
+        String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
+        Espetro.broadcastToTeam(enemyTeam, "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
 
         ServerPlayer commander = findCommanderForTeam(bastionTeam);
         if (commander != null) {
@@ -423,18 +427,16 @@ public class BastionManager {
      * 移除无效兵站
      */
     public void removeInvalidBastions() {
-        List<UUID> toRemove = new ArrayList<>();
-        for (BastionData bastion : bastions.values()) {
+        Iterator<BastionData> iterator = bastions.values().iterator();
+        while (iterator.hasNext()) {
+            BastionData bastion = iterator.next();
             if (!bastion.isActive()) {
-                toRemove.add(bastion.getBastionId());
+                iterator.remove();
             } else if (bastion.checkArmorStand()) {
                 updateBastionArmorStandPosition(bastion, bastion.getArmorStandPosition());
             } else {
                 ensureCoreArmorStand(bastion);
             }
-        }
-        for (UUID id : toRemove) {
-            bastions.remove(id);
         }
     }
 
@@ -471,7 +473,6 @@ public class BastionManager {
         playerDeployPoints.clear();
         bastionCooldowns.clear();
         resupplyCooldowns.clear();
-        resupplyCounts.clear();
         clearBastionRecords();
     }
 
@@ -506,19 +507,26 @@ public class BastionManager {
      * 获取当前所有队伍生效兵站数量。
      */
     public int getActiveBastionCount() {
-        return (int) bastions.values().stream()
-            .filter(BastionData::isActive)
-            .count();
+        int count = 0;
+        for (BastionData bastion : bastions.values()) {
+            if (bastion.isActive()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
      * 获取指定队伍当前生效兵站数量。
      */
     public int getActiveBastionCount(String team) {
-        return (int) bastions.values().stream()
-            .filter(BastionData::isActive)
-            .filter(b -> Objects.equals(team, b.getTeam()))
-            .count();
+        int count = 0;
+        for (BastionData bastion : bastions.values()) {
+            if (bastion.isActive() && Objects.equals(team, bastion.getTeam())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -608,17 +616,6 @@ public class BastionManager {
 
         Espetro.LOGGER.info("兵站 {} 的核心盔甲架缺失，已在记录位置 {} 重建", bastion.getName(), corePos);
         return true;
-    }
-
-    /**
-     * 传送前的非加载检查。只接受当前已加载区块，避免 ServerPlayer.teleportTo
-     * 在主线程同步等待远处区块生成/读取，复现旧强加载实现的卡死路径。
-     */
-    public boolean isTeleportTargetLoaded(ServerLevel level, BlockPos pos) {
-        if (level == null || pos == null) {
-            return false;
-        }
-        return isChunkLoaded(level, pos);
     }
 
     private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
@@ -761,32 +758,14 @@ public class BastionManager {
         return null;
     }
 
-    // ==================== 弹药补给 ====================
+    // ==================== 弹药补给（仅冷却，无次数限制）====================
 
     /**
-     * 尝试补给弹药
+     * 尝试补给弹药（仅检查冷却）
      * @return null表示成功，String表示失败原因
      */
     @Nullable
     public String tryResupply(UUID playerId) {
-        return tryResupply(playerId, -1);
-    }
-
-    /**
-     * 尝试补给弹药。
-     * @param maxResupplies 最大补给次数；小于等于0表示无限制
-     * @return null表示成功，String表示失败原因
-     */
-    @Nullable
-    public String tryResupply(UUID playerId, int maxResupplies) {
-        if (maxResupplies > 0) {
-            int used = getResupplyCount(playerId);
-            if (used >= maxResupplies) {
-                return "§c本次生命的弹药补给次数已用完！(" + used + "/" + maxResupplies + ")";
-            }
-        }
-
-        // 检查冷却
         Long lastResupply = resupplyCooldowns.get(playerId);
         if (lastResupply != null) {
             long remaining = RESUPPLY_COOLDOWN_MS - (System.currentTimeMillis() - lastResupply);
@@ -801,25 +780,10 @@ public class BastionManager {
     }
 
     /**
-     * 记录补给成功
+     * 记录补给成功（更新冷却时间）
      */
     public void recordResupply(UUID playerId) {
         resupplyCooldowns.put(playerId, System.currentTimeMillis());
-        resupplyCounts.merge(playerId, 1, Integer::sum);
-    }
-
-    /**
-     * 获取玩家剩余补给次数（-1 表示无限制）
-     */
-    public int getResupplyCount(UUID playerId) {
-        return resupplyCounts.getOrDefault(playerId, 0);
-    }
-
-    /**
-     * 重置玩家补给次数（死亡时调用）
-     */
-    public void resetResupplyCount(UUID playerId) {
-        resupplyCounts.remove(playerId);
     }
 
     /**
@@ -885,19 +849,10 @@ public class BastionManager {
             return false;
         }
 
-        if (!isTeleportTargetLoaded(deployPoint.level, deployPoint.pos)) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c原部署点所在区块尚未加载，已取消本次复活以避免服务器卡顿。请靠近该区域或稍后重试。"
-            ));
-            Espetro.LOGGER.warn("拒绝将玩家 {} 传送到未加载原部署点区块: {} ({})",
-                player.getName().getString(), deployPoint.pos, deployPoint.level.dimension().location());
-            return false;
-        }
-
         // 清除等待状态
         clearWaiting(player.getUUID());
 
-        // 传送玩家到原部署点
+        // 传送玩家到原部署点。该坐标由队伍复活点 JSON 配置保存，不再因目标区块未加载而取消。
         player.teleportTo(deployPoint.level, deployPoint.pos.getX() + 0.5, deployPoint.pos.getY() + 0.1, deployPoint.pos.getZ() + 0.5, 0f, 0f);
 
         // 设置生存模式

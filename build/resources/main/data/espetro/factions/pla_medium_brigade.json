@@ -57,9 +57,7 @@
         "items": [
           {"id": "minecraft:bread", "count": 8, "max": 16},
           {"id": "minecraft:ender_pearl", "count": 4, "max": 8}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_MARKSMAN": {
       "name": "精确射手",
@@ -81,9 +79,7 @@
         "items": [
           {"id": "minecraft:arrow", "count": 16, "max": 64},
           {"id": "minecraft:bread", "count": 6, "max": 12}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_SQUAD_MG": {
       "name": "班组机枪",
@@ -104,9 +100,7 @@
         "items": [
           {"id": "minecraft:coal", "count": 16, "max": 64},
           {"id": "minecraft:bread", "count": 8, "max": 16}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_HEAVY_MG": {
       "name": "重机枪手",
@@ -127,9 +121,7 @@
         "items": [
           {"id": "minecraft:coal", "count": 16, "max": 64},
           {"id": "minecraft:bread", "count": 8, "max": 20}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_ASSAULT": {
       "name": "自动步枪",
@@ -149,9 +141,7 @@
       "resupply": {
         "items": [
           {"id": "minecraft:bread", "count": 8, "max": 16}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_GRENADIER": {
       "name": "榴弹兵",
@@ -174,9 +164,7 @@
           {"id": "minecraft:fire_charge", "count": 8, "max": 32},
           {"id": "minecraft:arrow", "count": 8, "max": 32},
           {"id": "minecraft:bread", "count": 6, "max": 12}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_ANTITANK": {
       "name": "反坦克兵",
@@ -199,9 +187,7 @@
           {"id": "minecraft:fire_charge", "count": 8, "max": 32},
           {"id": "minecraft:tnt", "count": 2, "max": 4},
           {"id": "minecraft:bread", "count": 6, "max": 14}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     },
     "PLA_MEDIUM_CREW": {
       "name": "载具组员",
@@ -223,9 +209,7 @@
         "items": [
           {"id": "minecraft:bread", "count": 8, "max": 20},
           {"id": "minecraft:ender_pearl", "count": 2, "max": 4}
-        ],
-        "max_resupplies": 3
-      }
+        ]}
     }
   }
 }

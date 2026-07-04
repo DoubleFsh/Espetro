@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.espetro.Espetro;
+import org.espetro.data.EspetroDataResources;
 
 /**
  * 游戏全局配置加载器
@@ -36,6 +37,19 @@ public class GameConfig {
     private static int initialDefendTroops = 1200;
     private static int commanderDeathPenalty = 2;
 
+    // ========== 指挥官技能参数 ==========
+    private static double droneDetectionRange = 100.0;
+    private static int droneDetectionDurationSeconds = 10;
+    private static int droneDetectionCooldownSeconds = 60;
+
+    // ========== 体力参数 ==========
+    // playerStamina = -1 时整个体力系统禁用
+    private static int playerStamina = 100;
+    private static int sprintStaminaCostPerSecond = 5;
+    private static int jumpStaminaCost = 15;
+    private static int staminaRegenDelaySeconds = 4;
+    private static int staminaRegenPerSecond = 2;
+
     private static boolean loaded = false;
 
     /**
@@ -44,46 +58,75 @@ public class GameConfig {
     public static void loadConfig(MinecraftServer server) {
         try {
             ResourceManager resourceManager = server.getResourceManager();
-            ResourceLocation configLocation = ResourceLocation.fromNamespaceAndPath("espetro", "config/game.json");
+            ResourceLocation configLocation = EspetroDataResources.location("config/game.json");
 
-            var resourceOptional = resourceManager.getResource(configLocation);
+            var resourceOptional = EspetroDataResources.getPreferred(resourceManager, configLocation);
             if (resourceOptional.isPresent()) {
-                try (var inputStream = resourceOptional.get().open()) {
-                    String jsonStr = new String(inputStream.readAllBytes());
-                    JsonObject root = GSON.fromJson(jsonStr, JsonObject.class);
+                var resource = resourceOptional.get();
+                String jsonStr = EspetroDataResources.readUtf8(resource);
+                JsonObject root = GSON.fromJson(jsonStr, JsonObject.class);
 
-                    // 游戏参数
-                    if (root.has("game")) {
-                        JsonObject game = root.getAsJsonObject("game");
-                        requiredPlayers = getInt(game, "required_players", requiredPlayers);
-                        deployTimeoutSeconds = getInt(game, "deploy_timeout_seconds", deployTimeoutSeconds);
-                        deployWarningSeconds = getInt(game, "deploy_warning_seconds", deployWarningSeconds);
-                        defendCommanderVoteSeconds = getInt(game, "defend_commander_vote_seconds", defendCommanderVoteSeconds);
-                        attackCommanderVoteSeconds = getInt(game, "attack_commander_vote_seconds", attackCommanderVoteSeconds);
-                        defendFactionSelectSeconds = getInt(game, "defend_faction_select_seconds", defendFactionSelectSeconds);
-                        attackFactionSelectSeconds = getInt(game, "attack_faction_select_seconds", attackFactionSelectSeconds);
-                        factionPoolSize = getInt(game, "faction_pool_size", factionPoolSize);
-                        respawnInvincibilityTicks = getInt(game, "respawn_invincibility_ticks", respawnInvincibilityTicks);
-                        teammateNameTagDistance = getDouble(game, "teammate_name_tag_distance", teammateNameTagDistance);
-                        waitingY = getDouble(game, "waiting_y", waitingY);
-                    }
-
-                    // 兵力参数
-                    if (root.has("troops")) {
-                        JsonObject troops = root.getAsJsonObject("troops");
-                        initialAttackTroops = getInt(troops, "initial_attack", initialAttackTroops);
-                        initialDefendTroops = getInt(troops, "initial_defend", initialDefendTroops);
-                        commanderDeathPenalty = getInt(troops, "commander_death_penalty", commanderDeathPenalty);
-                    }
-
-                    loaded = true;
-                    Espetro.LOGGER.info("已从数据包加载游戏配置: 需要{}人, 部署{}秒, 守方指挥官投票{}秒, 攻方指挥官投票{}秒, 守方编制选择{}秒, 攻方编制选择{}秒, 编制池{}个",
-                        requiredPlayers, deployTimeoutSeconds, defendCommanderVoteSeconds, attackCommanderVoteSeconds,
-                        defendFactionSelectSeconds, attackFactionSelectSeconds, factionPoolSize);
-                    Espetro.LOGGER.info("兵力配置: 攻方{} | 守方{} | 指挥官阵亡惩罚{}",
-                        initialAttackTroops, initialDefendTroops, commanderDeathPenalty);
-                    return;
+                // 游戏参数
+                if (root.has("game")) {
+                    JsonObject game = root.getAsJsonObject("game");
+                    requiredPlayers = getInt(game, "required_players", requiredPlayers);
+                    deployTimeoutSeconds = getInt(game, "deploy_timeout_seconds", deployTimeoutSeconds);
+                    deployWarningSeconds = getInt(game, "deploy_warning_seconds", deployWarningSeconds);
+                    defendCommanderVoteSeconds = getInt(game, "defend_commander_vote_seconds", defendCommanderVoteSeconds);
+                    attackCommanderVoteSeconds = getInt(game, "attack_commander_vote_seconds", attackCommanderVoteSeconds);
+                    defendFactionSelectSeconds = getInt(game, "defend_faction_select_seconds", defendFactionSelectSeconds);
+                    attackFactionSelectSeconds = getInt(game, "attack_faction_select_seconds", attackFactionSelectSeconds);
+                    factionPoolSize = getInt(game, "faction_pool_size", factionPoolSize);
+                    respawnInvincibilityTicks = getInt(game, "respawn_invincibility_ticks", respawnInvincibilityTicks);
+                    teammateNameTagDistance = getDouble(game, "teammate_name_tag_distance", teammateNameTagDistance);
+                    waitingY = getDouble(game, "waiting_y", waitingY);
                 }
+
+                // 兵力参数
+                if (root.has("troops")) {
+                    JsonObject troops = root.getAsJsonObject("troops");
+                    initialAttackTroops = getInt(troops, "initial_attack", initialAttackTroops);
+                    initialDefendTroops = getInt(troops, "initial_defend", initialDefendTroops);
+                    commanderDeathPenalty = getInt(troops, "commander_death_penalty", commanderDeathPenalty);
+                }
+
+                // 指挥官技能参数
+                if (root.has("commander_skills")) {
+                    JsonObject skills = root.getAsJsonObject("commander_skills");
+                    droneDetectionRange = getDouble(skills, "drone_detection_range", droneDetectionRange);
+                    droneDetectionDurationSeconds = getInt(skills, "drone_detection_duration_seconds", droneDetectionDurationSeconds);
+                    droneDetectionCooldownSeconds = getInt(skills, "drone_detection_cooldown_seconds", droneDetectionCooldownSeconds);
+                }
+
+                // 体力参数
+                if (root.has("stamina")) {
+                    JsonObject stamina = root.getAsJsonObject("stamina");
+                    int configuredStamina = getInt(stamina, "player_stamina", playerStamina);
+                    playerStamina = configuredStamina == -1 ? -1 : Math.max(0, configuredStamina);
+                    sprintStaminaCostPerSecond = Math.max(0,
+                        getInt(stamina, "sprint_cost_per_second", sprintStaminaCostPerSecond));
+                    jumpStaminaCost = Math.max(0,
+                        getInt(stamina, "jump_cost", jumpStaminaCost));
+                    staminaRegenDelaySeconds = Math.max(0,
+                        getInt(stamina, "regen_delay_seconds", staminaRegenDelaySeconds));
+                    staminaRegenPerSecond = Math.max(0,
+                        getInt(stamina, "regen_per_second", staminaRegenPerSecond));
+                }
+
+                loaded = true;
+                Espetro.LOGGER.info("已从 {} 加载游戏配置: 需要{}人, 部署{}秒, 守方指挥官投票{}秒, 攻方指挥官投票{}秒, 守方编制选择{}秒, 攻方编制选择{}秒, 编制池{}个",
+                    EspetroDataResources.describeSource(resource), requiredPlayers, deployTimeoutSeconds,
+                    defendCommanderVoteSeconds, attackCommanderVoteSeconds,
+                    defendFactionSelectSeconds, attackFactionSelectSeconds, factionPoolSize);
+                Espetro.LOGGER.info("兵力配置: 攻方{} | 守方{} | 指挥官阵亡惩罚{}",
+                    initialAttackTroops, initialDefendTroops, commanderDeathPenalty);
+                Espetro.LOGGER.info("体力配置: {}",
+                    playerStamina == -1
+                        ? "已禁用"
+                        : String.format("上限%d | 奔跑每秒消耗%d | 跳跃消耗%d | %d秒后每秒恢复%d",
+                            playerStamina, sprintStaminaCostPerSecond, jumpStaminaCost,
+                            staminaRegenDelaySeconds, staminaRegenPerSecond));
+                return;
             }
 
             Espetro.LOGGER.warn("未找到 game.json 配置文件，使用默认游戏参数");
@@ -128,6 +171,14 @@ public class GameConfig {
         initialAttackTroops = 280;
         initialDefendTroops = 1200;
         commanderDeathPenalty = 2;
+        droneDetectionRange = 100.0;
+        droneDetectionDurationSeconds = 10;
+        droneDetectionCooldownSeconds = 60;
+        playerStamina = 100;
+        sprintStaminaCostPerSecond = 5;
+        jumpStaminaCost = 15;
+        staminaRegenDelaySeconds = 4;
+        staminaRegenPerSecond = 2;
         loaded = false;
         loadConfig(server);
     }
@@ -188,5 +239,41 @@ public class GameConfig {
 
     public static int getCommanderDeathPenalty() {
         return commanderDeathPenalty;
+    }
+
+    public static double getDroneDetectionRange() {
+        return droneDetectionRange;
+    }
+
+    public static int getDroneDetectionDurationSeconds() {
+        return droneDetectionDurationSeconds;
+    }
+
+    public static int getDroneDetectionCooldownSeconds() {
+        return droneDetectionCooldownSeconds;
+    }
+
+    public static boolean isStaminaEnabled() {
+        return playerStamina != -1;
+    }
+
+    public static int getPlayerStamina() {
+        return playerStamina;
+    }
+
+    public static int getSprintStaminaCostPerSecond() {
+        return sprintStaminaCostPerSecond;
+    }
+
+    public static int getJumpStaminaCost() {
+        return jumpStaminaCost;
+    }
+
+    public static int getStaminaRegenDelaySeconds() {
+        return staminaRegenDelaySeconds;
+    }
+
+    public static int getStaminaRegenPerSecond() {
+        return staminaRegenPerSecond;
     }
 }

@@ -23,20 +23,23 @@ public class ClassSelectScreenPacket {
     private final String opponentFaction;
     // 对手阶段剩余时间（秒），-1 表示无对手阶段
     private final int opponentTimeRemaining;
+    private final String selectedFactionId;
 
     public static class FactionInfo {
         public final String id;
         public final String name;
+        public final int voteCount;
 
-        public FactionInfo(String id, String name) {
+        public FactionInfo(String id, String name, int voteCount) {
             this.id = id;
             this.name = name;
+            this.voteCount = voteCount;
         }
     }
 
     public ClassSelectScreenPacket(String team, boolean isCommander, List<FactionInfo> factions,
                                     int timeRemaining, String opponentTeamName, String opponentFaction,
-                                    int opponentTimeRemaining) {
+                                    int opponentTimeRemaining, String selectedFactionId) {
         this.team = team;
         this.isCommander = isCommander;
         this.factions = factions;
@@ -44,6 +47,7 @@ public class ClassSelectScreenPacket {
         this.opponentTeamName = opponentTeamName;
         this.opponentFaction = opponentFaction;
         this.opponentTimeRemaining = opponentTimeRemaining;
+        this.selectedFactionId = selectedFactionId != null ? selectedFactionId : "";
     }
 
     public String getTeam() { return team; }
@@ -53,6 +57,7 @@ public class ClassSelectScreenPacket {
     public String getOpponentTeamName() { return opponentTeamName; }
     public String getOpponentFaction() { return opponentFaction; }
     public int getOpponentTimeRemaining() { return opponentTimeRemaining; }
+    public String getSelectedFactionId() { return selectedFactionId; }
 
     public static ClassSelectScreenPacket read(FriendlyByteBuf buf) {
         String team = buf.readUtf();
@@ -63,13 +68,15 @@ public class ClassSelectScreenPacket {
         for (int i = 0; i < count; i++) {
             String id = buf.readUtf();
             String name = buf.readUtf();
-            factions.add(new FactionInfo(id, name));
+            int voteCount = buf.readVarInt();
+            factions.add(new FactionInfo(id, name, voteCount));
         }
         String opponentTeamName = buf.readUtf();
         String opponentFaction = buf.readUtf();
         int opponentTimeRemaining = buf.readInt();
+        String selectedFactionId = buf.readUtf();
         return new ClassSelectScreenPacket(team, isCommander, factions, timeRemaining,
-            opponentTeamName, opponentFaction, opponentTimeRemaining);
+            opponentTeamName, opponentFaction, opponentTimeRemaining, selectedFactionId);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -80,10 +87,12 @@ public class ClassSelectScreenPacket {
         for (FactionInfo info : factions) {
             buf.writeUtf(info.id);
             buf.writeUtf(info.name);
+            buf.writeVarInt(info.voteCount);
         }
         buf.writeUtf(opponentTeamName != null ? opponentTeamName : "");
         buf.writeUtf(opponentFaction != null ? opponentFaction : "");
         buf.writeInt(opponentTimeRemaining);
+        buf.writeUtf(selectedFactionId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
