@@ -1,0 +1,12 @@
+{
+  "redeploy_cooldown_seconds": 60,
+  "outposts": [
+    {
+      "name": "前哨基地A",
+      "x": -2284,
+      "y": 9,
+      "z": 2306,
+      "yaw": 180
+    }
+  ]
+}

@@ -20,12 +20,19 @@ import java.util.*;
 public class FactionDataLoader {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    private static final FactionData[] EMPTY_FACTION_ARRAY = new FactionData[0];
+    private static final ClassKitData[] EMPTY_CLASS_KIT_ARRAY = new ClassKitData[0];
     private static FactionDataLoader INSTANCE;
 
     private Map<String, FactionData> factions = new LinkedHashMap<>();
     private Map<String, ClassKitData> classKits = new HashMap<>();
     /** factionId -> (vehicleType -> VehicleData) 来自编制JSON的载具配置 */
     private final Map<String, Map<String, VehicleData>> factionVehicles = new LinkedHashMap<>();
+    private final Map<String, ClassKitData[]> classesByFaction = new HashMap<>();
+    private final Map<String, String[]> classIdsByFaction = new HashMap<>();
+    private String[] factionIdArray = EMPTY_STRING_ARRAY;
+    private FactionData[] factionArray = EMPTY_FACTION_ARRAY;
     private boolean loaded = false;
 
     public FactionDataLoader() {
@@ -43,14 +50,19 @@ public class FactionDataLoader {
         this.factions.clear();
         this.classKits.clear();
         this.factionVehicles.clear();
+        this.classesByFaction.clear();
+        this.classIdsByFaction.clear();
+        this.factionIdArray = EMPTY_STRING_ARRAY;
+        this.factionArray = EMPTY_FACTION_ARRAY;
         
         String namespace = Espetro.MOD_ID;
         String path = "factions";
-        
-        Map<ResourceLocation, Resource> resources = resourceManager.listResources(path, loc -> 
-            loc.getNamespace().equals(namespace)
+
+        // 优先使用存档内 datapacks 数据包，再回退模组内置
+        Map<ResourceLocation, Resource> resources = org.espetro.data.EspetroDataResources.listPreferred(
+            resourceManager, path, loc -> loc.getNamespace().equals(namespace)
         );
-        
+
         for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
             ResourceLocation id = entry.getKey();
             Resource resource = entry.getValue();
@@ -124,7 +136,8 @@ public class FactionDataLoader {
                 Espetro.LOGGER.error("[!] 阵营加载异常: {} - {}", id, e.getMessage(), e);
             }
         }
-        
+
+        rebuildLookupCaches();
         this.loaded = true;
         Espetro.LOGGER.info("已加载 {} 个阵营, {} 个职业配置", this.factions.size(), this.classKits.size());
     }
@@ -158,11 +171,11 @@ public class FactionDataLoader {
     }
 
     public String[] getAllFactionIds() {
-        return factions.keySet().toArray(new String[0]);
+        return factionIdArray;
     }
 
     public FactionData[] getFactionArray() {
-        return factions.values().toArray(new FactionData[0]);
+        return factionArray;
     }
 
     // ==================== 职业方法 ====================
@@ -172,16 +185,39 @@ public class FactionDataLoader {
     }
 
     public ClassKitData[] getClassesForFaction(String factionId) {
-        return classKits.values().stream()
-            .filter(kit -> factionId.equals(kit.factionId))
-            .toArray(ClassKitData[]::new);
+        return classesByFaction.getOrDefault(factionId, EMPTY_CLASS_KIT_ARRAY);
     }
 
     public String[] getClassIdsForFaction(String factionId) {
-        return classKits.values().stream()
-            .filter(kit -> factionId.equals(kit.factionId))
-            .map(kit -> kit.id)
-            .toArray(String[]::new);
+        return classIdsByFaction.getOrDefault(factionId, EMPTY_STRING_ARRAY);
+    }
+
+    private void rebuildLookupCaches() {
+        factionIdArray = factions.keySet().toArray(EMPTY_STRING_ARRAY);
+        factionArray = factions.values().toArray(EMPTY_FACTION_ARRAY);
+
+        Map<String, List<ClassKitData>> groupedClasses = new HashMap<>();
+        for (String factionId : factions.keySet()) {
+            groupedClasses.put(factionId, new ArrayList<>());
+        }
+
+        for (ClassKitData kit : classKits.values()) {
+            if (kit == null || kit.factionId == null) {
+                continue;
+            }
+            groupedClasses.computeIfAbsent(kit.factionId, ignored -> new ArrayList<>()).add(kit);
+        }
+
+        for (Map.Entry<String, List<ClassKitData>> entry : groupedClasses.entrySet()) {
+            List<ClassKitData> kits = entry.getValue();
+            ClassKitData[] kitArray = kits.toArray(EMPTY_CLASS_KIT_ARRAY);
+            String[] classIds = new String[kitArray.length];
+            for (int i = 0; i < kitArray.length; i++) {
+                classIds[i] = kitArray[i].id;
+            }
+            classesByFaction.put(entry.getKey(), kitArray);
+            classIdsByFaction.put(entry.getKey(), classIds);
+        }
     }
 
     // ==================== 载具方法（编制自定义） ====================
@@ -295,9 +331,6 @@ public class FactionDataLoader {
     public static class ResupplyData {
         /** 补给物品列表 */
         public ResupplyItem[] items;
-        /** 单局最大补给次数，默认3 */
-        @SerializedName("max_resupplies")
-        public int maxResupplies = 3;
     }
 
     /**

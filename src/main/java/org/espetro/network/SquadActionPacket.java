@@ -4,7 +4,9 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
+import org.espetro.Espetro;
 import org.espetro.team.SquadManager;
+import org.espetro.team.TeamPackManager;
 
 import java.util.function.Supplier;
 
@@ -69,6 +71,10 @@ public class SquadActionPacket {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) return;
 
+            String previousTeam = Espetro.getPlayerTeam(player);
+            int previousSquadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+            boolean wasLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
+
             SquadManager.ActionResult result = switch (action) {
                 case CREATE -> SquadManager.getInstance().createSquad(player, squadName);
                 case JOIN -> SquadManager.getInstance().joinSquad(player, squadId);
@@ -78,9 +84,23 @@ public class SquadActionPacket {
 
             player.sendSystemMessage(Component.literal((result.success ? "\u00a7a" : "\u00a7c") + result.message));
 
+            if (result.success) {
+                TeamPackManager.getInstance().handleSquadLeaderTransition(
+                    player,
+                    previousTeam,
+                    previousSquadId,
+                    wasLeader,
+                    Espetro.getPlayerTeam(player),
+                    SquadManager.getInstance().getPlayerSquadId(player.getUUID()),
+                    SquadManager.getInstance().isSquadLeader(player.getUUID())
+                );
+            }
+
             if (result.team != null) {
+                TeamPackManager.getInstance().reconcileTeam(result.team);
                 NetworkManager.syncSquadsToTeam(result.team);
             } else {
+                TeamPackManager.getInstance().syncTeamPackItem(player);
                 NetworkManager.sendSquadSync(player);
             }
         });

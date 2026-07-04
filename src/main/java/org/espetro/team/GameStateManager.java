@@ -105,14 +105,16 @@ public class GameStateManager {
     }
 
     private void broadcastWaitingMessages() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return;
+        }
+
         String message = "§6⏳ 等待玩家集结中 §e[" + teamSelectedPlayers.size() + "/" + GameConfig.getRequiredPlayers() + "]";
         for (UUID uuid : teamSelectedPlayers) {
-            MinecraftServer server = Espetro.getServer();
-            if (server != null) {
-                ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-                if (player != null) {
-                    NetworkManager.sendWaitingStatus(player, message, true);
-                }
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player != null) {
+                NetworkManager.sendWaitingStatus(player, message, true);
             }
         }
     }
@@ -176,8 +178,12 @@ public class GameStateManager {
         factionRevealTickCounter = 0;
         deployClassSelected.clear();
         BastionManager.getInstance().reset();
+        TeamPackManager.getInstance().reset();
         VehicleManager.getInstance().reset();
         removeAttackWaitingBarrier();
+
+        // 激活前哨基地（部署阶段防守方可用）
+        OutpostManager.getInstance().activate();
 
         // 编制选择最终处理
         ClassSelectManager.getInstance().finalizeSelection();
@@ -275,15 +281,32 @@ public class GameStateManager {
                     team = getTeamFromFactionStatic(countManager.getPlayerFaction(uuid));
                 }
 
-                // 设置生存模式
-                player.setGameMode(GameType.SURVIVAL);
-
-                // 传送到复活点
-                teleportToTeamSpawn(player, team);
-
-                // 准备阶段双方都允许正常视野和移动；攻方由部署点屏障限制活动范围
-                player.removeEffect(MobEffects.BLINDNESS);
+                if (currentPhase == GamePhase.DEPLOYING && "DEFEND".equals(team)) {
+                    prepareDeploySelection(player, team);
+                } else {
+                    player.setGameMode(GameType.SURVIVAL);
+                    teleportToTeamSpawn(player, team);
+                    // 准备阶段双方都允许正常视野和移动；攻方由部署点屏障限制活动范围
+                    player.removeEffect(MobEffects.BLINDNESS);
+                }
             }
+        }
+    }
+
+    private void saveTeamSpawnAsDeployPoint(ServerPlayer player, String team) {
+        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
+        ServerLevel overworld = player.server.overworld();
+        BlockPos deployPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
+        BastionManager.getInstance().savePlayerDeployPoint(player, deployPos, overworld);
+    }
+
+    private void prepareDeploySelection(ServerPlayer player, String team) {
+        saveTeamSpawnAsDeployPoint(player, team);
+        applyWaitingState(player);
+        BastionManager.getInstance().activatePlayerBastionSelection(player.getUUID());
+        BastionManager.getInstance().lockPlayerPosition(player.getUUID(), player.position());
+        if ("DEFEND".equals(team)) {
+            OutpostManager.getInstance().prepareDeployTargets(player.server.overworld());
         }
     }
 
@@ -291,11 +314,9 @@ public class GameStateManager {
      * 部署阶段Tick处理
      */
     public void onDeployTick() {
-        int secondsRemaining = getDeployTimeRemainingSeconds();
-
         // 每秒更新一次
         if (deployTickCounter % TICKS_PER_SECOND == 0) {
-            broadcastDefenseSetupActionBar(secondsRemaining);
+            broadcastDefenseSetupActionBar(getDeployTimeRemainingSeconds());
         }
 
         // 部署阶段结束 -> 对战开始
@@ -409,7 +430,14 @@ public class GameStateManager {
      */
     private void startBattle() {
         removeAttackWaitingBarrier();
+
+        // 开战前先销毁虚拟前哨，确保 BATTLE 阶段的任何请求都无法再使用。
+        boolean hadActiveOutposts = OutpostManager.getInstance().isAvailable();
+        OutpostManager.getInstance().deactivate();
         setPhase(GamePhase.BATTLE);
+        if (hadActiveOutposts) {
+            Espetro.broadcastToTeam("DEFEND", "§c⚔ 攻方已开始进攻，前哨基地已销毁！");
+        }
 
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
@@ -418,6 +446,9 @@ public class GameStateManager {
         for (UUID uuid : teamSelectedPlayers) {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
             if (player != null) {
+                if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+                    BastionManager.getInstance().respawnAtDeployPoint(server.overworld(), player);
+                }
                 player.removeEffect(MobEffects.BLINDNESS);
             }
         }
@@ -549,6 +580,9 @@ public class GameStateManager {
         VoteManager.getInstance().reset();
         ClassSelectManager.getInstance().reset();
         SquadManager.getInstance().reset();
+        TeamPackManager.getInstance().reset();
+        OutpostManager.getInstance().reset();
+        CommanderSkillManager.getInstance().reset();
 
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
@@ -649,24 +683,17 @@ public class GameStateManager {
         switch (currentPhase) {
 
             case DEFEND_COMMANDER_VOTE, ATTACK_COMMANDER_VOTE -> {
-                // 投票阶段：保持旁观者+失明状态（与原有一致）
                 String votingTeam = currentPhase.getActiveTeam();
                 int voteRemaining = voteManager.getRemainingSeconds();
 
                 if (team.equals(votingTeam)) {
-                    // 正在轮到该队投票 -> 给新玩家发送投票界面
                     NetworkManager.sendCommanderVoteScreenToPlayer(player, team, voteRemaining);
-                    // GUI 已显示投票信息，不再发送聊天消息
-                    // ★ 关键：重新广播投票界面给全队，同步新玩家的名字到所有已有客户端
-                    NetworkManager.broadcastCommanderVoteScreenForTeam(team, voteRemaining);
                 } else {
-                    // 对方正在投票 -> 同步界面（GUI 中已显示等待信息）
-                    NetworkManager.broadcastCommanderVoteScreenForTeam(votingTeam, voteRemaining);
+                    NetworkManager.sendCommanderVoteScreenToPlayer(player, team, 0);
                 }
             }
 
             case DEFEND_FACTION_SELECT, ATTACK_FACTION_SELECT -> {
-                // 编制选择阶段：保持旁观者+失明状态
                 String selectingTeam = currentPhase.getActiveTeam();
                 int selectRemaining = selectManager.getRemainingSeconds();
 
@@ -675,24 +702,21 @@ public class GameStateManager {
                 boolean isCmd = cmdUuid != null && cmdUuid.equals(player.getUUID());
 
                 if (team.equals(selectingTeam)) {
-                    if (isCmd) {
-                        NetworkManager.sendClassSelectScreen(player, team, true, selectRemaining);
-                        // GUI 已显示编制选择信息，不再发送聊天消息
-                    }
-                    // ★ 重新广播编制界面给全队（含新玩家名字）
-                    NetworkManager.broadcastClassSelectScreenForTeam(team, selectRemaining);
+                    NetworkManager.sendClassSelectScreen(player, team, isCmd, selectRemaining);
                 } else {
-                    // 对方正在选择编制 -> 同步界面（GUI 中已显示等待信息）
-                    NetworkManager.broadcastClassSelectScreenForTeam(selectingTeam, selectRemaining);
+                    NetworkManager.sendClassSelectScreen(player, team, false, 0);
                 }
             }
 
             case DEPLOYING -> {
-                // 部署阶段：切换生存模式，同步部署状态
+                // 部署阶段：防守方先选部署点，攻方保持原逻辑。
                 player.removeAllEffects();
-                player.setGameMode(GameType.SURVIVAL);
-
-                teleportToTeamSpawn(player, team);
+                if ("DEFEND".equals(team)) {
+                    prepareDeploySelection(player, team);
+                } else {
+                    player.setGameMode(GameType.SURVIVAL);
+                    teleportToTeamSpawn(player, team);
+                }
 
                 // 发送统一部署主界面
                 int remaining = getDeployTimeRemainingSeconds();

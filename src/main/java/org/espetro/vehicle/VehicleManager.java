@@ -16,6 +16,7 @@ import org.espetro.team.ClassCountManager;
 
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 载具管理器
@@ -27,6 +28,7 @@ public class VehicleManager {
 
     // factionId -> (vehicleType -> List<UUID>) 追踪活跃载具
     private final Map<String, Map<String, List<UUID>>> activeVehicles = new HashMap<>();
+    private final Set<UUID> activeVehicleIds = new HashSet<>();
 
     // factionId -> (vehicleType -> spawnTimeMillis) 刷新冷却
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
@@ -46,7 +48,8 @@ public class VehicleManager {
      * 获取指定编制指定类型的活跃载具数量
      */
     public int getActiveCount(String factionId, String vehicleType) {
-        return getList(factionId, vehicleType).size();
+        List<UUID> vehicles = findList(factionId, vehicleType);
+        return vehicles == null ? 0 : vehicles.size();
     }
 
     /**
@@ -58,13 +61,18 @@ public class VehicleManager {
             .computeIfAbsent(vehicleType, k -> new ArrayList<>());
     }
 
+    @Nullable
+    private List<UUID> findList(String factionId, String vehicleType) {
+        Map<String, List<UUID>> typeMap = activeVehicles.get(factionId);
+        return typeMap != null ? typeMap.get(vehicleType) : null;
+    }
+
     /**
      * 获取冷却剩余毫秒数，0表示无冷却
      */
     public long getCooldownRemaining(String factionId, String vehicleType) {
-        Long lastSpawn = cooldowns
-            .computeIfAbsent(factionId, k -> new HashMap<>())
-            .get(vehicleType);
+        Map<String, Long> factionCooldowns = cooldowns.get(factionId);
+        Long lastSpawn = factionCooldowns != null ? factionCooldowns.get(vehicleType) : null;
         if (lastSpawn == null) return 0;
 
         VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
@@ -121,7 +129,9 @@ public class VehicleManager {
         level.addFreshEntity(vehicleEntity);
 
         // 记录
-        getList(factionId, vehicleType).add(vehicleEntity.getUUID());
+        UUID vehicleId = vehicleEntity.getUUID();
+        getList(factionId, vehicleType).add(vehicleId);
+        activeVehicleIds.add(vehicleId);
 
         // 设置冷却
         cooldowns.computeIfAbsent(factionId, k -> new HashMap<>()).put(vehicleType, System.currentTimeMillis());
@@ -173,7 +183,9 @@ public class VehicleManager {
             }
 
             level.addFreshEntity(vehicleEntity);
-            getList(factionId, vehicleType).add(vehicleEntity.getUUID());
+            UUID vehicleId = vehicleEntity.getUUID();
+            getList(factionId, vehicleType).add(vehicleId);
+            activeVehicleIds.add(vehicleId);
             deployed++;
 
             Espetro.LOGGER.info("初始载具已预部署: {} / {} 位置: {} ({}/{})",
@@ -187,6 +199,7 @@ public class VehicleManager {
      * 移除已死亡的载具追踪
      */
     public void onVehicleDeath(UUID entityId) {
+        activeVehicleIds.remove(entityId);
         for (Map.Entry<String, Map<String, List<UUID>>> factionEntry : activeVehicles.entrySet()) {
             for (Map.Entry<String, List<UUID>> typeEntry : factionEntry.getValue().entrySet()) {
                 if (typeEntry.getValue().remove(entityId)) {
@@ -201,12 +214,7 @@ public class VehicleManager {
      * 检查某个实体是否是我们追踪的载具
      */
     public boolean isTrackedVehicle(UUID entityId) {
-        for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
-            for (List<UUID> list : typeMap.values()) {
-                if (list.contains(entityId)) return true;
-            }
-        }
-        return false;
+        return activeVehicleIds.contains(entityId);
     }
 
     /**
@@ -215,14 +223,7 @@ public class VehicleManager {
     public void reset() {
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
-            List<UUID> trackedIds = new ArrayList<>();
-            for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
-                for (List<UUID> list : typeMap.values()) {
-                    trackedIds.addAll(list);
-                }
-            }
-
-            for (UUID id : trackedIds) {
+            for (UUID id : new ArrayList<>(activeVehicleIds)) {
                 Entity entity = server.overworld().getEntity(id);
                 if (entity != null) {
                     entity.discard();
@@ -230,6 +231,7 @@ public class VehicleManager {
             }
         }
         activeVehicles.clear();
+        activeVehicleIds.clear();
         cooldowns.clear();
     }
 
@@ -245,9 +247,14 @@ public class VehicleManager {
                 list.removeIf(id -> {
                     Entity entity = server.overworld().getEntity(id);
                     if (entity == null) {
+                        activeVehicleIds.remove(id);
                         return true;
                     }
-                    return entity.isRemoved();
+                    boolean removed = entity.isRemoved();
+                    if (removed) {
+                        activeVehicleIds.remove(id);
+                    }
+                    return removed;
                 });
             }
         }
@@ -327,7 +334,7 @@ public class VehicleManager {
         }
 
         int radius = Math.max(0, deployment.radius);
-        Random random = new Random();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
 
         // 尝试多次寻找合适位置；radius 为 0 时只检查中心点。
         int attempts = Math.max(1, 12 + radius * 4);

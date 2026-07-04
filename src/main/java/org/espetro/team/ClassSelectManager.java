@@ -10,7 +10,7 @@ import java.util.*;
 
 /**
  * 编制选择管理器
- * 指挥官选择队伍编制
+ * 队伍全员投票选择编制
  * 支持分阶段：先守方(30s)，后攻方(30s)
  */
 public class ClassSelectManager {
@@ -26,15 +26,9 @@ public class ClassSelectManager {
     private int selectTickCounter = 0;
     private static final int TICKS_PER_SECOND = 20;
 
-    // 攻方已选择的编制ID列表
-    private final Set<String> attackSelectedClasses = new HashSet<>();
-    // 守方已选择的编制ID列表
-    private final Set<String> defendSelectedClasses = new HashSet<>();
-
-    // 攻方指挥官选择的编制
-    private String attackCommanderClass = null;
-    // 守方指挥官选择的编制
-    private String defendCommanderClass = null;
+    // 编制投票：玩家UUID -> 编制ID（每人只保留最后一票）
+    private final Map<UUID, String> attackFactionVotes = new HashMap<>();
+    private final Map<UUID, String> defendFactionVotes = new HashMap<>();
 
     // 编制结果
     private String finalAttackClass = null;
@@ -72,14 +66,13 @@ public class ClassSelectManager {
         selectingActive = true;
         currentSelectingTeam = "DEFEND";
         selectTickCounter = 0;
-        defendSelectedClasses.clear();
-        defendCommanderClass = null;
+        defendFactionVotes.clear();
 
         int timeout = GameConfig.getDefendFactionSelectSeconds();
         Espetro.LOGGER.info("守方编制选择开始！限时{}秒", timeout);
         // 消息已通过 ClassSelectScreen GUI 实时显示，不再发送聊天消息
 
-        // 发送编制选择界面给守方指挥官
+        // 发送编制投票界面给守方全员
         org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam("DEFEND", timeout);
     }
 
@@ -90,14 +83,13 @@ public class ClassSelectManager {
         selectingActive = true;
         currentSelectingTeam = "ATTACK";
         selectTickCounter = 0;
-        attackSelectedClasses.clear();
-        attackCommanderClass = null;
+        attackFactionVotes.clear();
 
         int timeout = GameConfig.getAttackFactionSelectSeconds();
         Espetro.LOGGER.info("攻方编制选择开始！限时{}秒", timeout);
         // 消息已通过 ClassSelectScreen GUI 实时显示，不再发送聊天消息
 
-        // 发送编制选择界面给攻方指挥官
+        // 发送编制投票界面给攻方全员
         org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam("ATTACK", timeout);
     }
 
@@ -192,59 +184,51 @@ public class ClassSelectManager {
     }
 
     /**
-     * 指挥官选择编制（可重新选择，只保留最后一次）
+     * 玩家投票选择编制（可改票，每人只保留最后一票）。
      */
-    public boolean selectClass(ServerPlayer commander, String classId) {
+    public boolean selectClass(ServerPlayer voter, String classId) {
         if (!selectingActive) return false;
 
-        // 检查是否是指挥官
-        UUID commanderUUID = commander.getUUID();
-        VoteManager voteManager = VoteManager.getInstance();
-
-        String team = null;
-        if (voteManager.isCommanderOf(commanderUUID, "ATTACK")) {
-            team = "ATTACK";
-        } else if (voteManager.isCommanderOf(commanderUUID, "DEFEND")) {
-            team = "DEFEND";
-        } else {
-            Espetro.sendToPlayer(commander, "§c你不是指挥官，无法选择编制！");
-            return false;
-        }
+        String team = Espetro.getPlayerTeam(voter);
 
         // 检查当前阶段是否允许该队伍选择
-        if (!team.equals(currentSelectingTeam)) {
-            Espetro.sendToPlayer(commander, "§c当前不是你的编制选择时间！");
+        if (team == null || !team.equals(currentSelectingTeam)) {
+            Espetro.sendToPlayer(voter, "§c当前不是你所在阵营的编制投票时间！");
             return false;
         }
 
         if (!isFactionSelectableForTeam(team, classId)) {
-            Espetro.sendToPlayer(commander, "§c该编制当前不可选，可能已被对方选择或不在本局候选池中！");
+            Espetro.sendToPlayer(voter, "§c该编制当前不可选，可能已被对方选择或不在本局候选池中！");
             return false;
         }
 
-        Set<String> selectedSet = "ATTACK".equals(team) ? attackSelectedClasses : defendSelectedClasses;
+        Map<UUID, String> votes = "ATTACK".equals(team) ? attackFactionVotes : defendFactionVotes;
+        votes.put(voter.getUUID(), classId);
 
-        // 清除该指挥官之前的选择（只保留最后一次）
-        if ("ATTACK".equals(team)) {
-            if (attackCommanderClass != null) {
-                selectedSet.remove(attackCommanderClass);
-            }
-            attackCommanderClass = classId;
-        } else {
-            if (defendCommanderClass != null) {
-                selectedSet.remove(defendCommanderClass);
-            }
-            defendCommanderClass = classId;
-        }
-        selectedSet.add(classId);
+        Espetro.LOGGER.info("{} 玩家 {} 投票编制: {}", team, voter.getName().getString(), classId);
 
-        Espetro.LOGGER.info("{} 指挥官 {} 选择了编制: {}", team, commander.getName().getString(), classId);
-
-        // 通知同队伍玩家（显示星标）
-        String notifyMessage = "§6★ 指挥官选择了: " + getClassDisplayName(classId) + " ★";
-        Espetro.broadcastClassSelection(team, classId, notifyMessage);
+        org.espetro.network.NetworkManager.sendClassSelectScreenForTeam(team, getRemainingSeconds());
 
         return true;
+    }
+
+    public Map<String, Integer> getFactionVoteCounts(String team) {
+        Map<UUID, String> votes = "ATTACK".equals(team) ? attackFactionVotes : defendFactionVotes;
+        Map<String, Integer> counts = new HashMap<>();
+        for (String factionId : getAvailableFactionPoolForTeam(team)) {
+            counts.put(factionId, 0);
+        }
+        for (String target : votes.values()) {
+            if (counts.containsKey(target)) {
+                counts.merge(target, 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    public String getPlayerFactionVote(UUID playerId, String team) {
+        Map<UUID, String> votes = "ATTACK".equals(team) ? attackFactionVotes : defendFactionVotes;
+        return votes.get(playerId);
     }
 
     /**
@@ -273,24 +257,36 @@ public class ClassSelectManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return finishedTeam;
 
-        // 确定最终选择：指挥官已选则用已选，否则从编制池随机
+        // 确定最终选择：最高票当选，并列时随机；无人投票则从候选池随机。
         if ("DEFEND".equals(finishedTeam)) {
-            finalDefendClass = defendCommanderClass != null
-                ? defendCommanderClass
-                : getRandomFactionFromPool(finishedTeam);
+            finalDefendClass = getWinningFaction(finishedTeam);
             String name = getClassDisplayName(finalDefendClass);
             Espetro.broadcastToTeam("DEFEND", "§6===== 守方编制已确定: §9" + name + "§6 =====");
             Espetro.LOGGER.info("守方编制选择结束！编制: {}", name);
         } else {
-            finalAttackClass = attackCommanderClass != null
-                ? attackCommanderClass
-                : getRandomFactionFromPool(finishedTeam);
+            finalAttackClass = getWinningFaction(finishedTeam);
             String name = getClassDisplayName(finalAttackClass);
             Espetro.broadcastToTeam("ATTACK", "§6===== 攻方编制已确定: §c" + name + "§6 =====");
             Espetro.LOGGER.info("攻方编制选择结束！编制: {}", name);
         }
 
         return finishedTeam;
+    }
+
+    private String getWinningFaction(String team) {
+        Map<String, Integer> counts = getFactionVoteCounts(team);
+        int maxVotes = counts.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        if (maxVotes <= 0) {
+            return getRandomFactionFromPool(team);
+        }
+
+        List<String> winners = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            if (entry.getValue() == maxVotes) {
+                winners.add(entry.getKey());
+            }
+        }
+        return winners.get(new Random().nextInt(winners.size()));
     }
 
     /**
@@ -360,9 +356,9 @@ public class ClassSelectManager {
         int timeout = getCurrentTimeoutSeconds();
         int secondsRemaining = timeout - (selectTickCounter / TICKS_PER_SECOND);
 
-        // 每秒更新一次
+        // Keep the displayed countdown aligned with the server clock one
+        // second at a time without changing the phase timeout itself.
         if (selectTickCounter % TICKS_PER_SECOND == 0) {
-            // 每秒广播编制选择界面（同步倒计时）
             org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam(currentSelectingTeam, secondsRemaining);
         }
     }
@@ -412,14 +408,14 @@ public class ClassSelectManager {
      * 获取攻方已选择的编制
      */
     public Set<String> getAttackSelectedClasses() {
-        return new HashSet<>(attackSelectedClasses);
+        return new HashSet<>(attackFactionVotes.values());
     }
 
     /**
      * 获取守方已选择的编制
      */
     public Set<String> getDefendSelectedClasses() {
-        return new HashSet<>(defendSelectedClasses);
+        return new HashSet<>(defendFactionVotes.values());
     }
 
     /**
@@ -443,10 +439,8 @@ public class ClassSelectManager {
         selectingActive = false;
         currentSelectingTeam = null;
         selectTickCounter = 0;
-        attackSelectedClasses.clear();
-        defendSelectedClasses.clear();
-        attackCommanderClass = null;
-        defendCommanderClass = null;
+        attackFactionVotes.clear();
+        defendFactionVotes.clear();
         finalAttackClass = null;
         finalDefendClass = null;
         selectedFactionPool = null;

@@ -42,6 +42,8 @@ public class UnifiedDeployScreenPacket {
     // === 通用 ===
     private final int deployTimeRemaining;
     private final String team;
+    private final boolean waitingForDeploySelection;
+    private final int outpostRedeployCooldownRemaining;
 
     public UnifiedDeployScreenPacket(
             String factionId, String factionName, String factionDescription, String factionIcon,
@@ -53,7 +55,7 @@ public class UnifiedDeployScreenPacket {
         this(factionId, factionName, factionDescription, factionIcon,
             classes, classCounts, hasDeployPoint, deployPointPos, bastions,
             isCommander, vehicles, squads, mySquadId, deployTimeRemaining, team,
-            new ArrayList<>(), 10.0);
+            new ArrayList<>(), 10.0, false, 0);
     }
 
     public UnifiedDeployScreenPacket(
@@ -63,7 +65,8 @@ public class UnifiedDeployScreenPacket {
             boolean isCommander, List<VehicleInfo> vehicles,
             List<SquadInfo> squads, int mySquadId,
             int deployTimeRemaining, String team,
-            List<String> commanderNames, double teammateNameTagDistance) {
+            List<String> commanderNames, double teammateNameTagDistance,
+            boolean waitingForDeploySelection, int outpostRedeployCooldownRemaining) {
         this.factionId = factionId;
         this.factionName = factionName;
         this.factionDescription = factionDescription;
@@ -81,6 +84,8 @@ public class UnifiedDeployScreenPacket {
         this.team = team;
         this.commanderNames = commanderNames != null ? commanderNames : new ArrayList<>();
         this.teammateNameTagDistance = teammateNameTagDistance;
+        this.waitingForDeploySelection = waitingForDeploySelection;
+        this.outpostRedeployCooldownRemaining = Math.max(0, outpostRedeployCooldownRemaining);
     }
 
     public UnifiedDeployScreenPacket(FriendlyByteBuf buf) {
@@ -134,6 +139,8 @@ public class UnifiedDeployScreenPacket {
             this.commanderNames.add(buf.readUtf());
         }
         this.teammateNameTagDistance = buf.readDouble();
+        this.waitingForDeploySelection = buf.readBoolean();
+        this.outpostRedeployCooldownRemaining = buf.readVarInt();
     }
 
     public static UnifiedDeployScreenPacket read(FriendlyByteBuf buf) {
@@ -177,6 +184,8 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(commanderName);
         }
         buf.writeDouble(teammateNameTagDistance);
+        buf.writeBoolean(waitingForDeploySelection);
+        buf.writeVarInt(outpostRedeployCooldownRemaining);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -210,6 +219,8 @@ public class UnifiedDeployScreenPacket {
     public String getTeam() { return team; }
     public List<String> getCommanderNames() { return commanderNames; }
     public double getTeammateNameTagDistance() { return teammateNameTagDistance; }
+    public boolean isWaitingForDeploySelection() { return waitingForDeploySelection; }
+    public int getOutpostRedeployCooldownRemaining() { return outpostRedeployCooldownRemaining; }
 
     // ============ Inner Classes ============
 
@@ -283,6 +294,20 @@ public class UnifiedDeployScreenPacket {
             buf.writeUUID(id);
             buf.writeUtf(name);
             buf.writeUtf(pos);
+        }
+
+        /**
+         * 判断是否为前哨基地（用特殊 UUID 标记：MSB=0, LSB=index+1）
+         */
+        public boolean isOutpost() {
+            return id.getMostSignificantBits() == 0L && id.getLeastSignificantBits() > 0L;
+        }
+
+        /**
+         * 获取前哨基地索引（从0开始）
+         */
+        public int getOutpostIndex() {
+            return (int) (id.getLeastSignificantBits() - 1);
         }
     }
 

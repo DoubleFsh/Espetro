@@ -51,6 +51,7 @@ public class EspetroCommand {
                     // 重置游戏状态
                     GameStateManager.getInstance().resetGame();
                     BastionManager.getInstance().reset();
+                    org.espetro.team.TeamPackManager.getInstance().reset();
 
                     ctx.getSource().sendSystemMessage(Component.literal("§6[Espetro] 已重置所有玩家状态和职业人数"));
                     return 1;

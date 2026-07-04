@@ -14,6 +14,7 @@ import org.espetro.team.ClassCountManager;
 import org.espetro.team.ClassEquipment;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.OutpostManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.VoteManager;
 import org.espetro.vehicle.VehicleItems;
@@ -52,12 +53,10 @@ public class ClassSelectPacket {
 
             // 检查是否在编制选择阶段
             if (ClassSelectManager.getInstance().isSelectingActive()) {
-                // 如果是指挥官，进行编制选择
-                if (VoteManager.getInstance().isCommander(player.getUUID())) {
-                    boolean success = ClassSelectManager.getInstance().selectClass(player, classId);
-                    if (success) {
-                        Espetro.LOGGER.info("指挥官 {} 选择了编制 {}", player.getName().getString(), classId);
-                    }
+                // 当前选择阵营的所有玩家均可投票，服务端负责验证队伍和候选池。
+                boolean success = ClassSelectManager.getInstance().selectClass(player, classId);
+                if (success) {
+                    Espetro.LOGGER.info("玩家 {} 投票编制 {}", player.getName().getString(), classId);
                 }
                 return;
             }
@@ -112,8 +111,13 @@ public class ClassSelectPacket {
                 }
             }
 
+            // 4) 布防期内，防守方在前哨基地周边也可选择职业
+            if (!inRange && OutpostManager.getInstance().isPlayerNearAvailableOutpost(player, 6)) {
+                inRange = true;
+            }
+
             if (!inRange) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你不在部署点或兵站周边6格范围内！无法选择职业。"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你不在部署点、兵站或可用前哨基地周边6格范围内！无法选择职业。"));
                 return;
             }
 
@@ -132,13 +136,12 @@ public class ClassSelectPacket {
                 giveBastionWandIfNeeded(player);
                 giveVehicleDeployStickIfNeeded(player);
             }
+            org.espetro.team.TeamPackManager.getInstance().syncTeamPackItem(player);
 
-            // 同步人数给玩家
             String team = countManager.getEffectivePlayerTeam(player.getUUID());
-            ClassCountSyncPacket syncPacket = new ClassCountSyncPacket(
-                countManager.getCountsForFaction(team, teamOrFaction), teamOrFaction);
-            NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), syncPacket);
-            NetworkManager.syncSquadsToTeam(team);
+            String factionId = countManager.getPlayerFaction(player.getUUID());
+            NetworkManager.broadcastClassCounts(team,
+                factionId != null ? factionId : teamOrFaction);
         });
         ctx.get().setPacketHandled(true);
     }

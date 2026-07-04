@@ -16,6 +16,8 @@ public class ClientPacketHandlers {
     public static void handleOpenFactionScreen() {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player != null) {
+            org.espetro.client.gui.ClientGameState.setPlayerTeam(null);
+            org.espetro.client.gui.ClientGameState.setPlayerFactionId(null);
             mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
         }
     }
@@ -41,6 +43,8 @@ public class ClientPacketHandlers {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null) return;
 
+        org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
+
         if (mc.screen instanceof org.espetro.client.gui.ClassSelectScreen screen) {
             // 已在编制选择界面，刷新本方/对方倒计时和当前权限
             screen.updateFromPacket(packet);
@@ -48,7 +52,8 @@ public class ClientPacketHandlers {
             mc.setScreen(new org.espetro.client.gui.ClassSelectScreen(
                 packet.getTeam(), packet.isCommander(), packet.getFactions(),
                 packet.getTimeRemaining(), packet.getOpponentTeamName(),
-                packet.getOpponentFaction(), packet.getOpponentTimeRemaining()));
+                packet.getOpponentFaction(), packet.getOpponentTimeRemaining(),
+                packet.getSelectedFactionId()));
         }
     }
 
@@ -71,6 +76,7 @@ public class ClientPacketHandlers {
     // ==================== CommanderVotePacket ====================
 
     public static void handleCommanderVote(CommanderVotePacket packet) {
+        org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
         org.espetro.client.gui.CommanderVoteScreen.open(
             packet.getTeam(), packet.getPlayers(), packet.getTimeRemaining(),
             packet.getOpponentTeamName(), packet.getOpponentFaction(),
@@ -104,16 +110,31 @@ public class ClientPacketHandlers {
             packet.getAttackTroops(), packet.getDefendTroops());
     }
 
+    // ==================== StaminaSyncPacket ====================
+
+    public static void handleStamina(StaminaSyncPacket packet) {
+        org.espetro.client.gui.StaminaOverlay.update(
+            packet.isEnabled(), packet.getStamina(), packet.getMaxStamina());
+    }
+
     // ==================== ClassCountSyncPacket ====================
 
     public static void handleClassCountSync(ClassCountSyncPacket packet) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
-            if (packet.isError()) {
+        if (packet.isError()) {
+            if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
                 screen.showError(packet.getErrorMessage());
-            } else {
-                screen.updateClassCounts(packet.getClassCounts());
+            } else if (mc.player != null) {
+                mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(packet.getErrorMessage()), false);
             }
+            return;
+        }
+
+        if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
+            screen.updateClassCounts(packet.getClassCounts());
+        } else if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            screen.updateClassCounts(packet.getClassCounts());
         }
     }
 
@@ -121,8 +142,16 @@ public class ClientPacketHandlers {
 
     public static void handleGamePhase(String phaseName) {
         try {
-            org.espetro.client.gui.ClientGameState.setCurrentPhase(
-                GamePhase.valueOf(phaseName));
+            GamePhase phase = GamePhase.valueOf(phaseName);
+            org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
+
+            // 攻方开始进攻时前哨已销毁，关闭仍包含旧前哨按钮的布防面板。
+            if (phase == GamePhase.BATTLE) {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen) {
+                    mc.setScreen(null);
+                }
+            }
         } catch (IllegalArgumentException ignored) {
         }
     }
@@ -164,6 +193,9 @@ public class ClientPacketHandlers {
             screen.updateClassCounts(packet.getClassCounts());
             screen.updateTimeRemaining(packet.getDeployTimeRemaining());
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
+            screen.updateDeploymentState(
+                packet.isWaitingForDeploySelection(),
+                packet.getOutpostRedeployCooldownRemaining());
             // 载具部署已分离到 VehicleDeployScreen，通过"载具部署指令"物品单独打开
         } else {
             mc.setScreen(new org.espetro.client.gui.UnifiedDeployScreen(packet));
@@ -198,14 +230,12 @@ public class ClientPacketHandlers {
         }
 
         String playerTeam = packet.getPlayerTeam();
-        if (playerTeam != null && !playerTeam.isEmpty()) {
-            org.espetro.client.gui.ClientGameState.setPlayerTeam(playerTeam);
-        }
+        org.espetro.client.gui.ClientGameState.setPlayerTeam(
+            playerTeam != null && !playerTeam.isEmpty() ? playerTeam : null);
 
         String playerFaction = packet.getPlayerFaction();
-        if (playerFaction != null && !playerFaction.isEmpty()) {
-            org.espetro.client.gui.ClientGameState.setPlayerFactionId(playerFaction);
-        }
+        org.espetro.client.gui.ClientGameState.setPlayerFactionId(
+            playerFaction != null && !playerFaction.isEmpty() ? playerFaction : null);
 
         // 根据阶段自动打开对应界面
         String phaseName = packet.getPhaseName();
@@ -234,6 +264,19 @@ public class ClientPacketHandlers {
             if (myTeam == null || myTeam.isEmpty()) {
                 mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
             }
+        }
+    }
+
+    // ==================== CommanderSkillSyncPacket ====================
+
+    public static void handleCommanderSkillSync(org.espetro.network.CommanderSkillSyncPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        if (mc.screen instanceof org.espetro.client.gui.CommanderSkillScreen screen) {
+            screen.updateData(packet.isCommander(), packet.getCooldowns());
+        } else {
+            org.espetro.client.gui.CommanderSkillScreen.open(packet.isCommander(), packet.getCooldowns());
         }
     }
 }

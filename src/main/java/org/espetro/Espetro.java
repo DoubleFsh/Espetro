@@ -16,6 +16,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -28,8 +29,11 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import org.espetro.command.EspetroCommand;
 import org.espetro.bastion.BastionManager;
 import org.espetro.network.NetworkManager;
+import org.espetro.runtime.ServerRuntimeMaintenance;
 import org.espetro.config.GameConfig;
+import org.espetro.stamina.StaminaManager;
 import org.espetro.team.TeamManager;
+import org.espetro.team.TeamPackManager;
 import org.espetro.team.ClassEquipment;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.FactionDataLoader;
@@ -42,7 +46,6 @@ import org.espetro.team.VoteManager;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.vehicle.VehicleCommand;
 import org.espetro.vehicle.VehicleConfig;
-import org.espetro.vehicle.VehicleManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +67,7 @@ public class Espetro {
     // 快捷键 (客户端专用，使用 Object 类型避免服务端加载问题)
     public static Object KEY_TEAM;   // K - 队伍选择
     public static Object KEY_CLASS;  // J - 职业选择
+    public static Object KEY_SKILL;  // Y - 指挥官技能
 
     public Espetro() {
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
@@ -91,6 +95,7 @@ public class Espetro {
      *   <li>重新加载 game.json 全局参数</li>
      *   <li>重新加载 spawn_points.json 复活点</li>
      *   <li>重新加载 bastion.json 兵站参数</li>
+     *   <li>重新加载 outposts.json 布防期前哨基地</li>
      *   <li>重新加载编制自定义载具配置 → VehicleConfig</li>
      * </ul>
      */
@@ -115,9 +120,14 @@ public class Espetro {
 
         // 4. 热重载兵站配置
         BastionManager.getInstance().reloadConfig();
+        TeamPackManager.getInstance().reloadConfig();
 
         // 5. 热重载载具配置（依赖 faction 数据，放在最后）
         VehicleConfig.loadConfig(server);
+
+        // 6. 热重载前哨基地配置
+        org.espetro.team.OutpostManager.getInstance().loadConfig(server);
+
         NetworkManager.syncSquadsToTeam("ATTACK");
         NetworkManager.syncSquadsToTeam("DEFEND");
 
@@ -208,8 +218,14 @@ public class Espetro {
                 org.espetro.team.TroopCountManager.init();
                 // 初始化班组小队管理器
                 SquadManager.init();
+                // 初始化队包管理器
+                TeamPackManager.init();
                 // 初始化兵站管理器
                 BastionManager.getInstance();
+                // 初始化前哨基地管理器
+                org.espetro.team.OutpostManager.init();
+                // 初始化指挥官技能管理器
+                org.espetro.team.CommanderSkillManager.init();
             });
         }
 
@@ -222,6 +238,7 @@ public class Espetro {
             EspetroCommand.register(event.getDispatcher());
             org.espetro.bastion.BastionCommand.register(event.getDispatcher());
             VehicleCommand.register(event.getDispatcher());
+            event.getDispatcher().register(org.espetro.command.OutpostCommand.register());
         }
 
         @SubscribeEvent
@@ -232,6 +249,9 @@ public class Espetro {
             }
 
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                StaminaManager.resetPlayer(serverPlayer);
+                clearAndSavePlayerInventory(serverPlayer);
+
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
 
                 if (phase == GamePhase.WAITING_FOR_PLAYERS) {
@@ -248,11 +268,23 @@ public class Espetro {
 
         @SubscribeEvent
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
-            // 玩家离开时清空装备并减少职业人数
-            ClassEquipment.clearEquipment(event.getEntity());
+            // 玩家离开时清空装备并立即写入 playerdata，避免重进时恢复退出前的职业装备。
+            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                StaminaManager.removePlayer(serverPlayer.getUUID());
+                clearAndSavePlayerInventory(serverPlayer);
+            } else {
+                ClassEquipment.clearEquipment(event.getEntity());
+            }
+
+            // 玩家离开时减少职业人数
+            ClassCountManager countManager = ClassCountManager.getInstance();
+            String classCountTeam = countManager.getEffectivePlayerTeam(event.getEntity().getUUID());
+            String classCountFaction = countManager.getPlayerFaction(event.getEntity().getUUID());
             String squadTeam = SquadManager.getInstance().removePlayer(event.getEntity().getUUID());
-            ClassCountManager.getInstance().removePlayer(event.getEntity());
+            countManager.removePlayer(event.getEntity());
+            NetworkManager.broadcastClassCounts(classCountTeam, classCountFaction);
             if (squadTeam != null) {
+                TeamPackManager.getInstance().reconcileTeam(squadTeam);
                 NetworkManager.syncSquadsToTeam(squadTeam);
             }
 
@@ -321,26 +353,72 @@ public class Espetro {
         @SubscribeEvent
         public static void onServerStarting(ServerStartingEvent event) {
             serverInstance = event.getServer();
+            ServerRuntimeMaintenance.getInstance().reset();
             // 初始化所有配置（首次加载）
             reloadAllConfigs();
             // 初始化职业人数记分板
             ClassCountManager.getInstance().initializeAllClassScores();
             // 重置游戏状态（含兵站清空）
             BastionManager.getInstance().reset();
+            TeamPackManager.getInstance().reset();
             GameStateManager.getInstance().resetGame();
         }
 
         @SubscribeEvent
         public static void onServerStopping(ServerStoppingEvent event) {
+            clearAndSaveOnlinePlayerInventories(event.getServer());
+
             // 停服保存前清理已加载区块中的兵站实体，但不强制加载未加载区块。
             BastionManager.getInstance().reset();
+            TeamPackManager.getInstance().reset();
         }
 
         @SubscribeEvent
         public static void onServerStopped(ServerStoppedEvent event) {
             // 服务器已停止后只清理内存状态，避免在世界卸载阶段访问区块或实体。
             BastionManager.getInstance().clearRuntimeState();
+            TeamPackManager.getInstance().clearRuntimeState();
+            ServerRuntimeMaintenance.getInstance().reset();
+            StaminaManager.clear();
             serverInstance = null;
+        }
+
+        @SubscribeEvent
+        public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                StaminaManager.resetPlayer(serverPlayer);
+            }
+        }
+
+        @SubscribeEvent
+        public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+            if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer serverPlayer) {
+                StaminaManager.onPlayerTick(serverPlayer);
+            }
+        }
+
+        @SubscribeEvent
+        public static void onPlayerJump(LivingEvent.LivingJumpEvent event) {
+            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                StaminaManager.onPlayerJump(serverPlayer);
+            }
+        }
+
+        private static void clearAndSavePlayerInventory(ServerPlayer player) {
+            ClassEquipment.clearEquipment(player);
+            MinecraftServer server = player.getServer();
+            if (server != null) {
+                server.getPlayerList().saveAll();
+            }
+        }
+
+        private static void clearAndSaveOnlinePlayerInventories(MinecraftServer server) {
+            if (server == null) return;
+
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                ClassEquipment.clearEquipment(player);
+            }
+            server.getPlayerList().saveAll();
         }
 
         /**
@@ -379,10 +457,8 @@ public class Espetro {
         public static void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase == TickEvent.Phase.END) {
                 GameStateManager.getInstance().onServerTick();
-                // 更新兵站状态
-                BastionManager.getInstance().removeInvalidBastions();
-                VehicleManager.getInstance().removeInvalidVehicles();
-
+                ServerRuntimeMaintenance.getInstance().onServerTick();
+                org.espetro.team.CommanderSkillManager.getInstance().onServerTick();
             }
         }
 

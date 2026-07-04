@@ -1,7 +1,7 @@
 {
   "game": {
     "required_players": 1,
-    "deploy_timeout_seconds": 1,
+    "deploy_timeout_seconds": 3,
     "deploy_warning_seconds": 0,
     "defend_commander_vote_seconds": 1,
     "attack_commander_vote_seconds": 1,
@@ -16,5 +16,17 @@
     "initial_attack": 280,
     "initial_defend": 1200,
     "commander_death_penalty": 2
+  },
+  "commander_skills": {
+    "drone_detection_range": 100.0,
+    "drone_detection_duration_seconds": 10,
+    "drone_detection_cooldown_seconds": 60
+  },
+  "stamina": {
+    "player_stamina": 100,
+    "sprint_cost_per_second": 5,
+    "jump_cost": 15,
+    "regen_delay_seconds": 4,
+    "regen_per_second": 2
   }
 }

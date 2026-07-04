@@ -12,6 +12,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.client.gui.components.Button;
+
 /**
  * 职业选择界面
  * 支持两种数据来源：
@@ -35,8 +37,8 @@ public class ClassSelectionScreen extends Screen {
     private ClassDisplay[] displayClasses;
     private int hoveredClassIndex = -1;
 
-    // 职业人数映射（从服务端同步）
     private final Map<String, Integer> classCounts = new HashMap<>();
+    private final List<Button> classButtons = new java.util.ArrayList<>();
 
     // 错误消息
     private String errorMessage = null;
@@ -101,9 +103,6 @@ public class ClassSelectionScreen extends Screen {
         }
 
         createButtons();
-
-        // 请求服务端人数同步
-        NetworkManager.requestClassCounts(factionId);
     }
 
     private void initFromLocalData() {
@@ -126,8 +125,6 @@ public class ClassSelectionScreen extends Screen {
         }
 
         createButtons();
-
-        NetworkManager.requestClassCounts(factionId);
     }
 
     private void createButtons() {
@@ -136,6 +133,7 @@ public class ClassSelectionScreen extends Screen {
 
         if (displayClasses == null || displayClasses.length == 0) return;
 
+        classButtons.clear();
         for (int i = 0; i < displayClasses.length; i++) {
             final int classIndex = i;
 
@@ -144,16 +142,33 @@ public class ClassSelectionScreen extends Screen {
             int x = startX + col * buttonWidth;
             int y = startY + row * (buttonHeight + vSpacing);
 
-            String roleColor = getRoleColor(displayClasses[i].role);
-            Component buttonText = Component.literal(roleColor + displayClasses[i].name);
+            int currentCount = classCounts.getOrDefault(displayClasses[i].classId, 0);
+            boolean full = currentCount >= displayClasses[i].maxPlayers;
+            String roleColor = full ? "§c" : getRoleColor(displayClasses[i].role);
+            Component buttonText = Component.literal(
+                roleColor + displayClasses[i].name + " §7[" + currentCount + "/" + displayClasses[i].maxPlayers + "]");
 
             Button.OnPress onPress = btn -> selectClass(classIndex);
 
-            this.addRenderableWidget(
-                Button.builder(buttonText, onPress)
-                    .bounds(x, y, buttonWidth, buttonHeight)
-                    .build()
-            );
+            Button button = Button.builder(buttonText, onPress)
+                .bounds(x, y, buttonWidth, buttonHeight)
+                .build();
+            button.active = !full;
+            this.addRenderableWidget(button);
+            classButtons.add(button);
+        }
+    }
+
+    private void refreshButtons() {
+        if (displayClasses == null) return;
+        for (int i = 0; i < displayClasses.length && i < classButtons.size(); i++) {
+            ClassDisplay cls = displayClasses[i];
+            int currentCount = classCounts.getOrDefault(cls.classId, 0);
+            boolean full = currentCount >= cls.maxPlayers;
+            String roleColor = full ? "§c" : getRoleColor(cls.role);
+            classButtons.get(i).setMessage(Component.literal(
+                roleColor + cls.name + " §7[" + currentCount + "/" + cls.maxPlayers + "]"));
+            classButtons.get(i).active = !full;
         }
     }
 
@@ -163,6 +178,7 @@ public class ClassSelectionScreen extends Screen {
     public void updateClassCounts(Map<String, Integer> counts) {
         this.classCounts.clear();
         this.classCounts.putAll(counts);
+        refreshButtons();
     }
 
     /**

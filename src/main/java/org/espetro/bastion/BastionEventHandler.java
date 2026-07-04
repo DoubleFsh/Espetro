@@ -26,6 +26,8 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.ExplosionEvent;
 import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -40,7 +42,9 @@ import org.espetro.team.FactionDataLoader;
 import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
+import org.espetro.team.TeamPackManager;
 
 import javax.annotation.Nullable;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -61,10 +65,15 @@ public class BastionEventHandler {
             return;
         }
 
-        // 检查是否是对战阶段
+        // 对战阶段正常复活；布防阶段阵亡/重新部署也允许重选部署点。
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-        if (phase != GamePhase.BATTLE) {
+        if (phase != GamePhase.BATTLE && phase != GamePhase.DEPLOYING) {
             return;
+        }
+
+        if (phase == GamePhase.DEPLOYING) {
+            org.espetro.team.OutpostManager.getInstance()
+                .prepareDeployTargets(player.server.overworld());
         }
 
         // 检查玩家是否选择了职业
@@ -88,9 +97,6 @@ public class BastionEventHandler {
         // 记录死亡状态
         BastionManager.getInstance().onPlayerDeath(player.server.overworld(), player.getUUID());
 
-        // 重置弹药补给次数（每次死亡后重新计算）
-        BastionManager.getInstance().resetResupplyCount(player.getUUID());
-
         Espetro.LOGGER.info("玩家 {} 死亡，进入兵站选择状态", player.getName().getString());
     }
 
@@ -102,6 +108,8 @@ public class BastionEventHandler {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
+
+        TeamPackManager.getInstance().syncTeamPackItem(player);
 
         // 检查玩家是否在等待兵站选择
         if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
@@ -121,7 +129,10 @@ public class BastionEventHandler {
                 // 再次检查状态
                 if (BastionManager.getInstance().isWaitingForBastion(finalPlayer.getUUID())) {
                     // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
-                    org.espetro.network.NetworkManager.sendUnifiedDeployScreen(finalPlayer, -1);
+                    int remaining = GameStateManager.getInstance().getCurrentPhase() == GamePhase.DEPLOYING
+                        ? GameStateManager.getInstance().getDeployTimeRemainingSeconds()
+                        : -1;
+                    org.espetro.network.NetworkManager.sendUnifiedDeployScreen(finalPlayer, remaining);
                 }
             });
         }
@@ -136,11 +147,119 @@ public class BastionEventHandler {
             return;
         }
 
+        TeamPackManager.getInstance().syncTeamPackItem(player);
+
         // 如果玩家在等待兵站选择状态
         if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
             // 清除等待状态，让玩家正常游戏
             BastionManager.getInstance().clearWaiting(player.getUUID());
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你之前的复活选择已重置。"));
+        }
+    }
+
+    @SubscribeEvent
+    public static void onTeamPackPlace(BlockEvent.EntityPlaceEvent event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!(event.getLevel() instanceof ServerLevel level) || !event.getPlacedBlock().is(Blocks.BEACON)) {
+            return;
+        }
+        if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
+            return;
+        }
+
+        String error = TeamPackManager.getInstance().placeTeamPack(player, level, event.getPos());
+        if (error != null) {
+            event.setCanceled(true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(error));
+        }
+    }
+
+    @SubscribeEvent
+    public static void onTeamPackBreak(BlockEvent.BreakEvent event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+
+        TeamPackManager.TeamPackData teamPack = TeamPackManager.getInstance().findByPos(event.getPos());
+        if (teamPack == null) {
+            return;
+        }
+
+        event.setCanceled(true);
+
+        if (!(event.getPlayer() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        String playerTeam = Espetro.getPlayerTeam(player);
+        boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
+        if (isEnemy) {
+            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+            return;
+        }
+
+        boolean isLeaderOfThisSquad = SquadManager.getInstance().isSquadLeader(player.getUUID())
+            && SquadManager.getInstance().getPlayerSquadId(player.getUUID()) == teamPack.squadId;
+        if (!isLeaderOfThisSquad) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c只有本小队队长才能拆除队包！"));
+            return;
+        }
+
+        TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, false);
+    }
+
+    @SubscribeEvent
+    public static void onTeamPackEnemyLeftClick(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        TeamPackManager.TeamPackData teamPack = TeamPackManager.getInstance().findByPos(event.getPos());
+        if (teamPack == null) {
+            return;
+        }
+
+        event.setCanceled(true);
+
+        String playerTeam = Espetro.getPlayerTeam(player);
+        boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
+        if (isEnemy) {
+            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onTeamPackRightClick(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        TeamPackManager.TeamPackData teamPack = TeamPackManager.getInstance().findByPos(event.getPos());
+        if (teamPack == null) {
+            return;
+        }
+
+        event.setCanceled(true);
+
+        String playerTeam = Espetro.getPlayerTeam(player);
+        boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
+        if (isEnemy) {
+            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onExplosionDetonateTeamPack(ExplosionEvent.Detonate event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        for (BlockPos pos : event.getAffectedBlocks()) {
+            TeamPackManager.TeamPackData teamPack = TeamPackManager.getInstance().findByPos(pos);
+            if (teamPack != null) {
+                TeamPackManager.getInstance().destroyTeamPackByExplosion(teamPack);
+            }
         }
     }
 
@@ -272,7 +391,7 @@ public class BastionEventHandler {
             return;
         }
 
-        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID(), kit.resupply.maxResupplies);
+        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
         if (errorMsg != null) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
             event.setCanceled(true);

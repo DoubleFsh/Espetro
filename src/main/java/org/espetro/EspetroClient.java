@@ -26,6 +26,8 @@ public class EspetroClient {
             .addListener(EspetroClient::onRenderOverlay);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderNameTag);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onLivingJump);
     }
 
     // ==================== 事件处理方法 ====================
@@ -35,16 +37,27 @@ public class EspetroClient {
             "key.espetro.team", 75, "key.categories.espetro");
         net.minecraft.client.KeyMapping keyClass = new net.minecraft.client.KeyMapping(
             "key.espetro.class", 74, "key.categories.espetro");
+        net.minecraft.client.KeyMapping keySkill = new net.minecraft.client.KeyMapping(
+            "key.espetro.skill", 89, "key.categories.espetro");
         event.register(keyTeam);
         event.register(keyClass);
+        event.register(keySkill);
         Espetro.KEY_TEAM = keyTeam;
         Espetro.KEY_CLASS = keyClass;
+        Espetro.KEY_SKILL = keySkill;
     }
 
     private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc == null || mc.player == null) return;
+
+        // 客户端立即抑制耗尽后的按键，服务端仍会执行权威校验。
+        if (org.espetro.client.gui.StaminaOverlay.isExhausted()) {
+            mc.player.setSprinting(false);
+            mc.options.keySprint.setDown(false);
+            mc.options.keyJump.setDown(false);
+        }
 
         // K键 - 请求游戏状态后打开对应界面（不直接打开，先请求服务端）
         if (Espetro.KEY_TEAM != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_TEAM).consumeClick()) {
@@ -64,12 +77,38 @@ public class EspetroClient {
                 }
             }
         }
+        // Y键 - 指挥官技能面板 (在部署/战斗阶段允许)
+        if (Espetro.KEY_SKILL != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_SKILL).consumeClick()) {
+            if (org.espetro.client.gui.ClientGameState.canOpenCommanderSkill()) {
+                org.espetro.network.NetworkManager.requestCommanderSkillSync();
+            }
+        }
     }
 
     private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc != null && mc.screen == null && mc.level != null) {
             org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
+            org.espetro.client.gui.StaminaOverlay.render(event.getGuiGraphics(), mc);
+        }
+    }
+
+    private static void onLivingJump(
+            net.minecraftforge.event.entity.living.LivingEvent.LivingJumpEvent event) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null || event.getEntity() != mc.player
+                || !org.espetro.client.gui.StaminaOverlay.isEnabled()) {
+            return;
+        }
+
+        if (!org.espetro.client.gui.StaminaOverlay.isExhausted()) {
+            org.espetro.network.NetworkManager.sendStaminaJump();
+            return;
+        }
+
+        net.minecraft.world.phys.Vec3 movement = mc.player.getDeltaMovement();
+        if (movement.y > 0) {
+            mc.player.setDeltaMovement(movement.x, 0, movement.z);
         }
     }
 
