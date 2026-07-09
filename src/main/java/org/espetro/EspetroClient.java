@@ -23,6 +23,8 @@ public class EspetroClient {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onClientTick);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onRenderHotbar);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderOverlay);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderNameTag);
@@ -50,6 +52,7 @@ public class EspetroClient {
     private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        org.espetro.client.gui.VerticalHotbarOverlay.tick(mc);
         if (mc == null || mc.player == null) return;
 
         // 客户端立即抑制耗尽后的按键，服务端仍会执行权威校验。
@@ -83,6 +86,10 @@ public class EspetroClient {
                 org.espetro.network.NetworkManager.requestCommanderSkillSync();
             }
         }
+    }
+
+    private static void onRenderHotbar(net.minecraftforge.client.event.RenderGuiOverlayEvent.Pre event) {
+        org.espetro.client.gui.VerticalHotbarOverlay.onRenderHotbar(event);
     }
 
     private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
