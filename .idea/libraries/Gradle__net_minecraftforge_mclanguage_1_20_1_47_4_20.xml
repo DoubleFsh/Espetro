@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: net.minecraftforge:mclanguage:1.20.1-47.4.20" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="net.minecraftforge" artifactId="mclanguage" version="1.20.1-47.4.20" baseVersion="1.20.1-47.4.20" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.minecraftforge/mclanguage/1.20.1-47.4.20/af599930362212ae937e392709f49047e6abbbf/mclanguage-1.20.1-47.4.20.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.minecraftforge/mclanguage/1.20.1-47.4.20/85d40d80c97314a757923aa4bdc5be5b6a4b97d5/mclanguage-1.20.1-47.4.20-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

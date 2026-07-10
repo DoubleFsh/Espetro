@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: net.minecraftforge:eventbus:6.2.33" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="net.minecraftforge" artifactId="eventbus" version="6.2.33" baseVersion="6.2.33" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.minecraftforge/eventbus/6.2.33/3fae69cfa9c5095bcc25c0a8a3ed9b26c156f922/eventbus-6.2.33.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/net.minecraftforge/eventbus/6.2.33/296aff9f6e6298e17e19ace4bd8b02c45d823530/eventbus-6.2.33-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
