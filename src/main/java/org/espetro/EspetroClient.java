@@ -23,6 +23,10 @@ public class EspetroClient {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onClientTick);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.gui.VanillaHudLayout::onClientTick);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.gui.VanillaHudLayout::onRenderOverlayPre);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderOverlay);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderNameTag);

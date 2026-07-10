@@ -190,5 +190,17 @@
     },
     "done": true
   },
+  "minecraft:recipes/building_blocks/spruce_planks": {
+    "criteria": {
+      "has_logs": "2026-07-10 14:55:36 +0800"
+    },
+    "done": true
+  },
+  "minecraft:recipes/misc/charcoal": {
+    "criteria": {
+      "has_log": "2026-07-10 14:55:36 +0800"
+    },
+    "done": true
+  },
   "DataVersion": 3465
 }
