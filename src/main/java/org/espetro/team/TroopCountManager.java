@@ -260,7 +260,7 @@ public class TroopCountManager {
     /**
      * 检查胜负条件
      */
-    private void checkVictoryCondition() {
+    public void checkVictoryCondition() {
         int attackTroops = getAttackTroops();
         int defendTroops = getDefendTroops();
 

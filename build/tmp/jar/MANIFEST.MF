@@ -3,7 +3,7 @@ Specification-Title: espetro
 Specification-Vendor: 
 Specification-Version: 1
 Implementation-Title: espetro
-Implementation-Version: 1.0.3-final
+Implementation-Version: 1.0.6-final
 Implementation-Vendor: 
-Implementation-Timestamp: 2026-07-10T16:17:23+0800
+Implementation-Timestamp: 2026-07-14T05:48:34+0800
 

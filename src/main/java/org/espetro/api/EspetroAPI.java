@@ -2,9 +2,11 @@ package org.espetro.api;
 
 import net.minecraft.server.level.ServerPlayer;
 import org.espetro.Espetro;
+import org.espetro.team.CommanderSkillManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.VoteManager;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -50,6 +52,35 @@ public class EspetroAPI {
      */
     public static boolean isCommander(UUID playerId) {
         return VoteManager.getInstance().isCommander(playerId);
+    }
+
+    /**
+     * ESPoints 在服务端将战术地图选点转换为世界坐标后调用。
+     * Espetro 会重新校验指挥官权限、游戏阶段和技能冷却。
+     */
+    public static boolean submitArtillerySupportTarget(ServerPlayer commander, double x, double z) {
+        return CommanderSkillManager.getInstance().submitArtillerySupportTarget(commander, x, z);
+    }
+
+    /**
+     * 获取最近一次155火炮支援请求；不会从队列中移除。
+     */
+    public static CommanderSkillManager.ArtillerySupportRequest getLatestArtillerySupportRequest() {
+        return CommanderSkillManager.getInstance().getLatestArtillerySupportRequest();
+    }
+
+    /**
+     * 获取当前缓存的155火炮支援请求快照；不会从队列中移除。
+     */
+    public static List<CommanderSkillManager.ArtillerySupportRequest> getArtillerySupportRequests() {
+        return CommanderSkillManager.getInstance().getArtillerySupportRequestsSnapshot();
+    }
+
+    /**
+     * 获取并清空155火炮支援请求兼容队列，可供 KubeJS 或其他服务端逻辑联动。
+     */
+    public static List<CommanderSkillManager.ArtillerySupportRequest> drainArtillerySupportRequests() {
+        return CommanderSkillManager.getInstance().drainArtillerySupportRequests();
     }
 
     private static String getPlayerTeamById(UUID playerId) {

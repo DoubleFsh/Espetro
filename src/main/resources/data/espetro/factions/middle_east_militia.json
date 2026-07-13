@@ -12,14 +12,22 @@
       "display_name": "§6改装皮卡",
       "max": 1,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [7, 0, 0], "radius": 5, "yaw": 90 }
+      "troop_value": 5,
+      "deployment": {
+        "ATTACK": { "position": [3027, 9, -3640], "yaw": 90 },
+        "DEFEND": { "position": [-2277, 9, 2306], "yaw": 90 }
+      }
     },
     "motorized_squad": {
       "entity_type": "minecraft:horse",
       "display_name": "§e机动小队载具",
       "max": 8,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [-7, 0, 0], "radius": 5, "yaw": 270 }
+      "troop_value": 3,
+      "deployment": {
+        "ATTACK": { "position": [3013, 9, -3640], "yaw": 270 },
+        "DEFEND": { "position": [-2291, 9, 2306], "yaw": 270 }
+      }
     }
   },
   "classes": {

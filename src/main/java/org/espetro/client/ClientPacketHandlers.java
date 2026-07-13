@@ -114,7 +114,7 @@ public class ClientPacketHandlers {
 
     public static void handleStamina(StaminaSyncPacket packet) {
         org.espetro.client.gui.StaminaOverlay.update(
-            packet.isEnabled(), packet.getStamina(), packet.getMaxStamina());
+            packet.isEnabled(), packet.getStamina(), packet.getMaxStamina(), packet.getJumpStaminaCost());
     }
 
     // ==================== ClassCountSyncPacket ====================
@@ -274,9 +274,10 @@ public class ClientPacketHandlers {
         if (mc.player == null) return;
 
         if (mc.screen instanceof org.espetro.client.gui.CommanderSkillScreen screen) {
-            screen.updateData(packet.isCommander(), packet.getCooldowns());
+            screen.updateData(packet.isCommander(), packet.getCooldowns(), packet.getSkills());
         } else {
-            org.espetro.client.gui.CommanderSkillScreen.open(packet.isCommander(), packet.getCooldowns());
+            org.espetro.client.gui.CommanderSkillScreen.open(
+                packet.isCommander(), packet.getCooldowns(), packet.getSkills());
         }
     }
 }

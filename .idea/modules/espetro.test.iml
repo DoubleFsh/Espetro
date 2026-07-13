@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module external.linked.project.id="espetro:test" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="GRADLE" external.system.module.group="com.shuai" external.system.module.type="sourceSet" external.system.module.version="1.0.3-final" type="JAVA_MODULE" version="4">
+<module external.linked.project.id="espetro:test" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="GRADLE" external.system.module.group="com.shuai" external.system.module.type="sourceSet" external.system.module.version="1.0.6-final" type="JAVA_MODULE" version="4">
   <component name="FacetManager">
     <facet type="minecraft" name="Minecraft">
       <configuration>
         <autoDetectTypes>
+          <platformType>ARCHITECTURY</platformType>
           <platformType>FORGE</platformType>
           <platformType>MIXIN</platformType>
           <platformType>MCP</platformType>
@@ -30,6 +31,9 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="espetro.main" />
     <orderEntry type="library" name="Gradle: curse.maven:mutil-351914:7772906_mapped_official_1.20.1" level="project" />
+    <orderEntry type="library" name="Gradle: dev.latvian.mods:rhino-forge:2001.2.2-build.17_mapped_official_1.20.1" level="project" />
+    <orderEntry type="library" name="Gradle: dev.architectury:architectury-forge:9.1.12_mapped_official_1.20.1" level="project" />
+    <orderEntry type="library" name="Gradle: dev.latvian.mods:kubejs-forge:2001.6.5-build.26_mapped_official_1.20.1" level="project" />
     <orderEntry type="library" name="Gradle: net.minecraftforge:forge:1.20.1-47.4.20_mapped_official_1.20.1" level="project" />
     <orderEntry type="library" name="Gradle: net.minecraft:client:extra:1.20.1" level="project" />
     <orderEntry type="library" name="Gradle: net.minecraftforge:fmlloader:1.20.1-47.4.20" level="project" />
@@ -131,7 +135,7 @@
     <orderEntry type="library" name="Gradle: org.antlr:antlr-runtime:3.5.2" level="project" />
     <orderEntry type="library" name="Gradle: org.abego.treelayout:org.abego.treelayout.core:1.0.3" level="project" />
     <orderEntry type="library" name="Gradle: org.glassfish:javax.json:1.0.4" level="project" />
-    <orderEntry type="library" scope="RUNTIME" name="Gradle: local:espoints:1.0.4-final_mapped_official_1.20.1" level="project" />
+    <orderEntry type="library" scope="RUNTIME" name="Gradle: local:espoints:1.0.6-final_mapped_official_1.20.1" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Gradle: net.minecraft:mappings_official:zip:1.20.1" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Gradle: org.slf4j:slf4j-simple:1.7.30" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Gradle: net.minecraftforge:srgutils:0.4.11" level="project" />

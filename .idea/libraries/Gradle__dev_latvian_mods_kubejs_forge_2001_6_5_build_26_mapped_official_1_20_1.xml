@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="Gradle: dev.latvian.mods:kubejs-forge:2001.6.5-build.26_mapped_official_1.20.1" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="dev.latvian.mods" artifactId="kubejs-forge" version="2001.6.5-build.26_mapped_official_1.20.1" baseVersion="2001.6.5-build.26_mapped_official_1.20.1" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/latvian/mods/kubejs-forge/2001.6.5-build.26_mapped_official_1.20.1/kubejs-forge-2001.6.5-build.26_mapped_official_1.20.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

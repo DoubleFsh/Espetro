@@ -2,8 +2,11 @@ package org.espetro.network;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
+import org.espetro.team.CommanderSkillManager;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -11,10 +14,17 @@ public class CommanderSkillSyncPacket {
 
     private final boolean isCommander;
     private final Map<String, Integer> cooldowns;
+    private final List<CommanderSkillManager.SkillView> skills;
 
     public CommanderSkillSyncPacket(boolean isCommander, Map<String, Integer> cooldowns) {
+        this(isCommander, cooldowns, List.of());
+    }
+
+    public CommanderSkillSyncPacket(boolean isCommander, Map<String, Integer> cooldowns,
+                                    List<CommanderSkillManager.SkillView> skills) {
         this.isCommander = isCommander;
         this.cooldowns = cooldowns != null ? cooldowns : new HashMap<>();
+        this.skills = skills != null ? List.copyOf(skills) : List.of();
     }
 
     public static CommanderSkillSyncPacket read(FriendlyByteBuf buf) {
@@ -26,7 +36,17 @@ public class CommanderSkillSyncPacket {
             int value = buf.readVarInt();
             cooldowns.put(key, value);
         }
-        return new CommanderSkillSyncPacket(isCommander, cooldowns);
+        int skillCount = buf.readVarInt();
+        List<CommanderSkillManager.SkillView> skills = new ArrayList<>(skillCount);
+        for (int i = 0; i < skillCount; i++) {
+            skills.add(new CommanderSkillManager.SkillView(
+                buf.readUtf(128),
+                buf.readUtf(128),
+                buf.readUtf(512),
+                buf.readUtf(512)
+            ));
+        }
+        return new CommanderSkillSyncPacket(isCommander, cooldowns, skills);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -36,6 +56,20 @@ public class CommanderSkillSyncPacket {
             buf.writeUtf(entry.getKey());
             buf.writeVarInt(entry.getValue());
         }
+        buf.writeVarInt(skills.size());
+        for (CommanderSkillManager.SkillView skill : skills) {
+            buf.writeUtf(limit(skill.id(), 128), 128);
+            buf.writeUtf(limit(skill.displayName(), 128), 128);
+            buf.writeUtf(limit(skill.description(), 512), 512);
+            buf.writeUtf(limit(skill.stats(), 512), 512);
+        }
+    }
+
+    private static String limit(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -57,5 +91,9 @@ public class CommanderSkillSyncPacket {
 
     public Map<String, Integer> getCooldowns() {
         return cooldowns;
+    }
+
+    public List<CommanderSkillManager.SkillView> getSkills() {
+        return skills;
     }
 }

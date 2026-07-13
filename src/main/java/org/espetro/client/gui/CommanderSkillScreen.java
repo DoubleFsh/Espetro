@@ -3,33 +3,74 @@ package org.espetro.client.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
-import org.espetro.team.CommanderSkillType;
+import org.espetro.team.CommanderSkillManager;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class CommanderSkillScreen extends MutilScreen {
 
-    private Map<String, Integer> cooldowns;
+    private Map<String, Integer> cooldowns = new HashMap<>();
+    private final Map<String, Long> cooldownEndsAtMillis = new HashMap<>();
+    private List<CommanderSkillManager.SkillView> skills = new ArrayList<>();
     private boolean isCommander;
+    private int lastCooldownSignature = Integer.MIN_VALUE;
 
     public CommanderSkillScreen(boolean isCommander, Map<String, Integer> cooldowns) {
+        this(isCommander, cooldowns, List.of());
+    }
+
+    public CommanderSkillScreen(boolean isCommander, Map<String, Integer> cooldowns,
+                                List<CommanderSkillManager.SkillView> skills) {
         super(Component.literal("指挥官技能"));
         this.isCommander = isCommander;
-        this.cooldowns = cooldowns;
+        setSkills(skills);
+        setCooldowns(cooldowns);
     }
 
     public static void open(boolean isCommander, Map<String, Integer> cooldowns) {
+        open(isCommander, cooldowns, List.of());
+    }
+
+    public static void open(boolean isCommander, Map<String, Integer> cooldowns,
+                            List<CommanderSkillManager.SkillView> skills) {
         Minecraft mc = Minecraft.getInstance();
-        mc.setScreen(new CommanderSkillScreen(isCommander, cooldowns));
+        mc.setScreen(new CommanderSkillScreen(isCommander, cooldowns, skills));
     }
 
     public void updateData(boolean isCommander, Map<String, Integer> cooldowns) {
+        updateData(isCommander, cooldowns, List.of());
+    }
+
+    public void updateData(boolean isCommander, Map<String, Integer> cooldowns,
+                           List<CommanderSkillManager.SkillView> skills) {
         this.isCommander = isCommander;
-        this.cooldowns = cooldowns;
+        setSkills(skills);
+        setCooldowns(cooldowns);
         if (root != null) {
             rebuildMutilRoot();
         }
+    }
+
+    private void setSkills(List<CommanderSkillManager.SkillView> skills) {
+        this.skills = skills != null ? new ArrayList<>(skills) : new ArrayList<>();
+    }
+
+    private void setCooldowns(Map<String, Integer> cooldowns) {
+        this.cooldowns = cooldowns != null ? new HashMap<>(cooldowns) : new HashMap<>();
+        this.cooldownEndsAtMillis.clear();
+
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, Integer> entry : this.cooldowns.entrySet()) {
+            int seconds = entry.getValue() != null ? entry.getValue() : 0;
+            if (seconds > 0) {
+                this.cooldownEndsAtMillis.put(entry.getKey(), now + seconds * 1000L);
+            }
+        }
+        this.lastCooldownSignature = Integer.MIN_VALUE;
     }
 
     @Override
@@ -53,6 +94,7 @@ public class CommanderSkillScreen extends MutilScreen {
         if (!isCommander) {
             root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 50, panelW,
                 "\u00a7c你不是指挥官，无法使用技能", EspetroMutilWidgets.NEGATIVE));
+            lastCooldownSignature = getCooldownSignature();
             return;
         }
 
@@ -60,15 +102,18 @@ public class CommanderSkillScreen extends MutilScreen {
         int contentX = panelX + 10;
         int contentW = panelW - 20;
 
-        for (CommanderSkillType skillType : CommanderSkillType.values()) {
-            contentY = buildSkillCard(root, contentX, contentY, contentW, skillType);
+        for (CommanderSkillManager.SkillView skill : skills) {
+            contentY = buildSkillCard(root, contentX, contentY, contentW, skill);
             contentY += 8;
         }
+
+        lastCooldownSignature = getCooldownSignature();
     }
 
-    private int buildSkillCard(GuiElement root, int x, int y, int width, CommanderSkillType skillType) {
+    private int buildSkillCard(GuiElement root, int x, int y, int width,
+                               CommanderSkillManager.SkillView skill) {
         int cardH = 62;
-        int cooldownSec = cooldowns != null ? cooldowns.getOrDefault(skillType.getId(), 0) : 0;
+        int cooldownSec = getRemainingCooldownSeconds(skill.id());
         boolean onCooldown = cooldownSec > 0;
 
         int cardColor = onCooldown ? 0x55363636 : 0x60404040;
@@ -76,12 +121,12 @@ public class CommanderSkillScreen extends MutilScreen {
         root.addChild(EspetroMutilWidgets.panel(x, y, width, cardH, cardColor, borderColor));
 
         root.addChild(EspetroMutilWidgets.text(x + 8, y + 6,
-            "\u00a7e" + skillType.getDisplayName(), EspetroMutilWidgets.GOLD));
+            "\u00a7e" + skill.displayName(), EspetroMutilWidgets.GOLD));
 
         root.addChild(EspetroMutilWidgets.text(x + 8, y + 20,
-            "\u00a77" + skillType.getDescription(), EspetroMutilWidgets.MUTED));
+            "\u00a77" + skill.description(), EspetroMutilWidgets.MUTED));
 
-        String stats = getSkillStats(skillType);
+        String stats = skill.stats() == null ? "" : skill.stats();
         root.addChild(EspetroMutilWidgets.text(x + 8, y + 34,
             stats, EspetroMutilWidgets.DIM));
 
@@ -96,27 +141,47 @@ public class CommanderSkillScreen extends MutilScreen {
                 .setEnabled(false)
                 .setTextColor(EspetroMutilWidgets.DIM));
         } else {
-            root.addChild(EspetroMutilWidgets.button(btnX, btnY, btnW, btnH, "发动", () -> activateSkill(skillType))
+            root.addChild(EspetroMutilWidgets.button(btnX, btnY, btnW, btnH, "发动", () -> activateSkill(skill.id()))
                 .setTextColor(EspetroMutilWidgets.POSITIVE));
         }
 
         return y + cardH;
     }
 
-    private String getSkillStats(CommanderSkillType type) {
-        return switch (type) {
-            case DRONE_DETECTION -> {
-                double range = org.espetro.config.GameConfig.getDroneDetectionRange();
-                int duration = org.espetro.config.GameConfig.getDroneDetectionDurationSeconds();
-                int cooldown = org.espetro.config.GameConfig.getDroneDetectionCooldownSeconds();
-                yield "\u00a78范围: " + (int) range + "格 | 持续: " + duration + "秒 | 冷却: " + cooldown + "秒";
-            }
-        };
+    private int getRemainingCooldownSeconds(String skillId) {
+        Long endsAt = cooldownEndsAtMillis.get(skillId);
+        if (endsAt == null) {
+            return 0;
+        }
+
+        long remainingMillis = endsAt - System.currentTimeMillis();
+        return remainingMillis <= 0 ? 0 : (int) Math.ceil(remainingMillis / 1000.0);
     }
 
-    private void activateSkill(CommanderSkillType type) {
-        NetworkManager.sendCommanderSkillActivate(type);
+    private int getCooldownSignature() {
+        int signature = 1;
+        for (CommanderSkillManager.SkillView skill : skills) {
+            signature = 31 * signature + getRemainingCooldownSeconds(skill.id());
+        }
+        return signature;
+    }
+
+    private void activateSkill(String skillId) {
+        NetworkManager.sendCommanderSkillActivate(skillId);
         Minecraft.getInstance().setScreen(null);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (root == null) {
+            return;
+        }
+
+        int cooldownSignature = getCooldownSignature();
+        if (cooldownSignature != lastCooldownSignature) {
+            rebuildMutilRoot();
+        }
     }
 
     @Override

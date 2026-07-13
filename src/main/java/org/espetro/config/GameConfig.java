@@ -37,11 +37,6 @@ public class GameConfig {
     private static int initialDefendTroops = 1200;
     private static int commanderDeathPenalty = 2;
 
-    // ========== 指挥官技能参数 ==========
-    private static double droneDetectionRange = 100.0;
-    private static int droneDetectionDurationSeconds = 10;
-    private static int droneDetectionCooldownSeconds = 60;
-
     // ========== 体力参数 ==========
     // playerStamina = -1 时整个体力系统禁用
     private static int playerStamina = 100;
@@ -88,14 +83,6 @@ public class GameConfig {
                     initialAttackTroops = getInt(troops, "initial_attack", initialAttackTroops);
                     initialDefendTroops = getInt(troops, "initial_defend", initialDefendTroops);
                     commanderDeathPenalty = getInt(troops, "commander_death_penalty", commanderDeathPenalty);
-                }
-
-                // 指挥官技能参数
-                if (root.has("commander_skills")) {
-                    JsonObject skills = root.getAsJsonObject("commander_skills");
-                    droneDetectionRange = getDouble(skills, "drone_detection_range", droneDetectionRange);
-                    droneDetectionDurationSeconds = getInt(skills, "drone_detection_duration_seconds", droneDetectionDurationSeconds);
-                    droneDetectionCooldownSeconds = getInt(skills, "drone_detection_cooldown_seconds", droneDetectionCooldownSeconds);
                 }
 
                 // 体力参数
@@ -171,9 +158,6 @@ public class GameConfig {
         initialAttackTroops = 280;
         initialDefendTroops = 1200;
         commanderDeathPenalty = 2;
-        droneDetectionRange = 100.0;
-        droneDetectionDurationSeconds = 10;
-        droneDetectionCooldownSeconds = 60;
         playerStamina = 100;
         sprintStaminaCostPerSecond = 5;
         jumpStaminaCost = 15;
@@ -239,18 +223,6 @@ public class GameConfig {
 
     public static int getCommanderDeathPenalty() {
         return commanderDeathPenalty;
-    }
-
-    public static double getDroneDetectionRange() {
-        return droneDetectionRange;
-    }
-
-    public static int getDroneDetectionDurationSeconds() {
-        return droneDetectionDurationSeconds;
-    }
-
-    public static int getDroneDetectionCooldownSeconds() {
-        return droneDetectionCooldownSeconds;
     }
 
     public static boolean isStaminaEnabled() {

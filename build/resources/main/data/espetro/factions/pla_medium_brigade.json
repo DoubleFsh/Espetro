@@ -12,28 +12,44 @@
       "display_name": "§6运输卡车",
       "max": 1,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [8, 0, 0], "radius": 5, "yaw": 90 }
+      "troop_value": 5,
+      "deployment": {
+        "ATTACK": { "position": [3028, 9, -3640], "yaw": 90 },
+        "DEFEND": { "position": [-2276, 9, 2306], "yaw": 90 }
+      }
     },
     "apc": {
       "entity_type": "minecraft:camel",
       "display_name": "§a装甲运兵车",
       "max": 1,
       "respawn_minutes": 8,
-      "deployment": { "mode": "deploy_point", "offset": [-8, 0, 0], "radius": 5, "yaw": 270 }
+      "troop_value": 8,
+      "deployment": {
+        "ATTACK": { "position": [3012, 9, -3640], "yaw": 270 },
+        "DEFEND": { "position": [-2292, 9, 2306], "yaw": 270 }
+      }
     },
     "attack_helicopter": {
       "entity_type": "minecraft:ghast",
       "display_name": "§c武装直升机",
       "max": 1,
       "respawn_minutes": 10,
-      "deployment": { "mode": "deploy_point", "offset": [0, 8, 12], "radius": 8, "snap_to_ground": false, "yaw": 180 }
+      "troop_value": 12,
+      "deployment": {
+        "ATTACK": { "position": [3020, 17, -3628], "yaw": 180 },
+        "DEFEND": { "position": [-2284, 17, 2318], "yaw": 180 }
+      }
     },
     "recon_mount": {
       "entity_type": "minecraft:horse",
       "display_name": "§e侦察机动载具",
       "max": 2,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [0, 0, -8], "radius": 4, "yaw": 0 }
+      "troop_value": 3,
+      "deployment": {
+        "ATTACK": { "position": [3020, 9, -3648], "yaw": 0 },
+        "DEFEND": { "position": [-2284, 9, 2298], "yaw": 0 }
+      }
     }
   },
   "classes": {

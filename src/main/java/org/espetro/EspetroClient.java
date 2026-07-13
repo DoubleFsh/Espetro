@@ -56,11 +56,10 @@ public class EspetroClient {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc == null || mc.player == null) return;
 
-        // 客户端立即抑制耗尽后的按键，服务端仍会执行权威校验。
+        // 客户端立即抑制耗尽后的奔跑，服务端仍会执行权威校验。
         if (org.espetro.client.gui.StaminaOverlay.isExhausted()) {
             mc.player.setSprinting(false);
             mc.options.keySprint.setDown(false);
-            mc.options.keyJump.setDown(false);
         }
 
         // K键 - 请求游戏状态后打开对应界面（不直接打开，先请求服务端）
@@ -105,15 +104,7 @@ public class EspetroClient {
             return;
         }
 
-        if (!org.espetro.client.gui.StaminaOverlay.isExhausted()) {
-            org.espetro.network.NetworkManager.sendStaminaJump();
-            return;
-        }
-
-        net.minecraft.world.phys.Vec3 movement = mc.player.getDeltaMovement();
-        if (movement.y > 0) {
-            mc.player.setDeltaMovement(movement.x, 0, movement.z);
-        }
+        org.espetro.network.NetworkManager.sendStaminaJump();
     }
 
     /**

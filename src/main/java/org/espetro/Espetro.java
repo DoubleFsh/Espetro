@@ -8,7 +8,9 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -28,8 +30,10 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.espetro.command.EspetroCommand;
 import org.espetro.bastion.BastionManager;
+import org.espetro.kubejs.EspetroKubeJSDefaultScripts;
 import org.espetro.network.NetworkManager;
 import org.espetro.runtime.ServerRuntimeMaintenance;
+import org.espetro.script.CommanderScriptManager;
 import org.espetro.config.GameConfig;
 import org.espetro.stamina.StaminaManager;
 import org.espetro.team.TeamManager;
@@ -46,6 +50,7 @@ import org.espetro.team.VoteManager;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.vehicle.VehicleCommand;
 import org.espetro.vehicle.VehicleConfig;
+import org.espetro.vehicle.VehicleManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +75,8 @@ public class Espetro {
     public static Object KEY_SKILL;  // Y - 指挥官技能
 
     public Espetro() {
+        EspetroKubeJSDefaultScripts.ensureDefaultScripts();
+
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
             try {
@@ -115,7 +122,7 @@ public class Espetro {
         // 2. 热重载全局游戏配置
         GameConfig.reloadConfig(server);
 
-        // 3. 热重载复活点配置
+        // 3. 热重载复活点配置。指挥官技能由 KubeJS startup/server scripts 注册与实现。
         SpawnPointConfig.loadConfig(server);
 
         // 4. 热重载兵站配置
@@ -209,6 +216,7 @@ public class Espetro {
         @SubscribeEvent
         public static void commonSetup(FMLCommonSetupEvent event) {
             event.enqueueWork(() -> {
+                EspetroKubeJSDefaultScripts.ensureDefaultScripts();
                 NetworkManager.registerNetwork();
                 // 初始化职业人数管理器
                 new ClassCountManager();
@@ -226,6 +234,8 @@ public class Espetro {
                 org.espetro.team.OutpostManager.init();
                 // 初始化指挥官技能管理器
                 org.espetro.team.CommanderSkillManager.init();
+                // 初始化指挥官技能内部调度器
+                CommanderScriptManager.init();
             });
         }
 
@@ -233,6 +243,9 @@ public class Espetro {
 
     @Mod.EventBusSubscriber(modid = MOD_ID)
     public static class ServerCommandHandler {
+        private static final int FIXED_FOOD_LEVEL = 20;
+        private static final float FIXED_SATURATION_LEVEL = 20.0F;
+
         @SubscribeEvent
         public static void onRegisterCommands(RegisterCommandsEvent event) {
             EspetroCommand.register(event.getDispatcher());
@@ -353,7 +366,9 @@ public class Espetro {
         @SubscribeEvent
         public static void onServerStarting(ServerStartingEvent event) {
             serverInstance = event.getServer();
+            disableNaturalRegeneration(event.getServer());
             ServerRuntimeMaintenance.getInstance().reset();
+            CommanderScriptManager.getInstance().reset();
             // 初始化所有配置（首次加载）
             reloadAllConfigs();
             // 初始化职业人数记分板
@@ -371,6 +386,10 @@ public class Espetro {
             // 停服保存前清理已加载区块中的兵站实体，但不强制加载未加载区块。
             BastionManager.getInstance().reset();
             TeamPackManager.getInstance().reset();
+            int removedVehicles = VehicleManager.getInstance().removeAllDeployedVehicles(event.getServer());
+            if (removedVehicles > 0) {
+                LOGGER.info("停服时已删除 {} 辆已部署载具", removedVehicles);
+            }
         }
 
         @SubscribeEvent
@@ -378,7 +397,9 @@ public class Espetro {
             // 服务器已停止后只清理内存状态，避免在世界卸载阶段访问区块或实体。
             BastionManager.getInstance().clearRuntimeState();
             TeamPackManager.getInstance().clearRuntimeState();
+            VehicleManager.getInstance().clearRuntimeState();
             ServerRuntimeMaintenance.getInstance().reset();
+            CommanderScriptManager.getInstance().reset();
             StaminaManager.clear();
             serverInstance = null;
         }
@@ -393,6 +414,7 @@ public class Espetro {
         @SubscribeEvent
         public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
             if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer serverPlayer) {
+                maintainPlayerFood(serverPlayer);
                 StaminaManager.onPlayerTick(serverPlayer);
             }
         }
@@ -419,6 +441,30 @@ public class Espetro {
                 ClassEquipment.clearEquipment(player);
             }
             server.getPlayerList().saveAll();
+        }
+
+        private static void maintainPlayerFood(ServerPlayer player) {
+            disableNaturalRegeneration(player.getServer());
+
+            FoodData foodData = player.getFoodData();
+            if (foodData.getFoodLevel() != FIXED_FOOD_LEVEL) {
+                foodData.setFoodLevel(FIXED_FOOD_LEVEL);
+            }
+            if (foodData.getSaturationLevel() != FIXED_SATURATION_LEVEL) {
+                foodData.setSaturation(FIXED_SATURATION_LEVEL);
+            }
+            foodData.setExhaustion(0.0F);
+        }
+
+        private static void disableNaturalRegeneration(MinecraftServer server) {
+            if (server == null) return;
+
+            GameRules.BooleanValue naturalRegeneration = server.overworld()
+                    .getGameRules()
+                    .getRule(GameRules.RULE_NATURAL_REGENERATION);
+            if (naturalRegeneration.get()) {
+                naturalRegeneration.set(false, server);
+            }
         }
 
         /**
@@ -458,6 +504,7 @@ public class Espetro {
             if (event.phase == TickEvent.Phase.END) {
                 GameStateManager.getInstance().onServerTick();
                 ServerRuntimeMaintenance.getInstance().onServerTick();
+                CommanderScriptManager.getInstance().onServerTick();
                 org.espetro.team.CommanderSkillManager.getInstance().onServerTick();
             }
         }

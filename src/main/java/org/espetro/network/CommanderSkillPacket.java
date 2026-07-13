@@ -25,12 +25,12 @@ public class CommanderSkillPacket {
     }
 
     public static CommanderSkillPacket read(FriendlyByteBuf buf) {
-        String skillId = buf.readUtf();
+        String skillId = buf.readUtf(128);
         return new CommanderSkillPacket(skillId);
     }
 
     public void write(FriendlyByteBuf buf) {
-        buf.writeUtf(skillId);
+        buf.writeUtf(skillId.length() <= 128 ? skillId : skillId.substring(0, 128), 128);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -43,10 +43,7 @@ public class CommanderSkillPacket {
                 return;
             }
 
-            CommanderSkillType type = CommanderSkillType.fromId(skillId);
-            if (type == null) return;
-
-            CommanderSkillManager.getInstance().activateSkill(player, type);
+            CommanderSkillManager.getInstance().activateSkill(player, skillId);
         });
         ctx.get().setPacketHandled(true);
     }

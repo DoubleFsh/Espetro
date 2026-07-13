@@ -89,8 +89,13 @@ public class CommanderVoteScreen extends MutilScreen {
             EspetroMutilWidgets.TEXT));
 
         boolean votingOpen = timeRemaining > 0;
+        boolean waitingForOwnVote = isWaitingForOwnVote();
         int timeColor = timeRemaining <= 10 ? EspetroMutilWidgets.NEGATIVE : EspetroMutilWidgets.GOLD;
-        String timeText = votingOpen ? "剩余时间: " + timeRemaining + "秒" : "\u00a77本方指挥官投票已结束";
+        String timeText = votingOpen
+            ? "剩余时间: " + timeRemaining + "秒"
+            : waitingForOwnVote
+            ? "\u00a77本方指挥官投票尚未开始"
+            : "\u00a77本方指挥官投票已结束";
         root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
             timeText, votingOpen ? timeColor : EspetroMutilWidgets.MUTED));
 
@@ -165,7 +170,9 @@ public class CommanderVoteScreen extends MutilScreen {
                 EspetroMutilWidgets.DIM));
         }
 
-        String voteText = !votingOpen
+        String voteText = waitingForOwnVote
+            ? "\u00a78等待本方指挥官投票开始"
+            : !votingOpen
             ? "\u00a78等待对方完成指挥官投票"
             : currentVote == null
             ? "\u00a78尚未投票"
@@ -189,6 +196,11 @@ public class CommanderVoteScreen extends MutilScreen {
             NetworkManager.sendCastVote(playerName);
             rebuildMutilRoot();
         }
+    }
+
+    private boolean isWaitingForOwnVote() {
+        // 当前流程固定守方先投票、攻方后投票；攻方收到对方倒计时表示本方尚未开始。
+        return "ATTACK".equals(team) && timeRemaining <= 0 && opponentTimeRemaining > 0;
     }
 
     @Override

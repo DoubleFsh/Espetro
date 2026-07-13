@@ -17,7 +17,7 @@ license = "All Rights Reserved"
 # The modid of the mod
 modId = "espetro" #mandatory
 # The version number of the mod
-version = "1.0.3-final" #mandatory
+version = "1.0.6-final" #mandatory
 # A display name for the mod
 displayName = "Espetro" #mandatory
 # A URL to query for updates for this mod. See the JSON update specification https://docs.minecraftforge.net/en/latest/misc/updatechecker/
@@ -77,8 +77,29 @@ ordering = "NONE"
 side = "BOTH"# Here's another dependency
 
 [[dependencies."espetro"]]
+modId = "rhino"
+mandatory = true
+versionRange = "[2001.2.2-build.17,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."espetro"]]
+modId = "architectury"
+mandatory = true
+versionRange = "[9.1.12,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."espetro"]]
 modId = "espoints"
 mandatory = false
-versionRange = "[1.0.4-final,)"
+versionRange = "[1.0.6-final,)"
 ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."espetro"]]
+modId = "kubejs"
+mandatory = true
+versionRange = "[2001.6.5-build.26,)"
+ordering = "AFTER"
 side = "BOTH"

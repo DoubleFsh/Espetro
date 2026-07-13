@@ -13,21 +13,24 @@ public class StaminaSyncPacket {
     private final boolean enabled;
     private final int stamina;
     private final int maxStamina;
+    private final int jumpStaminaCost;
 
-    public StaminaSyncPacket(boolean enabled, int stamina, int maxStamina) {
+    public StaminaSyncPacket(boolean enabled, int stamina, int maxStamina, int jumpStaminaCost) {
         this.enabled = enabled;
         this.stamina = stamina;
         this.maxStamina = maxStamina;
+        this.jumpStaminaCost = jumpStaminaCost;
     }
 
     public static StaminaSyncPacket read(FriendlyByteBuf buf) {
-        return new StaminaSyncPacket(buf.readBoolean(), buf.readVarInt(), buf.readVarInt());
+        return new StaminaSyncPacket(buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeBoolean(enabled);
         buf.writeVarInt(stamina);
         buf.writeVarInt(maxStamina);
+        buf.writeVarInt(jumpStaminaCost);
     }
 
     public boolean isEnabled() {
@@ -40,6 +43,10 @@ public class StaminaSyncPacket {
 
     public int getMaxStamina() {
         return maxStamina;
+    }
+
+    public int getJumpStaminaCost() {
+        return jumpStaminaCost;
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {

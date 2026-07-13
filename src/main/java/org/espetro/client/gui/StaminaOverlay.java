@@ -18,7 +18,7 @@ public final class StaminaOverlay {
     private StaminaOverlay() {
     }
 
-    public static void update(boolean newEnabled, int newStamina, int newMaxStamina) {
+    public static void update(boolean newEnabled, int newStamina, int newMaxStamina, int newJumpStaminaCost) {
         enabled = newEnabled;
         maxStamina = Math.max(0, newMaxStamina);
         stamina = Math.max(0, Math.min(newStamina, maxStamina));

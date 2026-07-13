@@ -11,12 +11,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.*;
 import org.espetro.Espetro;
-import org.espetro.bastion.BastionManager;
 import org.espetro.team.ClassCountManager;
+import org.espetro.team.GamePhase;
+import org.espetro.team.GameStateManager;
+import org.espetro.team.TroopCountManager;
 
 import javax.annotation.Nullable;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 载具管理器
@@ -25,13 +26,17 @@ import java.util.concurrent.ThreadLocalRandom;
 public class VehicleManager {
 
     private static VehicleManager INSTANCE;
+    private static final String VEHICLE_TAG = "espetro_vehicle";
 
     // factionId -> (vehicleType -> List<UUID>) 追踪活跃载具
     private final Map<String, Map<String, List<UUID>>> activeVehicles = new HashMap<>();
     private final Set<UUID> activeVehicleIds = new HashSet<>();
+    private final Map<UUID, ActiveVehicleData> activeVehicleData = new HashMap<>();
 
     // factionId -> (vehicleType -> spawnTimeMillis) 刷新冷却
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
+
+    private record ActiveVehicleData(String factionId, String vehicleType, String team, boolean initial) {}
 
     private VehicleManager() {
         INSTANCE = this;
@@ -95,6 +100,11 @@ public class VehicleManager {
             return "§c你没有选择编制！";
         }
 
+        String team = Espetro.getPlayerTeam(commander);
+        if (team == null) {
+            return "§c无法确定你所在的攻守阵营！";
+        }
+
         // 检查编制是否配置了该载具
         VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
         if (cfg == null) {
@@ -114,14 +124,15 @@ public class VehicleManager {
             return "§c" + getDisplayName(factionId, vehicleType) + " 刷新冷却中！剩余 " + seconds + " 秒。";
         }
 
-        ServerLevel level = resolveDeployLevel(commander, cfg);
-        BlockPos spawnPos = resolveSpawnPosition(level, cfg, commander, null);
+        ServerLevel level = resolveDeployLevel(commander);
+        VehicleConfig.DeploymentPointConfig deployment = resolveDeploymentPoint(cfg, team);
+        BlockPos spawnPos = resolveSpawnPosition(deployment);
         if (spawnPos == null) {
-            return "§c无法解析载具部署位置，或部署点附近没有合适的位置！";
+            return "§c该载具未在编制 JSON 中配置当前阵营的 deployment." + team + ".position 坐标！";
         }
 
         // 创建载具实体
-        Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg);
+        Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg, deployment.yaw);
         if (vehicleEntity == null) {
             return "§c创建载具实体失败！";
         }
@@ -130,8 +141,7 @@ public class VehicleManager {
 
         // 记录
         UUID vehicleId = vehicleEntity.getUUID();
-        getList(factionId, vehicleType).add(vehicleId);
-        activeVehicleIds.add(vehicleId);
+        trackVehicle(vehicleId, factionId, vehicleType, team, false);
 
         // 设置冷却
         cooldowns.computeIfAbsent(factionId, k -> new HashMap<>()).put(vehicleType, System.currentTimeMillis());
@@ -140,8 +150,8 @@ public class VehicleManager {
             "§a已部署 " + getDisplayName(factionId, vehicleType) + " §a！(" + (current + 1) + "/" + cfg.max + ") §7位置: " +
             spawnPos.getX() + " " + spawnPos.getY() + " " + spawnPos.getZ()));
 
-        Espetro.LOGGER.info("指挥官 {} 部署载具: {} (编制: {}, 位置: {})",
-            commander.getName().getString(), vehicleType, factionId, spawnPos);
+        Espetro.LOGGER.info("指挥官 {} 部署载具: {} (队伍: {}, 编制: {}, 位置: {})",
+            commander.getName().getString(), vehicleType, team, factionId, spawnPos);
 
         return null;
     }
@@ -152,7 +162,7 @@ public class VehicleManager {
      *
      * @return 成功预部署的载具数量
      */
-    public int deployInitialVehicles(String factionId, ServerLevel level, BlockPos deployPointBase) {
+    public int deployInitialVehicles(String factionId, String team, ServerLevel level) {
         Map<String, VehicleConfig.VehicleTypeConfig> configs = VehicleConfig.getFactionVehicles(factionId);
         if (configs.isEmpty()) {
             return 0;
@@ -170,13 +180,14 @@ public class VehicleManager {
                 continue;
             }
 
-            BlockPos spawnPos = resolveSpawnPosition(level, cfg, null, deployPointBase);
+            VehicleConfig.DeploymentPointConfig deployment = resolveDeploymentPoint(cfg, team);
+            BlockPos spawnPos = resolveSpawnPosition(deployment);
             if (spawnPos == null) {
-                Espetro.LOGGER.warn("初始载具预部署失败: 无法解析 {} / {} 的部署位置", factionId, vehicleType);
+                Espetro.LOGGER.warn("初始载具预部署失败: {} / {} 未配置有效 deployment.{}.position 坐标", factionId, vehicleType, team);
                 continue;
             }
 
-            Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg);
+            Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg, deployment.yaw);
             if (vehicleEntity == null) {
                 Espetro.LOGGER.warn("初始载具预部署失败: 无法创建 {} / {} 的实体", factionId, vehicleType);
                 continue;
@@ -184,12 +195,11 @@ public class VehicleManager {
 
             level.addFreshEntity(vehicleEntity);
             UUID vehicleId = vehicleEntity.getUUID();
-            getList(factionId, vehicleType).add(vehicleId);
-            activeVehicleIds.add(vehicleId);
+            trackVehicle(vehicleId, factionId, vehicleType, team, true);
             deployed++;
 
-            Espetro.LOGGER.info("初始载具已预部署: {} / {} 位置: {} ({}/{})",
-                factionId, vehicleType, spawnPos, current + 1, cfg.max);
+            Espetro.LOGGER.info("初始载具已预部署: {} / {} 队伍: {} 位置: {} ({}/{})",
+                factionId, vehicleType, team, spawnPos, current + 1, cfg.max);
         }
 
         return deployed;
@@ -199,15 +209,78 @@ public class VehicleManager {
      * 移除已死亡的载具追踪
      */
     public void onVehicleDeath(UUID entityId) {
+        ActiveVehicleData data = removeTrackedVehicle(entityId);
+        if (data != null) {
+            applyVehicleTroopPenalty(data);
+        }
+    }
+
+    /**
+     * 移除未按死亡处理的载具追踪，例如卸载或重置。
+     */
+    public void onVehicleRemoved(UUID entityId) {
+        removeTrackedVehicle(entityId);
+    }
+
+    @Nullable
+    private ActiveVehicleData removeTrackedVehicle(UUID entityId) {
         activeVehicleIds.remove(entityId);
+        ActiveVehicleData data = activeVehicleData.remove(entityId);
+
+        if (data != null) {
+            List<UUID> vehicles = findList(data.factionId(), data.vehicleType());
+            if (vehicles != null) {
+                vehicles.remove(entityId);
+            }
+            Espetro.LOGGER.debug("载具 {} 已移除追踪", entityId);
+            return data;
+        }
+
         for (Map.Entry<String, Map<String, List<UUID>>> factionEntry : activeVehicles.entrySet()) {
             for (Map.Entry<String, List<UUID>> typeEntry : factionEntry.getValue().entrySet()) {
                 if (typeEntry.getValue().remove(entityId)) {
                     Espetro.LOGGER.debug("载具 {} 已移除追踪", entityId);
-                    return;
+                    return null;
                 }
             }
         }
+        return null;
+    }
+
+    private void trackVehicle(UUID vehicleId, String factionId, String vehicleType, String team, boolean initial) {
+        getList(factionId, vehicleType).add(vehicleId);
+        activeVehicleIds.add(vehicleId);
+        activeVehicleData.put(vehicleId, new ActiveVehicleData(factionId, vehicleType, team, initial));
+    }
+
+    private void applyVehicleTroopPenalty(ActiveVehicleData data) {
+        if (GameStateManager.getInstance().getCurrentPhase() != GamePhase.BATTLE) {
+            return;
+        }
+
+        if (data.initial()) {
+            Espetro.LOGGER.debug("初始载具 {} 被摧毁，跳过兵力惩罚（已在开战时扣除）", data.vehicleType());
+            return;
+        }
+
+        VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(data.factionId(), data.vehicleType());
+        int penalty = cfg != null ? Math.max(0, cfg.troopValue) : 0;
+        if (penalty <= 0) {
+            return;
+        }
+
+        TroopCountManager troopManager = TroopCountManager.getInstance();
+        String displayName = getDisplayName(data.factionId(), data.vehicleType());
+        if ("ATTACK".equals(data.team())) {
+            troopManager.modifyAttackTroops(-penalty);
+            Espetro.broadcastToAll("§c☠ 攻方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
+            Espetro.LOGGER.info("攻方载具 {} 被摧毁，扣除 {} 兵力，剩余: {}", displayName, penalty, troopManager.getAttackTroops());
+        } else if ("DEFEND".equals(data.team())) {
+            troopManager.modifyDefendTroops(-penalty);
+            Espetro.broadcastToAll("§9☠ 守方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
+            Espetro.LOGGER.info("守方载具 {} 被摧毁，扣除 {} 兵力，剩余: {}", displayName, penalty, troopManager.getDefendTroops());
+        }
+        troopManager.checkVictoryCondition();
     }
 
     /**
@@ -218,20 +291,79 @@ public class VehicleManager {
     }
 
     /**
-     * 重置所有载具
+     * 计算指定阵营所有初始载具的 troopValue 总和
      */
-    public void reset() {
-        MinecraftServer server = Espetro.getServer();
-        if (server != null) {
-            for (UUID id : new ArrayList<>(activeVehicleIds)) {
-                Entity entity = server.overworld().getEntity(id);
-                if (entity != null) {
-                    entity.discard();
+    public int getInitialTroopValueForTeam(String team) {
+        int total = 0;
+        for (ActiveVehicleData data : activeVehicleData.values()) {
+            if (data.initial() && team.equals(data.team())) {
+                VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(data.factionId(), data.vehicleType());
+                if (cfg != null) {
+                    total += cfg.troopValue;
                 }
             }
         }
+        return total;
+    }
+
+    /**
+     * 重置所有载具
+     */
+    public void reset() {
+        removeAllDeployedVehicles(Espetro.getServer());
+    }
+
+    /**
+     * 删除所有已加载的 Espetro 部署载具，并清空载具运行时状态。
+     *
+     * @return 实际删除的实体数量
+     */
+    public int removeAllDeployedVehicles(@Nullable MinecraftServer server) {
+        int removedCount = 0;
+        Set<UUID> removedIds = new HashSet<>();
+
+        if (server != null) {
+            for (ServerLevel level : server.getAllLevels()) {
+                List<Entity> entitiesToRemove = new ArrayList<>();
+                for (Entity entity : level.getAllEntities()) {
+                    if (isDeployedVehicleEntity(entity)) {
+                        entitiesToRemove.add(entity);
+                    }
+                }
+
+                for (Entity entity : entitiesToRemove) {
+                    if (!entity.isRemoved()) {
+                        entity.discard();
+                        removedIds.add(entity.getUUID());
+                        removedCount++;
+                    }
+                }
+            }
+
+            for (UUID id : new ArrayList<>(activeVehicleIds)) {
+                if (removedIds.contains(id)) {
+                    continue;
+                }
+
+                Entity entity = findEntity(server, id);
+                if (entity != null && !entity.isRemoved()) {
+                    entity.discard();
+                    removedCount++;
+                }
+            }
+        }
+
+        clearRuntimeState();
+        return removedCount;
+    }
+
+    /**
+     * 只清空内存状态，不访问世界实体。服务器完全停止后调用。
+     */
+    public void clearRuntimeState() {
         activeVehicles.clear();
         activeVehicleIds.clear();
+        activeVehicleData.clear();
         cooldowns.clear();
     }
 
@@ -245,14 +377,16 @@ public class VehicleManager {
         for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
             for (List<UUID> list : typeMap.values()) {
                 list.removeIf(id -> {
-                    Entity entity = server.overworld().getEntity(id);
+                    Entity entity = findEntity(server, id);
                     if (entity == null) {
                         activeVehicleIds.remove(id);
+                        activeVehicleData.remove(id);
                         return true;
                     }
                     boolean removed = entity.isRemoved();
                     if (removed) {
                         activeVehicleIds.remove(id);
+                        activeVehicleData.remove(id);
                     }
                     return removed;
                 });
@@ -281,88 +415,33 @@ public class VehicleManager {
 
     // ========== 辅助方法 ==========
 
-    private ServerLevel resolveDeployLevel(ServerPlayer commander, VehicleConfig.VehicleTypeConfig cfg) {
+    private ServerLevel resolveDeployLevel(ServerPlayer commander) {
         return commander.server.overworld();
     }
 
     @Nullable
-    private BlockPos resolveSpawnPosition(
-        ServerLevel level,
-        VehicleConfig.VehicleTypeConfig cfg,
-        @Nullable ServerPlayer commander,
-        @Nullable BlockPos deployPointBase
-    ) {
-        VehicleConfig.DeploymentConfig deployment = cfg.deployment;
-        BlockPos base = resolveBasePosition(commander, deployPointBase, deployment);
-        if (base == null) return null;
-
-        int[] offset = deployment.offset;
-        BlockPos center = base.offset(offset[0], offset[1], offset[2]);
-        return findSpawnPosition(level, center, deployment);
+    private VehicleConfig.DeploymentPointConfig resolveDeploymentPoint(VehicleConfig.VehicleTypeConfig cfg, String team) {
+        return cfg.deployment.forTeam(team);
     }
 
     @Nullable
-    private BlockPos resolveBasePosition(
-        @Nullable ServerPlayer commander,
-        @Nullable BlockPos deployPointBase,
-        VehicleConfig.DeploymentConfig deployment
-    ) {
-        if (deployment.fixed()) {
-            if (deployment.absolute == null || deployment.absolute.length < 3) return null;
-            return new BlockPos(deployment.absolute[0], deployment.absolute[1], deployment.absolute[2]);
-        }
-
-        if (deployPointBase != null) {
-            return deployPointBase;
-        }
-
-        if (commander == null) {
+    private BlockPos resolveSpawnPosition(@Nullable VehicleConfig.DeploymentPointConfig deployment) {
+        if (deployment == null) {
             return null;
         }
 
-        BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(commander.getUUID());
-        return deployPoint != null ? deployPoint.pos : null;
-    }
-
-    /**
-     * 按载具自己的部署配置寻找生成位置。
-     */
-    @Nullable
-    private BlockPos findSpawnPosition(ServerLevel level, BlockPos center, VehicleConfig.DeploymentConfig deployment) {
-        if (!deployment.snapToGround) {
-            return level.getBlockState(center).isAir() ? center : null;
+        int[] position = deployment.position;
+        if (position == null || position.length < 3) {
+            return null;
         }
-
-        int radius = Math.max(0, deployment.radius);
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-
-        // 尝试多次寻找合适位置；radius 为 0 时只检查中心点。
-        int attempts = Math.max(1, 12 + radius * 4);
-        for (int attempt = 0; attempt < attempts; attempt++) {
-            int dx = radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius;
-            int dz = radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius;
-            BlockPos pos = center.offset(dx, 0, dz);
-
-            for (int dy = deployment.verticalScan; dy >= -deployment.verticalScan; dy--) {
-                BlockPos checkPos = pos.offset(0, dy, 0);
-                if (level.getBlockState(checkPos).isAir() &&
-                    !level.getBlockState(checkPos.below()).isAir()) {
-                    return checkPos;
-                }
-            }
-        }
-
-        if (level.getBlockState(center).isAir()) {
-            return center;
-        }
-        return null;
+        return new BlockPos(position[0], position[1], position[2]);
     }
 
     /**
      * 创建载具实体（从配置读取 entity_type）
      */
     @Nullable
-    private Entity createVehicleEntity(ServerLevel level, String vehicleType, BlockPos pos, String factionId, VehicleConfig.VehicleTypeConfig config) {
+    private Entity createVehicleEntity(ServerLevel level, String vehicleType, BlockPos pos, String factionId, VehicleConfig.VehicleTypeConfig config, float yaw) {
         EntityType<?> entityTypeObj = config.getEntityType();
         if (entityTypeObj == null) {
             Espetro.LOGGER.warn("载具 {} 未配置 entity_type 或注册名无效", vehicleType);
@@ -382,12 +461,27 @@ public class VehicleManager {
         entity.setCustomNameVisible(false);
 
         entity.setPos(x, y, z);
-        entity.setYRot(config.deployment.yaw);
-        entity.setYHeadRot(config.deployment.yaw);
-        entity.addTag("espetro_vehicle");
+        entity.setYRot(yaw);
+        entity.setYHeadRot(yaw);
+        entity.addTag(VEHICLE_TAG);
         entity.addTag("espetro_" + vehicleType);
         entity.addTag("espetro_vehicle_type_" + vehicleType);
         return entity;
+    }
+
+    @Nullable
+    private Entity findEntity(MinecraftServer server, UUID id) {
+        for (ServerLevel level : server.getAllLevels()) {
+            Entity entity = level.getEntity(id);
+            if (entity != null) {
+                return entity;
+            }
+        }
+        return null;
+    }
+
+    private boolean isDeployedVehicleEntity(Entity entity) {
+        return entity.getTags().contains(VEHICLE_TAG) || activeVehicleIds.contains(entity.getUUID());
     }
 
     /**

@@ -368,37 +368,32 @@ public class FactionDataLoader {
         /** 单辆刷新冷却时间(分钟) */
         @SerializedName("respawn_minutes")
         public int respawnMinutes = 0;
-        /** 单类载具的部署位置配置。 */
+        /** 载具死亡/被摧毁时扣除的兵力值。 */
+        @SerializedName(value = "troop_value", alternate = {"troopValue"})
+        public int troopValue = 0;
+        /** 单类载具的固定部署坐标配置。 */
         public VehicleDeploymentData deployment;
-        /** deployment.offset 的旧式快捷写法。 */
-        public int[] offset;
-        /** deployment.radius 的旧式快捷写法。 */
-        public Integer radius;
-        /** deployment.absolute 的旧式快捷写法。 */
-        public int[] position;
-        /** deployment.yaw 的旧式快捷写法。 */
-        public Float yaw;
     }
 
     /**
-     * 单类载具部署位置配置。
+     * 单类载具部署位置配置。坐标必须由编制 JSON 直接指定。
      */
     public static class VehicleDeploymentData {
-        /** deploy_point: 以玩家当前部署点为基准；fixed: 使用 absolute 固定坐标。 */
-        public String mode;
+        /** 攻方选中该编制时使用的固定坐标。 */
+        @SerializedName(value = "ATTACK", alternate = {"attack"})
+        public VehicleDeploymentPointData attack;
+        /** 守方选中该编制时使用的固定坐标。 */
+        @SerializedName(value = "DEFEND", alternate = {"defend"})
+        public VehicleDeploymentPointData defend;
+    }
+
+    /**
+     * 单队伍载具部署坐标。
+     */
+    public static class VehicleDeploymentPointData {
         /** 固定坐标 [x, y, z]。 */
-        public int[] absolute;
-        /** 相对基准点偏移 [x, y, z]。 */
-        public int[] offset;
-        /** 在偏移后的基准点周围随机寻找落点半径。 */
-        public Integer radius;
+        public int[] position;
         /** 朝向角度。 */
         public Float yaw;
-        /** true 时尝试自动找地面，默认 true。 */
-        @SerializedName("snap_to_ground")
-        public Boolean snapToGround;
-        /** 寻找可用地面时向上/向下扫描格数。 */
-        @SerializedName("vertical_scan")
-        public Integer verticalScan;
     }
 }

@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="Gradle: local:espoints:1.0.6-final_mapped_official_1.20.1" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="local" artifactId="espoints" version="1.0.6-final_mapped_official_1.20.1" baseVersion="1.0.6-final_mapped_official_1.20.1" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/local/espoints/1.0.6-final_mapped_official_1.20.1/espoints-1.0.6-final_mapped_official_1.20.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

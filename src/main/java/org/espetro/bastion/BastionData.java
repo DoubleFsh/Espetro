@@ -131,11 +131,12 @@ public class BastionData {
      */
     public boolean checkArmorStand() {
         if (armorStandId == null) return false;
-        if (!isChunkLoaded()) return armorStandPosition != null;
+        if (!isChunkLoaded()) return false;
         Entity entity = level.getEntity(armorStandId);
         if (entity instanceof ArmorStand armorStand && armorStand.isAlive()) {
             BastionManager.getInstance().syncCoreArmorStand(armorStand);
             armorStandPosition = entity.blockPosition();
+            coreHealth = armorStand.getHealth();
             resetMissingEntityTicks();
             return true;
         }

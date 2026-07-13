@@ -32,7 +32,7 @@ world/datapacks/espetro_server_config/
 }
 ```
 
-执行 `/reload` 或 `/espetro reload` 后会重新加载阵营、游戏参数、复活点、兵站、队包、载具和前哨配置。JSON 必须是 UTF-8，不支持注释和尾随逗号。
+执行 `/reload` 或 `/espetro reload` 后会重新加载阵营、游戏参数、复活点、兵站、队包、载具和前哨配置。指挥官技能由 KubeJS 脚本注册和实现，按 KubeJS 自身的脚本加载规则生效。JSON 必须是 UTF-8，不支持注释和尾随逗号。
 
 ## 构建与模组元数据配置
 
@@ -41,10 +41,15 @@ world/datapacks/espetro_server_config/
 | `minecraft_version` | `1.20.1` | 目标游戏版本 |
 | `forge_version` | `47.4.20` | Forge 开发版本 |
 | `mod_id` | `espetro` | 模组 ID 与数据包命名空间 |
-| `mod_version` | `1.0.2-final` | 构建版本 |
+| `mod_version` | `1.0.6-final` | 构建版本 |
 | `mod_group_id` | `com.shuai` | Maven group |
+| `mutil_version` | `6.3.0` | MUtil 强制依赖版本 |
+| `rhino_version` | `2001.2.2-build.17` | Rhino 强制依赖版本，用于 KubeJS JavaScript |
+| `architectury_version` | `9.1.12` | Architectury API 强制依赖版本，满足 KubeJS Forge 1.20.1 要求 |
+| `espoints_version` | `1.0.6-final` | ESPoints 可选运行时依赖版本 |
+| `kubejs_version` | `2001.6.5-build.26` | KubeJS 强制运行依赖版本 |
 
-`META-INF/mods.toml` 声明 MUtil 6.3.0 为强制依赖，并将模组 ID 为 `espoints` 的 HCR AAD `>=1.0.4-final` 声明为可选依赖。未安装 HCR AAD 时部署界面使用占位地图；如需战术地图，客户端和服务器必须同时安装。版本升级时应同步修改 `hcr_aad_version`、本地开发依赖和元数据范围。
+`META-INF/mods.toml` 声明 MUtil 6.3.0、Rhino `2001.2.2-build.17`、Architectury API `>=9.1.12` 和 KubeJS `>=2001.6.5-build.26` 为强制依赖，并将模组 ID 为 `espoints` 的 ESPoints `>=1.0.6-final` 声明为可选依赖。未安装 ESPoints 时部署界面使用占位地图；如需战术地图或 `155火炮支援` 选点，客户端和服务器必须同时安装 ESPoints。版本升级时应同步修改 Gradle 属性、本地开发依赖和元数据范围。
 
 资源 JSON：
 
@@ -76,11 +81,6 @@ world/datapacks/espetro_server_config/
     "initial_attack": 280,
     "initial_defend": 1200,
     "commander_death_penalty": 2
-  },
-  "commander_skills": {
-    "drone_detection_range": 100.0,
-    "drone_detection_duration_seconds": 10,
-    "drone_detection_cooldown_seconds": 60
   },
   "stamina": {
     "player_stamina": 100,
@@ -116,13 +116,26 @@ world/datapacks/espetro_server_config/
 | `initial_defend` | 1200 | 防守方初始兵力 |
 | `commander_death_penalty` | 2 | 指挥官阵亡额外兵力惩罚 |
 
-### `commander_skills`
+`game.json` 不包含任何指挥官技能配置。技能列表、显示文本、触发方式、冷却、无人机范围、载具补给站布局和火炮参数都由 KubeJS 脚本负责。
 
-| 字段 | 默认 | 说明 |
-| --- | ---: | --- |
-| `drone_detection_range` | 100.0 | 无人机侦测半径 |
-| `drone_detection_duration_seconds` | 10 | 高亮持续时间 |
-| `drone_detection_cooldown_seconds` | 60 | 技能冷却 |
+## KubeJS 指挥官技能
+
+Espetro 首次启动时会在游戏目录写入默认脚本：
+
+```text
+kubejs/startup_scripts/00_espetro_drone_detection.js
+kubejs/startup_scripts/00_espetro_vehicle_supply_station.js
+kubejs/startup_scripts/00_espetro_artillery_155.js
+kubejs/server_scripts/00_espetro_drone_detection.js
+kubejs/server_scripts/00_espetro_vehicle_supply_station.js
+kubejs/server_scripts/00_espetro_artillery_155.js
+```
+
+`startup_scripts` 调用 `EspetroCommanderSkills.create(id).register()` 注册技能元数据；`server_scripts` 调用 `EspetroCommanderSkills.on(id, callback)` 实现实际效果。默认脚本按技能拆分，便于单独维护。默认 `155火炮支援` 打开 ESPoints 战术地图，选点后由 KubeJS 回调用纯 KubeJS tick 调度，并通过 `level.createEntity(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 从目标上空分两批发射实体。
+
+已有自定义脚本不会被覆盖。旧版 Espetro 默认合并脚本 `00_espetro_commander_skills.js` 如果仍带默认文件头，会在启动时改名为 `00_espetro_commander_skills.js.disabled` 保存，避免与拆分后的脚本重复加载。
+
+详见 [KubeJS 指挥官技能配置与开发文档](COMMANDER_SKILL_SCRIPTS.md)。
 
 ### `stamina`
 
@@ -242,13 +255,10 @@ world/datapacks/espetro_server_config/
       "display_name": "§6运输车",
       "max": 2,
       "respawn_minutes": 5,
+      "troop_value": 5,
       "deployment": {
-        "mode": "deploy_point",
-        "offset": [8, 0, 0],
-        "radius": 5,
-        "yaw": 90,
-        "snap_to_ground": true,
-        "vertical_scan": 6
+        "ATTACK": { "position": [3028, 9, -3640], "yaw": 90 },
+        "DEFEND": { "position": [-2276, 9, 2306], "yaw": 90 }
       }
     }
   },
@@ -325,15 +335,13 @@ world/datapacks/espetro_server_config/
 | `display_name` | vehicle ID | 显示名，可含 `§` 颜色码 |
 | `max` | 1 | 同类最大部署数量 |
 | `respawn_minutes` | 5 | 单辆刷新冷却 |
-| `deployment.mode` | `deploy_point` | `deploy_point`、`fixed` 或 `absolute` |
-| `deployment.absolute` | 空 | 固定坐标 `[x,y,z]` |
-| `deployment.offset` | `[0,0,0]` | 相对当前部署点偏移 |
-| `deployment.radius` | 6 | 周围落点搜索半径，至少 0 |
-| `deployment.yaw` | 0 | 朝向 |
-| `deployment.snap_to_ground` | `true` | 是否寻找地面 |
-| `deployment.vertical_scan` | 6 | 上下扫描距离，至少 1 |
+| `troop_value` | 0 | 载具死亡/被摧毁时扣除的所属队伍兵力 |
+| `deployment.ATTACK.position` | 必填 | 该编制被攻方选中时使用的固定坐标 `[x,y,z]` |
+| `deployment.ATTACK.yaw` | 0 | 攻方载具朝向 |
+| `deployment.DEFEND.position` | 必填 | 该编制被守方选中时使用的固定坐标 `[x,y,z]` |
+| `deployment.DEFEND.yaw` | 0 | 守方载具朝向 |
 
-旧式兼容字段 `position`、`offset`、`radius`、`yaw` 可直接写在车辆对象下；新配置应使用 `deployment`。
+载具部署点只支持在阵营 JSON 中按 `ATTACK`/`DEFEND` 直接指定坐标；同一个编制被哪一方选中，就使用对应队伍下的坐标。不会再按玩家部署点、偏移量、半径或自动落地逻辑推导位置。
 
 ## 内置编制
 

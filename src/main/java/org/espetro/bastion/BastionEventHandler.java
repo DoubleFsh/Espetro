@@ -12,26 +12,17 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
-import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -61,6 +52,17 @@ public class BastionEventHandler {
      */
     @SubscribeEvent
     public static void onPlayerDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof ArmorStand armorStand && isBastionCore(armorStand)) {
+            if (!armorStand.level().isClientSide) {
+                BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+                if (bastion != null && bastion.isActive()) {
+                    BastionManager.getInstance().onCoreArmorStandDestroyed(
+                        bastion, event.getSource().getEntity());
+                }
+            }
+            return;
+        }
+
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
@@ -113,15 +115,7 @@ public class BastionEventHandler {
 
         // 检查玩家是否在等待兵站选择
         if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
-            // 立即设置旁观模式
-            player.setGameMode(GameType.SPECTATOR);
-
-            // 施加失明效果
-            player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
-
-            // 锁定玩家位置（不可移动）
-            Vec3 lockPos = player.position();
-            BastionManager.getInstance().lockPlayerPosition(player.getUUID(), lockPos);
+            applyWaitingDeployState(player);
 
             // 延迟发送统一部署界面（等玩家完全重生）
             ServerPlayer finalPlayer = player;
@@ -196,7 +190,7 @@ public class BastionEventHandler {
         String playerTeam = Espetro.getPlayerTeam(player);
         boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
         if (isEnemy) {
-            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+            TeamPackManager.getInstance().damageTeamPack(teamPack, player, 1, true);
             return;
         }
 
@@ -221,12 +215,11 @@ public class BastionEventHandler {
             return;
         }
 
-        event.setCanceled(true);
-
         String playerTeam = Espetro.getPlayerTeam(player);
         boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
         if (isEnemy) {
-            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+            event.setCanceled(true);
+            TeamPackManager.getInstance().damageTeamPack(teamPack, player, 1, true);
         }
     }
 
@@ -246,8 +239,23 @@ public class BastionEventHandler {
         String playerTeam = Espetro.getPlayerTeam(player);
         boolean isEnemy = playerTeam != null && !playerTeam.equals(teamPack.team);
         if (isEnemy) {
-            TeamPackManager.getInstance().destroyTeamPack(teamPack, player, true, true);
+            TeamPackManager.getInstance().damageTeamPack(teamPack, player, 1, true);
         }
+    }
+
+    @SubscribeEvent
+    public static void onTeamPackBreakSpeed(PlayerEvent.BreakSpeed event) {
+        if (event.getEntity().level().isClientSide()) {
+            return;
+        }
+
+        BlockPos pos = event.getPosition().orElse(null);
+        if (pos == null || TeamPackManager.getInstance().findByPos(pos) == null) {
+            return;
+        }
+
+        float multiplier = TeamPackManager.getInstance().getBreakSpeedMultiplier();
+        event.setNewSpeed(event.getNewSpeed() * multiplier);
     }
 
     @SubscribeEvent
@@ -261,29 +269,6 @@ public class BastionEventHandler {
                 TeamPackManager.getInstance().destroyTeamPackByExplosion(teamPack);
             }
         }
-    }
-
-    @SubscribeEvent
-    public static void onBastionCorePlayerAttack(AttackEntityEvent event) {
-        if (!(event.getTarget() instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
-            return;
-        }
-
-        event.setCanceled(true);
-        if (armorStand.level().isClientSide || !(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-
-        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
-        if (bastion == null || !bastion.isActive()) {
-            return;
-        }
-
-        float damage = (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE);
-        float attackScale = player.getAttackStrengthScale(0.5F);
-        damage *= 0.2F + attackScale * attackScale * 0.8F;
-        BastionManager.getInstance().damageBastionCore(bastion, Math.max(1.0F, damage), player);
-        player.resetAttackStrengthTicker();
     }
 
     @SubscribeEvent
@@ -302,49 +287,6 @@ public class BastionEventHandler {
         }
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
-    }
-
-    @SubscribeEvent
-    public static void onBastionCoreProjectileImpact(ProjectileImpactEvent event) {
-        if (event.getRayTraceResult().getType() != HitResult.Type.ENTITY) {
-            return;
-        }
-
-        Entity target = ((EntityHitResult) event.getRayTraceResult()).getEntity();
-        if (!(target instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
-            return;
-        }
-
-        event.setImpactResult(ProjectileImpactEvent.ImpactResult.STOP_AT_CURRENT_NO_DAMAGE);
-        if (armorStand.level().isClientSide) {
-            return;
-        }
-
-        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
-        if (bastion == null || !bastion.isActive()) {
-            return;
-        }
-
-        Entity projectile = event.getProjectile();
-        float damage = estimateProjectileDamage(projectile);
-        BastionManager.getInstance().damageBastionCore(bastion, damage, event.getProjectile().getOwner());
-    }
-
-    /**
-     * 兜底处理火焰、爆炸等仍会进入 LivingHurtEvent 的伤害，防止原版盔甲架逻辑绕过核心血量。
-     */
-    @SubscribeEvent
-    public static void onBastionCoreHurt(LivingHurtEvent event) {
-        Entity entity = event.getEntity();
-        if (!(entity instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
-            return;
-        }
-
-        event.setCanceled(true);
-        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
-        if (bastion != null && bastion.isActive()) {
-            BastionManager.getInstance().damageBastionCore(bastion, event.getAmount(), event.getSource().getEntity());
-        }
     }
 
     /**
@@ -490,25 +432,6 @@ public class BastionEventHandler {
         return armorStand.getTags().contains("bastion_armor_stand");
     }
 
-    private static float estimateProjectileDamage(Entity projectile) {
-        if (projectile instanceof AbstractArrow arrow) {
-            double speed = arrow.getDeltaMovement().length();
-            int damage = net.minecraft.util.Mth.ceil(net.minecraft.util.Mth.clamp(
-                speed * arrow.getBaseDamage(),
-                0.0D,
-                (double) Integer.MAX_VALUE
-            ));
-            if (arrow.isCritArrow()) {
-                damage += Math.max(1, damage / 2);
-            }
-            return Math.max(1.0F, damage);
-        }
-        if (projectile instanceof ThrownTrident) {
-            return 8.0F;
-        }
-        return 4.0F;
-    }
-
     /**
      * 玩家重生时的状态复制
      * 等待状态由 onPlayerRespawn 处理，这里不做清除
@@ -527,12 +450,33 @@ public class BastionEventHandler {
         if (event.phase != TickEvent.Phase.END) return;
         if (!(event.player instanceof ServerPlayer player)) return;
 
-        Vec3 lockPos = BastionManager.getInstance().getPlayerLockPosition(player.getUUID());
+        if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+            return;
+        }
+
+        applyWaitingDeployState(player);
+    }
+
+    private static void applyWaitingDeployState(ServerPlayer player) {
+        if (!player.isSpectator()) {
+            player.setGameMode(GameType.SPECTATOR);
+        }
+
+        if (!player.hasEffect(MobEffects.BLINDNESS)) {
+            player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+        }
+
+        BastionManager manager = BastionManager.getInstance();
+        Vec3 lockPos = manager.getPlayerLockPosition(player.getUUID());
+        if (lockPos == null) {
+            lockPos = player.position();
+            manager.lockPlayerPosition(player.getUUID(), lockPos);
+        }
+
         if (lockPos != null) {
-            // 如果玩家移动了，将其传送回锁定位置
+            player.setDeltaMovement(0, 0, 0);
             if (player.distanceToSqr(lockPos) > 0.01) {
                 player.teleportTo(lockPos.x, lockPos.y, lockPos.z);
-                player.setDeltaMovement(0, 0, 0);
             }
         }
     }

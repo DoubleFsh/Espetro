@@ -72,32 +72,31 @@ public class ClassSelectScreen extends MutilScreen {
             EspetroMutilWidgets.TEXT));
 
         boolean selectingOpen = timeRemaining > 0;
-        String prompt = !selectingOpen
-            ? "\u00a77本方编制已确定，等待对方选择编制"
-            : "\u00a7e点击投票，可随时改票，票数实时同步";
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
-            prompt, EspetroMutilWidgets.MUTED));
-
+        boolean waitingForOwnSelection = isWaitingForOwnSelection();
         int timeColor = timeRemaining <= 5 ? EspetroMutilWidgets.NEGATIVE : EspetroMutilWidgets.GOLD;
-        String timeText = selectingOpen ? "剩余时间: " + timeRemaining + "秒" : "\u00a77本方选择已结束";
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 36, panelW,
+        String timeText = selectingOpen
+            ? "剩余时间: " + timeRemaining + "秒"
+            : waitingForOwnSelection
+            ? "\u00a77本方编制投票尚未开始"
+            : "\u00a77本方编制已确定，等待对方选择编制";
+        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
             timeText, selectingOpen ? timeColor : EspetroMutilWidgets.MUTED));
 
         // 对手编制信息 + 对手倒计时
         if (opponentTeamName != null && !opponentTeamName.isEmpty()) {
             String oppPrefix = "ATTACK".equals(team) ? "\u00a79" : "\u00a7c";
             if (opponentFaction != null && !opponentFaction.isEmpty()) {
-                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 50, panelW,
+                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 40, panelW,
                     oppPrefix + "\u00a7l" + opponentTeamName + " 编制: " + opponentFaction,
                     EspetroMutilWidgets.TEXT));
             } else {
-                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 50, panelW,
+                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 40, panelW,
                     "\u00a77" + opponentTeamName + " 编制尚未确定", EspetroMutilWidgets.MUTED));
             }
             // 对手倒计时
             if (opponentTimeRemaining >= 0) {
                 int oppTimeColor = opponentTimeRemaining <= 5 ? EspetroMutilWidgets.NEGATIVE : EspetroMutilWidgets.GOLD;
-                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 62, panelW,
+                root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 52, panelW,
                     opponentTeamName + "选择编制剩余: " + opponentTimeRemaining + "秒", oppTimeColor));
             }
         }
@@ -157,6 +156,11 @@ public class ClassSelectScreen extends MutilScreen {
         NetworkManager.sendClassSelect("", factionId);
         lastSelectedFaction = factionId;
         rebuildMutilRoot();
+    }
+
+    private boolean isWaitingForOwnSelection() {
+        // 当前流程固定守方先选编制、攻方后选编制；攻方收到对方倒计时表示本方尚未开始。
+        return "ATTACK".equals(team) && timeRemaining <= 0 && opponentTimeRemaining > 0;
     }
 
     public void updateFromPacket(ClassSelectScreenPacket packet) {

@@ -912,6 +912,10 @@ public class NetworkManager {
         NET.sendToServer(CommanderSkillPacket.activate(type));
     }
 
+    public static void sendCommanderSkillActivate(String skillId) {
+        NET.sendToServer(new CommanderSkillPacket(skillId));
+    }
+
     /**
      * 发送指挥官技能同步包给指定玩家（S→C）
      */
@@ -919,7 +923,8 @@ public class NetworkManager {
         boolean isCommander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
         java.util.Map<String, Integer> cooldowns =
             org.espetro.team.CommanderSkillManager.getInstance().getCooldownData(player.getUUID());
-        CommanderSkillSyncPacket packet = new CommanderSkillSyncPacket(isCommander, cooldowns);
+        CommanderSkillSyncPacket packet = new CommanderSkillSyncPacket(isCommander, cooldowns,
+            org.espetro.team.CommanderSkillManager.getInstance().getSkillViews());
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
 }

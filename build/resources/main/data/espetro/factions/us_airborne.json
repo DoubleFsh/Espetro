@@ -12,21 +12,33 @@
       "display_name": "§a空降轻型载具",
       "max": 1,
       "respawn_minutes": 4,
-      "deployment": { "mode": "deploy_point", "offset": [-7, 0, 0], "radius": 5, "yaw": 270 }
+      "troop_value": 4,
+      "deployment": {
+        "ATTACK": { "position": [3013, 9, -3640], "yaw": 270 },
+        "DEFEND": { "position": [-2291, 9, 2306], "yaw": 270 }
+      }
     },
     "airmobile_mount": {
       "entity_type": "minecraft:horse",
       "display_name": "§e空中机动载具",
       "max": 4,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [7, 0, 0], "radius": 5, "yaw": 90 }
+      "troop_value": 3,
+      "deployment": {
+        "ATTACK": { "position": [3027, 9, -3640], "yaw": 90 },
+        "DEFEND": { "position": [-2277, 9, 2306], "yaw": 90 }
+      }
     },
     "gunship": {
       "entity_type": "minecraft:ghast",
       "display_name": "§c武装直升机",
       "max": 3,
       "respawn_minutes": 8,
-      "deployment": { "mode": "deploy_point", "offset": [0, 10, 14], "radius": 8, "snap_to_ground": false, "yaw": 180 }
+      "troop_value": 12,
+      "deployment": {
+        "ATTACK": { "position": [3020, 19, -3626], "yaw": 180 },
+        "DEFEND": { "position": [-2284, 19, 2320], "yaw": 180 }
+      }
     }
   },
   "classes": {

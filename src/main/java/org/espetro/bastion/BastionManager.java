@@ -4,8 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -45,8 +43,14 @@ public class BastionManager {
     // 兵站记录表：部署传送只依赖记录坐标，不依赖区块当前是否加载。
     private final Map<UUID, BlockPos> bastionRecordPositions = new HashMap<>();
 
+    // 核心盔甲架 UUID -> 兵站 UUID，用于盔甲架按原版逻辑死亡后快速释放兵站记录。
+    private final Map<UUID, UUID> bastionIdsByArmorStand = new HashMap<>();
+
     // 正在等待复活选择的玩家
     private final Map<UUID, UUID> waitingPlayers = new HashMap<>(); // playerUUID -> bastionChoiceRequestId
+
+    // 由死亡进入的等待复活状态。部署期残留等待会在开战时自动结算，死亡等待不会。
+    private final Set<UUID> deathWaitingPlayers = new HashSet<>();
 
     // 玩家的原部署点位置
     private final Map<UUID, DeployPoint> playerDeployPoints = new HashMap<>(); // playerUUID -> DeployPoint
@@ -205,6 +209,7 @@ public class BastionManager {
         level.addFreshEntity(armorStand);
 
         bastion.setArmorStandId(armorStand.getUUID());
+        registerCoreEntity(bastion);
         updateBastionArmorStandPosition(bastion, armorStand.blockPosition());
         bastion.setActive(true);
 
@@ -242,8 +247,18 @@ public class BastionManager {
      */
     @Nullable
     public BastionData findBastionByArmorStand(UUID armorStandId) {
+        UUID bastionId = bastionIdsByArmorStand.get(armorStandId);
+        if (bastionId != null) {
+            BastionData bastion = bastions.get(bastionId);
+            if (bastion != null) {
+                return bastion;
+            }
+            bastionIdsByArmorStand.remove(armorStandId);
+        }
+
         for (BastionData bastion : bastions.values()) {
             if (bastion.getArmorStandId() != null && bastion.getArmorStandId().equals(armorStandId)) {
+                registerCoreEntity(bastion);
                 return bastion;
             }
         }
@@ -284,51 +299,20 @@ public class BastionManager {
     }
 
     /**
-     * 对兵站核心造成伤害。核心生命由模组维护，不依赖原版盔甲架破坏逻辑。
-     *
-     * @return true 表示该伤害已被兵站系统处理。
+     * 核心盔甲架按原版实体逻辑死亡后调用，释放该兵站坐标和编号。
      */
-    public boolean damageBastionCore(BastionData bastion, float amount, @Nullable Entity attacker) {
-        if (bastion == null || !bastion.isActive() || amount <= 0) {
-            return false;
-        }
-
-        float maxHealth = Math.max(1, armorStandHealth);
-        float currentHealth = bastion.getCoreHealth();
-        if (currentHealth <= 0 || currentHealth > maxHealth) {
-            currentHealth = maxHealth;
-        }
-
-        float remaining = currentHealth - amount;
-        bastion.setCoreHealth(Math.max(0, remaining));
-        bastion.resetMissingEntityTicks();
-
-        Entity coreEntity = bastion.getArmorStandId() == null ? null : bastion.getLevel().getEntity(bastion.getArmorStandId());
-        if (coreEntity instanceof ArmorStand armorStand && armorStand.isAlive()) {
-            syncCoreArmorStand(armorStand);
-            if (remaining <= 0) {
-                // 核心血量归零，直接杀死盔甲架实体
-                armorStand.kill();
-            } else {
-                float visualHealth = Math.max(1.0F, bastion.getCoreHealth());
-                armorStand.setHealth(Math.min(visualHealth, armorStand.getMaxHealth()));
-                updateBastionArmorStandPosition(bastion, armorStand.blockPosition());
-            }
-        }
-
-        Espetro.LOGGER.debug("兵站核心受击: {} 伤害={}, 剩余={}/{}",
-            bastion.getName(), amount, bastion.getCoreHealth(), maxHealth);
-
-        if (remaining <= 0) {
-            destroyBastion(bastion, attacker);
-        }
-        return true;
+    public void onCoreArmorStandDestroyed(BastionData bastion, @Nullable Entity attacker) {
+        destroyBastion(bastion, attacker, false);
     }
 
     /**
      * 统一摧毁兵站，负责释放编号、移除核心实体、广播和扣兵力。
      */
     public void destroyBastion(BastionData bastion, @Nullable Entity attacker) {
+        destroyBastion(bastion, attacker, true);
+    }
+
+    private void destroyBastion(BastionData bastion, @Nullable Entity attacker, boolean removeLoadedCoreEntity) {
         if (bastion == null || !bastion.isActive()) {
             return;
         }
@@ -336,7 +320,9 @@ public class BastionManager {
         String bastionName = bastion.getName();
         String bastionTeam = bastion.getTeam();
 
-        removeCoreEntityIfLoaded(bastion, true);
+        if (removeLoadedCoreEntity) {
+            removeCoreEntityIfLoaded(bastion, true);
+        }
 
         setBastionActive(bastion, false);
 
@@ -374,7 +360,7 @@ public class BastionManager {
         if (!waitingPlayers.containsKey(playerId)) {
             return false;
         }
-        waitingPlayers.remove(playerId);
+        clearWaiting(playerId);
 
         return true;
     }
@@ -384,6 +370,7 @@ public class BastionManager {
      */
     public void onPlayerDeath(ServerLevel level, UUID playerId) {
         waitingPlayers.put(playerId, UUID.randomUUID());
+        deathWaitingPlayers.add(playerId);
     }
 
     /**
@@ -393,11 +380,16 @@ public class BastionManager {
         return waitingPlayers.containsKey(playerId);
     }
 
+    public boolean isDeathWaiting(UUID playerId) {
+        return deathWaitingPlayers.contains(playerId);
+    }
+
     /**
      * 移除等待状态
      */
     public void clearWaiting(UUID playerId) {
         waitingPlayers.remove(playerId);
+        deathWaitingPlayers.remove(playerId);
         unlockPlayerPosition(playerId);
     }
 
@@ -432,10 +424,11 @@ public class BastionManager {
             BastionData bastion = iterator.next();
             if (!bastion.isActive()) {
                 iterator.remove();
+                unregisterCoreEntity(bastion);
             } else if (bastion.checkArmorStand()) {
                 updateBastionArmorStandPosition(bastion, bastion.getArmorStandPosition());
-            } else {
-                ensureCoreArmorStand(bastion);
+            } else if (bastion.isChunkLoaded()) {
+                onCoreArmorStandDestroyed(bastion, null);
             }
         }
     }
@@ -445,6 +438,7 @@ public class BastionManager {
      */
     public void activatePlayerBastionSelection(UUID playerId) {
         waitingPlayers.put(playerId, UUID.randomUUID());
+        deathWaitingPlayers.remove(playerId);
     }
 
     /**
@@ -469,8 +463,11 @@ public class BastionManager {
             releaseBastionRecord(bastion);
         }
         bastions.clear();
+        bastionIdsByArmorStand.clear();
         waitingPlayers.clear();
+        deathWaitingPlayers.clear();
         playerDeployPoints.clear();
+        playerLockPositions.clear();
         bastionCooldowns.clear();
         resupplyCooldowns.clear();
         clearBastionRecords();
@@ -496,11 +493,7 @@ public class BastionManager {
             return;
         }
 
-        if (kill) {
-            entity.kill();
-        } else {
-            entity.discard();
-        }
+        entity.discard();
     }
 
     /**
@@ -577,45 +570,8 @@ public class BastionManager {
             if (armorStandPos != null) {
                 updateBastionArmorStandPosition(bastion, armorStandPos);
             }
-        } else {
-            ensureCoreArmorStand(bastion);
         }
         return getRecordedArmorStandPosition(bastion) != null;
-    }
-
-    public boolean ensureCoreArmorStand(BastionData bastion) {
-        if (bastion == null || !bastion.isActive()) {
-            return false;
-        }
-
-        if (bastion.getArmorStandId() != null) {
-            Entity entity = bastion.getLevel().getEntity(bastion.getArmorStandId());
-            if (entity instanceof ArmorStand armorStand && armorStand.isAlive()) {
-                syncCoreArmorStand(armorStand);
-                updateBastionArmorStandPosition(bastion, armorStand.blockPosition());
-                return true;
-            }
-        }
-
-        BlockPos corePos = getRecordedArmorStandPosition(bastion);
-        if (corePos == null || !bastion.getLevel().hasChunkAt(corePos)) {
-            return false;
-        }
-
-        ArmorStand armorStand = createCoreArmorStand(bastion.getLevel(), corePos, bastion.getTeam(), bastion.getName());
-        if (armorStand == null) {
-            return false;
-        }
-
-        float visualHealth = Math.max(1.0F, Math.min(bastion.getCoreHealth(), armorStandHealth));
-        armorStand.setHealth(visualHealth);
-        bastion.getLevel().addFreshEntity(armorStand);
-        bastion.setArmorStandId(armorStand.getUUID());
-        updateBastionArmorStandPosition(bastion, armorStand.blockPosition());
-        bastion.resetMissingEntityTicks();
-
-        Espetro.LOGGER.info("兵站 {} 的核心盔甲架缺失，已在记录位置 {} 重建", bastion.getName(), corePos);
-        return true;
     }
 
     private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
@@ -685,14 +641,30 @@ public class BastionManager {
     }
 
     private void releaseBastionRecord(BastionData bastion) {
+        unregisterCoreEntity(bastion);
         bastionRecordPositions.remove(bastion.getBastionId());
         Espetro.LOGGER.debug("释放兵站记录: {}", bastion.getName());
         bastion.setBastionNumber(-1);
         bastion.clearArmorStandPosition();
+        bastion.setArmorStandId(null);
     }
 
     private void clearBastionRecords() {
         bastionRecordPositions.clear();
+    }
+
+    private void registerCoreEntity(BastionData bastion) {
+        UUID armorStandId = bastion.getArmorStandId();
+        if (armorStandId != null) {
+            bastionIdsByArmorStand.put(armorStandId, bastion.getBastionId());
+        }
+    }
+
+    private void unregisterCoreEntity(BastionData bastion) {
+        UUID armorStandId = bastion.getArmorStandId();
+        if (armorStandId != null) {
+            bastionIdsByArmorStand.remove(armorStandId);
+        }
     }
 
     private int findAvailableBastionNumber(BastionData bastion) {

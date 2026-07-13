@@ -48,6 +48,8 @@ public class TeamPackManager {
     private final Map<UUID, Long> inheritedLeaderCooldowns = new HashMap<>();
     private final Set<UUID> pendingItemSyncs = new HashSet<>();
     private int cooldownSeconds = 300;
+    private int durability = 1;
+    private float breakSpeedMultiplier = 8.0f;
 
     private TeamPackManager() {
         INSTANCE = this;
@@ -67,6 +69,8 @@ public class TeamPackManager {
 
     private void loadConfig() {
         cooldownSeconds = 300;
+        durability = 1;
+        breakSpeedMultiplier = 8.0f;
         try {
             MinecraftServer server = Espetro.getServer();
             if (server == null) {
@@ -95,9 +99,16 @@ public class TeamPackManager {
                 if (teamPack.has("cooldown_seconds")) {
                     cooldownSeconds = Math.max(0, teamPack.get("cooldown_seconds").getAsInt());
                 }
+                if (teamPack.has("durability")) {
+                    durability = Math.max(1, teamPack.get("durability").getAsInt());
+                }
+                if (teamPack.has("break_speed_multiplier")) {
+                    breakSpeedMultiplier = Math.max(1.0f, teamPack.get("break_speed_multiplier").getAsFloat());
+                }
             }
 
-            Espetro.LOGGER.info("队包配置已加载: 冷却{}秒", cooldownSeconds);
+            Espetro.LOGGER.info("队包配置已加载: 冷却{}秒, 耐久{}, 破坏速度倍率{}",
+                cooldownSeconds, durability, breakSpeedMultiplier);
         } catch (Exception e) {
             Espetro.LOGGER.error("加载队包配置失败: {}", e.getMessage());
         }
@@ -109,6 +120,14 @@ public class TeamPackManager {
 
     public int getCooldownSeconds() {
         return cooldownSeconds;
+    }
+
+    public int getDurability() {
+        return durability;
+    }
+
+    public float getBreakSpeedMultiplier() {
+        return breakSpeedMultiplier;
     }
 
     public void onServerTick() {
@@ -247,7 +266,7 @@ public class TeamPackManager {
             return "§c队包冷却中！请等待 " + cooldownRemaining + " 秒后再试。";
         }
 
-        TeamPackData teamPack = new TeamPackData(UUID.randomUUID(), team, squadId, pos, level);
+        TeamPackData teamPack = new TeamPackData(UUID.randomUUID(), team, squadId, pos, level, durability);
         teamPacks.put(teamPack.teamPackId, teamPack);
         squadTeamPacks.put(squadKey, teamPack.teamPackId);
         teamPackPositions.put(pos.immutable(), teamPack.teamPackId);
@@ -459,6 +478,22 @@ public class TeamPackManager {
         }
     }
 
+    public void damageTeamPack(TeamPackData teamPack, @Nullable ServerPlayer actor, int damage, boolean enemyAction) {
+        if (teamPack == null || !teamPack.active) {
+            return;
+        }
+
+        teamPack.health -= Math.max(1, damage);
+        if (teamPack.health <= 0) {
+            destroyTeamPack(teamPack, actor, true, enemyAction);
+            return;
+        }
+
+        if (actor != null) {
+            actor.sendSystemMessage(Component.literal("§e队包耐久: " + teamPack.health + "/" + teamPack.maxHealth));
+        }
+    }
+
     public void destroyTeamPackByExplosion(TeamPackData teamPack) {
         if (teamPack == null || !teamPack.active) {
             return;
@@ -585,14 +620,18 @@ public class TeamPackManager {
         public final int squadId;
         public final BlockPos pos;
         public final ServerLevel level;
+        public final int maxHealth;
+        public int health;
         public boolean active = true;
 
-        public TeamPackData(UUID teamPackId, String team, int squadId, BlockPos pos, ServerLevel level) {
+        public TeamPackData(UUID teamPackId, String team, int squadId, BlockPos pos, ServerLevel level, int maxHealth) {
             this.teamPackId = teamPackId;
             this.team = team;
             this.squadId = squadId;
             this.pos = pos.immutable();
             this.level = level;
+            this.maxHealth = Math.max(1, maxHealth);
+            this.health = this.maxHealth;
         }
 
         public BlockPos getSpawnPos() {

@@ -9,6 +9,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
+import org.espetro.team.CommanderSkillManager;
 
 /**
  * 载具事件处理器
@@ -27,6 +28,11 @@ public class VehicleEventHandler {
             VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
             Espetro.LOGGER.debug("载具 {} 已死亡，移除追踪", entity.getUUID());
         }
+
+        if (CommanderSkillManager.isVehicleSupplyStationEntity(entity)) {
+            CommanderSkillManager.getInstance().onVehicleSupplyStationDestroyed(entity);
+            Espetro.LOGGER.debug("载具补给站实体 {} 已死亡，清理补给站", entity.getUUID());
+        }
     }
 
     @SubscribeEvent
@@ -35,8 +41,19 @@ public class VehicleEventHandler {
 
         Entity entity = event.getEntity();
         if (entity.getTags().contains("espetro_vehicle")) {
-            VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
-            Espetro.LOGGER.debug("载具 {} 已离开世界，移除追踪", entity.getUUID());
+            if (entity.getRemovalReason() == Entity.RemovalReason.KILLED) {
+                VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
+                Espetro.LOGGER.debug("载具 {} 已被杀毁，移除追踪并处理兵力扣除", entity.getUUID());
+            } else {
+                VehicleManager.getInstance().onVehicleRemoved(entity.getUUID());
+                Espetro.LOGGER.debug("载具 {} 已离开世界，移除追踪", entity.getUUID());
+            }
+        }
+
+        if (CommanderSkillManager.isVehicleSupplyStationEntity(entity)
+            && entity.getRemovalReason() == Entity.RemovalReason.KILLED) {
+            CommanderSkillManager.getInstance().onVehicleSupplyStationDestroyed(entity);
+            Espetro.LOGGER.debug("载具补给站实体 {} 已被杀毁，清理补给站", entity.getUUID());
         }
     }
 

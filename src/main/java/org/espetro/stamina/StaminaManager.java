@@ -1,7 +1,6 @@
 package org.espetro.stamina;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
 import org.espetro.config.GameConfig;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.StaminaSyncPacket;
@@ -82,9 +81,6 @@ public final class StaminaManager {
         }
     }
 
-    /**
-     * LivingJumpEvent 不可取消，所以在体力耗尽时移除它刚施加的竖直速度。
-     */
     public static void onPlayerJump(ServerPlayer player) {
         if (!GameConfig.isStaminaEnabled()) return;
 
@@ -92,12 +88,6 @@ public final class StaminaManager {
         long currentTick = player.serverLevel().getGameTime();
         if (state.lastJumpTick == currentTick) return;
         state.lastJumpTick = currentTick;
-
-        if (state.stamina <= 0) {
-            stopJump(player);
-            sync(player, state);
-            return;
-        }
 
         int cost = GameConfig.getJumpStaminaCost();
         if (cost <= 0) return;
@@ -137,14 +127,6 @@ public final class StaminaManager {
         });
     }
 
-    private static void stopJump(ServerPlayer player) {
-        Vec3 movement = player.getDeltaMovement();
-        if (movement.y > 0) {
-            player.setDeltaMovement(movement.x, 0, movement.z);
-            player.hasImpulse = true;
-        }
-    }
-
     private static void scheduleRegeneration(ServerPlayer player, PlayerStamina state) {
         state.regenAtTick = player.serverLevel().getGameTime()
             + GameConfig.getStaminaRegenDelaySeconds() * (long) TICKS_PER_SECOND;
@@ -152,11 +134,12 @@ public final class StaminaManager {
 
     private static void sync(ServerPlayer player, PlayerStamina state) {
         NetworkManager.sendToPlayer(player,
-            new StaminaSyncPacket(true, state.stamina, GameConfig.getPlayerStamina()));
+            new StaminaSyncPacket(true, state.stamina, GameConfig.getPlayerStamina(),
+                GameConfig.getJumpStaminaCost()));
     }
 
     private static void syncDisabled(ServerPlayer player) {
-        NetworkManager.sendToPlayer(player, new StaminaSyncPacket(false, 0, 0));
+        NetworkManager.sendToPlayer(player, new StaminaSyncPacket(false, 0, 0, 0));
     }
 
     private static final class PlayerStamina {

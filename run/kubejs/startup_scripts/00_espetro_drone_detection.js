@@ -1,0 +1,9 @@
+// Espetro 默认指挥官技能注册脚本：无人机侦测。
+// 本文件由 Espetro 首次启动时写入；可按 KubeJS startup_scripts 规则修改。
+EspetroCommanderSkills.create('drone_detection')
+  .displayName('无人机侦测')
+  .description('短时间高亮指挥官附近敌方玩家')
+  .stats('§8高亮半径: 100格 | 持续: 10秒 | 冷却: 60秒')
+  .activate()
+  .cooldownSeconds(60)
+  .register()

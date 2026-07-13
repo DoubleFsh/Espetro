@@ -58,6 +58,8 @@ minecraft {
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
 
             mods {
                 "${mod_id}" {
@@ -103,6 +105,21 @@ repositories {
     flatDir {
         dirs '../ds/build/libs'
     }
+    maven {
+        name = 'LatvianMods'
+        url = 'https://maven.latvian.dev/releases'
+        content {
+            includeGroup 'dev.latvian.mods'
+            includeGroup 'dev.latvian.apps'
+        }
+    }
+    maven {
+        name = 'Architectury'
+        url = 'https://maven.architectury.dev/'
+        content {
+            includeGroup 'dev.architectury'
+        }
+    }
     repositories {
         maven {
             url "https://cursemaven.com"
@@ -117,11 +134,15 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     implementation fg.deobf("curse.maven:mutil-351914:7772906")
 
-    // HCR AAD depends on Espetro, so Espetro uses reflection at compile time and
-    // only adds the sibling project's latest jar to local development runs.
-    def localHcrAadJar = file("../ds/build/libs/espoints-${hcr_aad_version}.jar")
-    if (localHcrAadJar.exists()) {
-        runtimeOnly fg.deobf("local:espoints:${hcr_aad_version}")
+    implementation fg.deobf("dev.latvian.mods:rhino-forge:${rhino_version}")
+    implementation fg.deobf("dev.architectury:architectury-forge:${architectury_version}")
+    implementation fg.deobf("dev.latvian.mods:kubejs-forge:${kubejs_version}")
+
+    // ESPoints depends on Espetro, so Espetro integrates through reflection and
+    // only adds the sibling project's jar to local development runs.
+    def localEspointsJar = file("../ds/build/libs/espoints-${espoints_version}.jar")
+    if (localEspointsJar.exists()) {
+        runtimeOnly fg.deobf("local:espoints:${espoints_version}")
     }
 }
 
@@ -131,7 +152,8 @@ tasks.named('processResources', ProcessResources).configure {
                              loader_version_range: loader_version_range,
                              mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
                              mod_authors         : mod_authors, mod_description: mod_description,
-                             hcr_aad_version     : hcr_aad_version,]
+                             espoints_version    : espoints_version, rhino_version: rhino_version,
+                             architectury_version: architectury_version, kubejs_version: kubejs_version,]
 
     inputs.properties replaceProperties
 

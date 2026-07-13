@@ -1,6 +1,6 @@
 # Espetro
 
-Espetro 是 Minecraft Forge 1.20.1 的战术小队与侵攻流程模组，提供阵营、编制、职业、小队、指挥官、兵力、体力、兵站、队包、前哨和载具系统。
+Espetro 是 Minecraft Forge 1.20.1 的战术小队与侵攻流程模组，提供阵营、编制、职业、小队、指挥官、指挥官技能、兵力、体力、兵站、队包、前哨和载具系统。
 
 ## 核心流程
 
@@ -23,9 +23,14 @@ Espetro 是 Minecraft Forge 1.20.1 的战术小队与侵攻流程模组，提供
 | Minecraft | 1.20.1 |
 | Forge | 47.4.20 |
 | MUtil | 6.3.0 |
-| HCR AAD (`espoints`) | 1.0.4-final 或更高 |
+| Rhino (`rhino`) | 2001.2.2-build.17 |
+| Architectury API (`architectury`) | 9.1.12 或更高 |
+| ESPoints (`espoints`) | 1.0.6-final 或更高 |
+| KubeJS (`kubejs`) | Forge 1.20.1 使用 `2001.6.5-build.26`，强制依赖 |
 
-Espetro 和 MUtil 是基础运行依赖。HCR AAD 1.0.4-final 以 `espoints` 为模组 ID，并依赖 Espetro；未安装时 Espetro 仍可启动，但部署界面的战术地图会使用占位显示。生产环境如需战术地图，客户端和服务器都必须安装 HCR AAD。Esvoice 是可选的战术语音扩展，但 Esvoice 会依赖 Espetro。
+Espetro、MUtil、Rhino、Architectury API 和 KubeJS 是基础运行依赖。所有指挥官技能由 KubeJS 脚本注册和实现：`startup_scripts` 注册技能，`server_scripts` 执行技能效果。ESPoints 1.0.6-final 以 `espoints` 为模组 ID，并依赖 Espetro；Espetro 将 ESPoints 声明为软依赖。未安装时 Espetro 仍可启动，但部署界面的战术地图会使用占位显示，`155火炮支援` 无法打开选点地图。生产环境如需战术地图或火炮选点，客户端和服务器都必须安装 ESPoints。Esvoice 是可选的战术语音扩展，但 Esvoice 会依赖 Espetro。
+
+KubeJS 是强制依赖。加载时会自动暴露 `Espetro`、`EspetroAPI`、`EspetroCommanderSkills`、底层管理器、ESPoints 桥接类和 MUtil 类给 KubeJS。默认三项指挥官技能均通过 KubeJS 执行，并按技能拆分为独立脚本；`无人机侦测` 使用 `level.getPlayers()` 和 `target.getPotionEffects().add(...)` 高亮范围内敌方玩家，`载具补给站` 使用 `level.getBlock(...).set(...)` 与 `level.createEntity(...).spawn()` 部署，`155火炮支援` 的默认火力效果由 `kubejs/server_scripts/00_espetro_artillery_155.js` 以 KubeJS `ServerEvents.tick` 队列、`level.createEntity(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 实现。
 
 ## 默认按键
 
@@ -68,7 +73,9 @@ cd /home/shushu/IdeaProjects/Espetro
 ## 文档
 
 - [配置与 JSON 规范](docs/CONFIGURATION.md)
+- [指挥官技能脚本配置与开发](docs/COMMANDER_SKILL_SCRIPTS.md)
 - [开发与 API 文档](docs/DEVELOPMENT.md)
+- [KubeJS 联动开发文档](docs/KUBEJS_INTEGRATION.md)
 - [完整类参考](docs/CLASS_REFERENCE.md)
 
 ## 与 HCR AAD 源码的边界

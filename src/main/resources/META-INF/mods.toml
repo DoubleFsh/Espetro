@@ -77,8 +77,29 @@ ordering = "NONE"
 side = "BOTH"# Here's another dependency
 
 [[dependencies."${mod_id}"]]
+modId = "rhino"
+mandatory = true
+versionRange = "[${rhino_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "architectury"
+mandatory = true
+versionRange = "[${architectury_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
 modId = "espoints"
 mandatory = false
-versionRange = "[${hcr_aad_version},)"
+versionRange = "[${espoints_version},)"
 ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "kubejs"
+mandatory = true
+versionRange = "[${kubejs_version},)"
+ordering = "AFTER"
 side = "BOTH"

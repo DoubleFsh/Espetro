@@ -1,0 +1,224 @@
+// Espetro 默认指挥官技能实现脚本。
+// 本文件由 Espetro 首次启动时写入；所有技能效果均在 KubeJS server_scripts 中实现。
+const Skills = EspetroCommanderSkills
+const EspetroArtilleryTasks = []
+let EspetroArtilleryTick = 0
+
+ServerEvents.tick(event => {
+  EspetroArtilleryTick++
+  if (EspetroArtilleryTasks.length === 0) return
+
+  for (let i = EspetroArtilleryTasks.length - 1; i >= 0; i--) {
+    const task = EspetroArtilleryTasks[i]
+    if (task.tick <= EspetroArtilleryTick) {
+      event.server.runCommandSilent(task.command)
+      EspetroArtilleryTasks.splice(i, 1)
+    }
+  }
+})
+
+function scheduleArtilleryCommand(delayTicks, command) {
+  EspetroArtilleryTasks.push({
+    tick: EspetroArtilleryTick + Math.max(0, Math.floor(delayTicks)),
+    command: command
+  })
+}
+
+Skills.on('drone_detection', event => {
+  const range = 100.0
+  const durationSeconds = 10
+  const count = Skills.droneDetection(event, range, durationSeconds)
+  if (count < 0) return false
+  console.info('[Espetro] drone_detection highlighted enemies within ' + range + ' blocks: ' + count)
+  event.tell('§a无人机侦测已执行，范围内高亮敌方玩家: ' + count)
+  return true
+})
+
+Skills.on('vehicle_supply_station', event => {
+  const deployed = Skills.deployVehicleSupplyStation(event, {
+    entities: [
+      {
+        entity: 'minecraft:armor_stand',
+        customName: '载具补给站',
+        x: 0,
+        y: 0,
+        z: 0,
+        yaw: 0,
+        block: {
+          id: 'minecraft:barrel',
+          offset: [2, 0, 0]
+        }
+      }
+    ]
+  })
+  console.info('[Espetro] vehicle_supply_station deployed: ' + deployed)
+  return deployed
+})
+
+Skills.on('artillery_155', event => {
+  const fired = firePureKubeArtillery(event, {
+    entity: 'minecraft:tnt',
+    nbt: '{Fuse:260s}',
+    targetY: 0,
+    impactRadius: 90,
+    launchHeight: 10,
+    sourceDistance: 160,
+    sourceRange: 70,
+    velocity: 3.5,
+    firstBatchShots: 2,
+    firstBatchIntervalTicks: 20 * 20,
+    secondBatchDelayTicks: 2 * 20 * 20,
+    secondBatchWaves: 6,
+    secondBatchIntervalTicks: 4 * 20,
+    secondBatchEntitiesPerWave: 4,
+    approachYawDegrees: Math.random() * 360
+  })
+  console.info('[Espetro] artillery_155 queued by pure KubeJS: ' + fired)
+  return fired
+})
+
+function firePureKubeArtillery(event, config) {
+  if (!event.hasTarget()) {
+    event.tell('§c155火炮支援缺少战术地图目标坐标。')
+    return false
+  }
+
+  const cfg = normalizeArtilleryConfig(event, config)
+  if (!cfg.entity || cfg.entity.indexOf(':') < 1) {
+    event.tell('§c155火炮支援实体 ID 无效: ' + cfg.entity)
+    return false
+  }
+
+  for (let i = 0; i < cfg.firstBatchShots; i++) {
+    queueArtilleryWave(event, cfg, i * cfg.firstBatchIntervalTicks, 1)
+  }
+
+  for (let wave = 0; wave < cfg.secondBatchWaves; wave++) {
+    queueArtilleryWave(
+      event,
+      cfg,
+      cfg.secondBatchDelayTicks + wave * cfg.secondBatchIntervalTicks,
+      cfg.secondBatchEntitiesPerWave
+    )
+  }
+
+  return cfg.firstBatchShots + cfg.secondBatchWaves * cfg.secondBatchEntitiesPerWave > 0
+}
+
+function normalizeArtilleryConfig(event, config) {
+  const firstInterval = intConfig(config, 'firstBatchIntervalTicks', 20 * 20)
+  const firstShots = intConfig(config, 'firstBatchShots', 2)
+  return {
+    entity: stringConfig(config, 'entity', stringConfig(config, 'entityId', 'minecraft:tnt')),
+    nbt: stringConfig(config, 'nbt', ''),
+    dimension: event.getDimensionId(),
+    centerX: event.getX(),
+    centerZ: event.getZ(),
+    targetY: numberConfig(config, 'targetY', event.getY()),
+    impactRadius: Math.max(0, numberConfig(config, 'impactRadius', numberConfig(config, 'radius', 80))),
+    launchHeight: numberConfig(config, 'launchHeight', 600),
+    sourceDistance: Math.max(0, numberConfig(config, 'sourceDistance', 260)),
+    sourceRange: Math.max(0, numberConfig(config, 'sourceRange', numberConfig(config, 'sourceSpread', 90))),
+    velocity: Math.max(0, numberConfig(config, 'velocity', 3.2)),
+    inaccuracy: Math.max(0, numberConfig(config, 'inaccuracy', 0)),
+    approachYawDegrees: numberConfig(config, 'approachYawDegrees', Math.random() * 360),
+    firstBatchShots: Math.max(0, firstShots),
+    firstBatchIntervalTicks: Math.max(0, firstInterval),
+    secondBatchDelayTicks: Math.max(0, intConfig(config, 'secondBatchDelayTicks', firstShots * firstInterval)),
+    secondBatchWaves: Math.max(0, intConfig(config, 'secondBatchWaves', intConfig(config, 'secondBatchTimes', 6))),
+    secondBatchIntervalTicks: Math.max(0, intConfig(config, 'secondBatchIntervalTicks', 4 * 20)),
+    secondBatchEntitiesPerWave: Math.max(0, intConfig(config, 'secondBatchEntitiesPerWave', intConfig(config, 'secondBatchEntitiesPerShot', 4)))
+  }
+}
+
+function queueArtilleryWave(event, cfg, delayTicks, count) {
+  for (let i = 0; i < count; i++) {
+    const target = randomPointInCircle(cfg.centerX, cfg.centerZ, cfg.impactRadius)
+    const source = randomSourcePoint(target[0], target[1], cfg)
+    const targetX = target[0] + randomSigned(cfg.inaccuracy)
+    const targetZ = target[1] + randomSigned(cfg.inaccuracy)
+    const spawnY = cfg.targetY + cfg.launchHeight
+    const motion = motionToward(source[0], spawnY, source[1], targetX, cfg.targetY, targetZ, cfg.velocity)
+    const rotation = rotationFromMotion(motion)
+    const nbt = mergeLaunchNbt(cfg.nbt, motion, rotation)
+    const command = 'execute in ' + cfg.dimension + ' run summon ' + cfg.entity + ' '
+      + coord(source[0]) + ' ' + coord(spawnY) + ' ' + coord(source[1]) + ' ' + nbt
+    scheduleArtilleryCommand(delayTicks, command)
+  }
+}
+
+function randomPointInCircle(centerX, centerZ, radius) {
+  const angle = Math.random() * Math.PI * 2
+  const distance = Math.sqrt(Math.random()) * Math.max(0, radius)
+  return [
+    centerX + Math.cos(angle) * distance,
+    centerZ + Math.sin(angle) * distance
+  ]
+}
+
+function randomSourcePoint(targetX, targetZ, cfg) {
+  const radians = cfg.approachYawDegrees * Math.PI / 180
+  const directionX = Math.cos(radians)
+  const directionZ = Math.sin(radians)
+  const centerX = targetX - directionX * cfg.sourceDistance
+  const centerZ = targetZ - directionZ * cfg.sourceDistance
+  const offset = randomPointInCircle(0, 0, cfg.sourceRange)
+  return [centerX + offset[0], centerZ + offset[1]]
+}
+
+function motionToward(spawnX, spawnY, spawnZ, targetX, targetY, targetZ, velocity) {
+  const dx = targetX - spawnX
+  const dy = targetY - spawnY
+  const dz = targetZ - spawnZ
+  const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  if (length <= 0.000001 || velocity <= 0) return [0, 0, 0]
+  return [dx / length * velocity, dy / length * velocity, dz / length * velocity]
+}
+
+function rotationFromMotion(motion) {
+  const horizontal = Math.sqrt(motion[0] * motion[0] + motion[2] * motion[2])
+  const yaw = Math.atan2(motion[2], motion[0]) * 180 / Math.PI - 90
+  const pitch = -(Math.atan2(motion[1], horizontal) * 180 / Math.PI)
+  return [yaw, pitch]
+}
+
+function mergeLaunchNbt(baseNbt, motion, rotation) {
+  const extra = 'Motion:[' + snbtNumber(motion[0], 'd') + ',' + snbtNumber(motion[1], 'd') + ',' + snbtNumber(motion[2], 'd') + '],'
+    + 'Rotation:[' + snbtNumber(rotation[0], 'f') + ',' + snbtNumber(rotation[1], 'f') + ']'
+  const trimmed = (baseNbt || '').trim()
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    const body = trimmed.substring(1, trimmed.length - 1).trim()
+    return '{' + (body.length > 0 ? body + ',' : '') + extra + '}'
+  }
+  return '{' + extra + '}'
+}
+
+function stringConfig(config, key, fallback) {
+  const value = config && config[key]
+  return value === undefined || value === null ? fallback : String(value)
+}
+
+function numberConfig(config, key, fallback) {
+  const value = Number(config && config[key])
+  return Number.isFinite(value) ? value : fallback
+}
+
+function intConfig(config, key, fallback) {
+  return Math.round(numberConfig(config, key, fallback))
+}
+
+function randomSigned(value) {
+  return value <= 0 ? 0 : (Math.random() * 2 - 1) * value
+}
+
+function coord(value) {
+  return finiteNumber(value).toFixed(3)
+}
+
+function snbtNumber(value, suffix) {
+  return finiteNumber(value).toFixed(5) + suffix
+}
+
+function finiteNumber(value) {
+  return Number.isFinite(value) ? value : 0
+}

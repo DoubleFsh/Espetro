@@ -8,7 +8,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.food.FoodData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
@@ -36,8 +35,6 @@ public final class VanillaHudLayout {
     private static final int HEALTH_HEIGHT = 8;
     private static final int HEALTH_MIN_WIDTH = 96;
     private static final int HEALTH_MAX_WIDTH = 170;
-    private static final int HUNGER_GAP = 1;
-    private static final int HUNGER_HEIGHT = 3;
 
     private static boolean hotbarStateReady;
     private static int previousSelectedSlot = -1;
@@ -97,10 +94,16 @@ public final class VanillaHudLayout {
         }
 
         if (VanillaGuiOverlay.PLAYER_HEALTH.id().equals(overlayId)) {
-            if (renderStatusLines(event.getGuiGraphics(), mc,
-                    event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight())) {
+            if (shouldReplaceSurvivalBars(mc)) {
                 event.setCanceled(true);
+                renderHealthLine(event.getGuiGraphics(), mc,
+                        event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight());
             }
+            return;
+        }
+
+        if (VanillaGuiOverlay.ARMOR_LEVEL.id().equals(overlayId)) {
+            event.setCanceled(true);
             return;
         }
 
@@ -308,40 +311,34 @@ public final class VanillaHudLayout {
         graphics.blit(GUI_ICONS_LOCATION, x, y + 18 - filled, 18, 112 - filled, 18, filled);
     }
 
-    private static boolean renderStatusLines(GuiGraphics graphics, Minecraft mc, int screenWidth, int screenHeight) {
+    private static void renderHealthLine(GuiGraphics graphics, Minecraft mc, int screenWidth, int screenHeight) {
         if (!shouldReplaceSurvivalBars(mc) || !(mc.getCameraEntity() instanceof Player player)) {
-            return false;
+            return;
         }
 
         float maxHealth = Math.max(1.0F, player.getMaxHealth());
         float health = Mth.clamp(player.getHealth(), 0.0F, maxHealth);
-        FoodData foodData = player.getFoodData();
-        float hunger = Mth.clamp(foodData.getFoodLevel(), 0, 20) / 20.0F;
+        if (health >= maxHealth) {
+            return;
+        }
 
         int barWidth = Mth.clamp(screenWidth / 5, HEALTH_MIN_WIDTH, HEALTH_MAX_WIDTH);
         int x = HEALTH_LEFT;
         int healthY = screenHeight - HEALTH_BOTTOM - HEALTH_HEIGHT;
-        int hungerY = healthY + HEALTH_HEIGHT + HUNGER_GAP;
-        int healthFilled = Mth.ceil(barWidth * (health / maxHealth));
-        int hungerFilled = Mth.ceil(barWidth * hunger);
+        int healthFilled = Math.round(barWidth * (health / maxHealth));
+        if (health > 0.0F) {
+            healthFilled = Math.max(1, healthFilled);
+        }
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        graphics.fill(x - 1, healthY - 1, x + barWidth + 1, hungerY + HUNGER_HEIGHT + 1, 0xA0000000);
-        graphics.fill(x, healthY, x + barWidth, healthY + HEALTH_HEIGHT, 0x66000000);
         if (healthFilled > 0) {
             graphics.fill(x, healthY, x + healthFilled, healthY + HEALTH_HEIGHT, 0xFFE33434);
             graphics.fill(x, healthY, x + healthFilled, healthY + 2, 0xFFFF6B6B);
         }
 
-        graphics.fill(x, hungerY, x + barWidth, hungerY + HUNGER_HEIGHT, 0x663A2500);
-        if (hungerFilled > 0) {
-            graphics.fill(x, hungerY, x + hungerFilled, hungerY + HUNGER_HEIGHT, 0xFFFF9F1A);
-        }
-
         RenderSystem.disableBlend();
-        return true;
     }
 
     private static boolean shouldReplaceSurvivalBars(Minecraft mc) {

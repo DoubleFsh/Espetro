@@ -1,5 +1,7 @@
 {
   "team_pack": {
-    "cooldown_seconds": 300
+    "cooldown_seconds": 300,
+    "durability": 1,
+    "break_speed_multiplier": 8.0
   }
 }

@@ -254,14 +254,7 @@ public class GameStateManager {
             return 0;
         }
 
-        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
-        BlockPos deployBase = new BlockPos(
-            (int) Math.floor(spawn.x),
-            (int) Math.floor(spawn.y),
-            (int) Math.floor(spawn.z)
-        );
-
-        return VehicleManager.getInstance().deployInitialVehicles(factionId, level, deployBase);
+        return VehicleManager.getInstance().deployInitialVehicles(factionId, team, level);
     }
 
     /**
@@ -443,18 +436,45 @@ public class GameStateManager {
         if (server == null) return;
 
         // 移除准备阶段残留状态
+        BastionManager bastionManager = BastionManager.getInstance();
         for (UUID uuid : teamSelectedPlayers) {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
             if (player != null) {
-                if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
-                    BastionManager.getInstance().respawnAtDeployPoint(server.overworld(), player);
+                if (bastionManager.isWaitingForBastion(player.getUUID())) {
+                    if (bastionManager.isDeathWaiting(player.getUUID())) {
+                        player.setGameMode(GameType.SPECTATOR);
+                        player.addEffect(new MobEffectInstance(
+                            MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+                        if (bastionManager.getPlayerLockPosition(player.getUUID()) == null) {
+                            bastionManager.lockPlayerPosition(player.getUUID(), player.position());
+                        }
+                        NetworkManager.sendUnifiedDeployScreen(player, -1);
+                    } else {
+                        bastionManager.respawnAtDeployPoint(server.overworld(), player);
+                        player.removeEffect(MobEffects.BLINDNESS);
+                    }
+                } else {
+                    player.removeEffect(MobEffects.BLINDNESS);
                 }
-                player.removeEffect(MobEffects.BLINDNESS);
             }
         }
 
         // 初始化兵力统计
         TroopCountManager.getInstance().initializeTroops();
+
+        // 扣除初始载具的 troopValue（初始载具占用兵力预算）
+        VehicleManager vm = VehicleManager.getInstance();
+        int attackVehicleCost = vm.getInitialTroopValueForTeam("ATTACK");
+        int defendVehicleCost = vm.getInitialTroopValueForTeam("DEFEND");
+        if (attackVehicleCost > 0) {
+            TroopCountManager.getInstance().modifyAttackTroops(-attackVehicleCost);
+            Espetro.LOGGER.info("攻方初始载具占用 {} 兵力，剩余: {}", attackVehicleCost, TroopCountManager.getInstance().getAttackTroops());
+        }
+        if (defendVehicleCost > 0) {
+            TroopCountManager.getInstance().modifyDefendTroops(-defendVehicleCost);
+            Espetro.LOGGER.info("守方初始载具占用 {} 兵力，剩余: {}", defendVehicleCost, TroopCountManager.getInstance().getDefendTroops());
+        }
+
         org.espetro.network.NetworkManager.broadcastTroopCounts(
             TroopCountManager.getInstance().getAttackTroops(),
             TroopCountManager.getInstance().getDefendTroops()

@@ -17,11 +17,6 @@
     "initial_defend": 1200,
     "commander_death_penalty": 2
   },
-  "commander_skills": {
-    "drone_detection_range": 100.0,
-    "drone_detection_duration_seconds": 10,
-    "drone_detection_cooldown_seconds": 60
-  },
   "stamina": {
     "player_stamina": 100,
     "sprint_cost_per_second": 5,

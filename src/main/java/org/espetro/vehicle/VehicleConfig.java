@@ -19,9 +19,6 @@ public class VehicleConfig {
     // factionId -> (vehicleType -> VehicleTypeConfig)
     private static final Map<String, Map<String, VehicleTypeConfig>> VEHICLE_CONFIGS = new LinkedHashMap<>();
 
-    // 部署半径（全局常量）
-    public static final int SPAWN_RADIUS = 6;
-
     /**
      * 载具类型配置
      */
@@ -34,7 +31,8 @@ public class VehicleConfig {
         /** 显示名，含颜色代码，如 "§6运输卡车" */
         @Nullable
         public String displayName;
-        public DeploymentConfig deployment = DeploymentConfig.deployPointDefault();
+        public int troopValue;
+        public DeploymentConfig deployment = new DeploymentConfig();
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
             this.max = max;
@@ -60,22 +58,22 @@ public class VehicleConfig {
     }
 
     public static class DeploymentConfig {
-        public String mode = "deploy_point";
         @Nullable
-        public int[] absolute;
-        public int[] offset = new int[] {0, 0, 0};
-        public int radius = SPAWN_RADIUS;
+        public DeploymentPointConfig attack;
+        @Nullable
+        public DeploymentPointConfig defend;
+
+        @Nullable
+        public DeploymentPointConfig forTeam(@Nullable String team) {
+            if ("ATTACK".equalsIgnoreCase(team)) return attack;
+            if ("DEFEND".equalsIgnoreCase(team)) return defend;
+            return null;
+        }
+    }
+
+    public static class DeploymentPointConfig {
+        public int[] position;
         public float yaw = 0f;
-        public boolean snapToGround = true;
-        public int verticalScan = 6;
-
-        public static DeploymentConfig deployPointDefault() {
-            return new DeploymentConfig();
-        }
-
-        public boolean fixed() {
-            return "fixed".equalsIgnoreCase(mode) || "absolute".equalsIgnoreCase(mode);
-        }
     }
 
     /**
@@ -118,41 +116,44 @@ public class VehicleConfig {
         VehicleTypeConfig cfg = new VehicleTypeConfig(max, respawn);
         cfg.entityTypeStr = vd.entityTypeStr;
         cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
-        cfg.deployment = buildDeploymentConfig(vd);
+        cfg.troopValue = Math.max(0, vd.troopValue);
+        cfg.deployment = buildDeploymentConfig(vehicleType, vd);
         if (cfg.entityTypeStr == null || cfg.entityTypeStr.isBlank()) {
             Espetro.LOGGER.warn("载具 {} 未配置 entity_type；请在对应编制 JSON 的 vehicles 节中配置", vehicleType);
         }
         return cfg;
     }
 
-    private static DeploymentConfig buildDeploymentConfig(FactionDataLoader.VehicleData vd) {
-        DeploymentConfig cfg = DeploymentConfig.deployPointDefault();
+    private static DeploymentConfig buildDeploymentConfig(String vehicleType, FactionDataLoader.VehicleData vd) {
+        DeploymentConfig cfg = new DeploymentConfig();
 
         FactionDataLoader.VehicleDeploymentData raw = vd.deployment;
         if (raw != null) {
-            cfg.mode = firstNonBlank(raw.mode, cfg.mode);
-            cfg.absolute = validVector(raw.absolute) ? raw.absolute : cfg.absolute;
-            cfg.offset = validVector(raw.offset) ? raw.offset : cfg.offset;
-            if (raw.radius != null) cfg.radius = Math.max(0, raw.radius);
-            if (raw.yaw != null) cfg.yaw = raw.yaw;
-            if (raw.snapToGround != null) cfg.snapToGround = raw.snapToGround;
-            if (raw.verticalScan != null) cfg.verticalScan = Math.max(1, raw.verticalScan);
+            cfg.attack = buildDeploymentPoint(raw.attack);
+            cfg.defend = buildDeploymentPoint(raw.defend);
         }
 
-        if (validVector(vd.position)) {
-            cfg.mode = "fixed";
-            cfg.absolute = vd.position;
+        if (cfg.attack == null) {
+            Espetro.LOGGER.warn("载具 {} 未配置有效 deployment.ATTACK.position 坐标；必须在编制 JSON 中直接指定攻方坐标", vehicleType);
         }
-        if (validVector(vd.offset)) {
-            cfg.offset = vd.offset;
-        }
-        if (vd.radius != null) {
-            cfg.radius = Math.max(0, vd.radius);
-        }
-        if (vd.yaw != null) {
-            cfg.yaw = vd.yaw;
+        if (cfg.defend == null) {
+            Espetro.LOGGER.warn("载具 {} 未配置有效 deployment.DEFEND.position 坐标；必须在编制 JSON 中直接指定守方坐标", vehicleType);
         }
         return cfg;
+    }
+
+    @Nullable
+    private static DeploymentPointConfig buildDeploymentPoint(@Nullable FactionDataLoader.VehicleDeploymentPointData raw) {
+        if (raw == null || !validVector(raw.position)) {
+            return null;
+        }
+
+        DeploymentPointConfig point = new DeploymentPointConfig();
+        point.position = raw.position;
+        if (raw.yaw != null) {
+            point.yaw = raw.yaw;
+        }
+        return point;
     }
 
     private static boolean validVector(@Nullable int[] vector) {

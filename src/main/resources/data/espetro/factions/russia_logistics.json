@@ -12,21 +12,33 @@
       "display_name": "§e后勤运输车",
       "max": 2,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [9, 0, 0], "radius": 5, "yaw": 90 }
+      "troop_value": 5,
+      "deployment": {
+        "ATTACK": { "position": [3029, 9, -3640], "yaw": 90 },
+        "DEFEND": { "position": [-2275, 9, 2306], "yaw": 90 }
+      }
     },
     "escort_vehicle": {
       "entity_type": "minecraft:boat",
       "display_name": "§a护送轻型载具",
       "max": 2,
       "respawn_minutes": 4,
-      "deployment": { "mode": "deploy_point", "offset": [-7, 0, 0], "radius": 5, "yaw": 270 }
+      "troop_value": 4,
+      "deployment": {
+        "ATTACK": { "position": [3013, 9, -3640], "yaw": 270 },
+        "DEFEND": { "position": [-2291, 9, 2306], "yaw": 270 }
+      }
     },
     "crew_transport": {
       "entity_type": "minecraft:horse",
       "display_name": "§e乘员机动载具",
       "max": 3,
       "respawn_minutes": 5,
-      "deployment": { "mode": "deploy_point", "offset": [0, 0, -8], "radius": 4, "yaw": 0 }
+      "troop_value": 3,
+      "deployment": {
+        "ATTACK": { "position": [3020, 9, -3648], "yaw": 0 },
+        "DEFEND": { "position": [-2284, 9, 2298], "yaw": 0 }
+      }
     }
   },
   "classes": {

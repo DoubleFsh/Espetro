@@ -73,10 +73,15 @@ public class UnifiedDeployScreen extends Screen {
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
     private final List<EspButton> deployButtons = new ArrayList<>();
+    private final Map<EspButton, String> deployButtonPositions = new HashMap<>();
+    private final Map<EspButton, String> deployButtonCommands = new HashMap<>();
+    private final Map<EspButton, String> deployButtonBaseLabels = new HashMap<>();
     private EspButton outpostRedeployButton;
     private PlainText statusText;
     private PlainText deployTitleText;
     private PlainText statusTimerText;
+    private String pendingDeployPosition;
+    private String pendingDeployCommand;
 
     // ===== 滚轮列表 =====
     private ScrollableList classScrollList;
@@ -174,7 +179,7 @@ public class UnifiedDeployScreen extends Screen {
         @Override
         public void draw(GuiGraphics graphics, int x, int y, int w, int h, int mx, int my, float tick) {
             if (!isVisible()) return;
-            hovered = enabled && hasFocus();
+            hovered = hasFocus();
 
             int bx = x + getX(), by = y + getY(), bw = getWidth(), bh = getHeight();
 
@@ -366,6 +371,9 @@ public class UnifiedDeployScreen extends Screen {
         root.addChild(deployScrollList);
 
         deployButtons.clear();
+        deployButtonPositions.clear();
+        deployButtonCommands.clear();
+        deployButtonBaseLabels.clear();
         int btnW = areaW - SCROLLBAR_RESERVED_W - 4;
         int btnSpacing = 2;
         int row = 0;
@@ -373,14 +381,14 @@ public class UnifiedDeployScreen extends Screen {
         // 原部署点
         if (hasDeployPoint) {
             String deployLabel = "\u00a7e\u25c6 原部署点 \u00a77(" + deployPointPos + ")";
+            String deployCommand = "bastion deploy";
             EspButton btn = new EspButton(
                 2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                 deployLabel,
-                () -> selectDeploymentPoint(deployPointPos, "bastion deploy")
+                () -> selectDeploymentPoint(deployPointPos, deployCommand)
             );
             btn.setEnabled(waitingForDeploySelection);
-            deployScrollList.addChild(btn);
-            deployButtons.add(btn);
+            registerDeployButton(btn, deployPointPos, deployCommand, deployLabel);
             row++;
         }
 
@@ -389,27 +397,36 @@ public class UnifiedDeployScreen extends Screen {
             final var bid = b.id;
             if (b.isOutpost()) {
                 String deployCmd = "outpost deploy " + (b.getOutpostIndex() + 1);
+                String deployLabel = "\u00a7d\u25c6 " + b.name;
                 EspButton selectButton = new EspButton(
                     2, row * (BTN_H + btnSpacing), btnW, BTN_H,
-                    "\u00a7d\u25c6 " + b.name,
+                    deployLabel,
                     () -> selectDeploymentPoint(b.pos, deployCmd)
                 );
                 selectButton.setEnabled(waitingForDeploySelection);
-                deployScrollList.addChild(selectButton);
-                deployButtons.add(selectButton);
+                registerDeployButton(selectButton, b.pos, deployCmd, deployLabel);
             } else {
                 String cmd = "bastion select " + bid;
+                String deployLabel = "\u00a79\u25c6 " + b.name;
                 EspButton btn = new EspButton(
                     2, row * (BTN_H + btnSpacing), btnW, BTN_H,
-                    "\u00a79\u25c6 " + b.name,
+                    deployLabel,
                     () -> selectDeploymentPoint(b.pos, cmd)
                 );
                 btn.setEnabled(waitingForDeploySelection);
-                deployScrollList.addChild(btn);
-                deployButtons.add(btn);
+                registerDeployButton(btn, b.pos, cmd, deployLabel);
             }
             row++;
         }
+    }
+
+    private void registerDeployButton(EspButton button, String positionText, String command, String baseLabel) {
+        deployScrollList.addChild(button);
+        deployButtons.add(button);
+        deployButtonPositions.put(button, positionText);
+        deployButtonCommands.put(button, command);
+        deployButtonBaseLabels.put(button, baseLabel);
+        button.setLabel(buildDeployButtonLabel(baseLabel, positionText, command));
     }
 
     private int getRedeployCooldownRemaining() {
@@ -418,6 +435,18 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void selectDeploymentPoint(String positionText, String command) {
+        if (!waitingForDeploySelection) {
+            return;
+        }
+
+        if (!isPendingDeploySelection(positionText, command)) {
+            pendingDeployPosition = positionText;
+            pendingDeployCommand = command;
+            updateSelectedDeploymentPoint(positionText);
+            refreshDeployButtonLabels();
+            return;
+        }
+
         double[] coordinates = parseDeploymentCoordinates(positionText);
         if (coordinates != null) {
             HcrTacticalMapBridge.setSelectedDeploymentPoint(coordinates[0], coordinates[1]);
@@ -428,7 +457,30 @@ public class UnifiedDeployScreen extends Screen {
         var player = Minecraft.getInstance().player;
         if (player != null) {
             player.connection.sendCommand(command);
+            waitingForDeploySelection = false;
+            clearPendingDeploySelection();
+            refreshDeployButtonStates();
         }
+    }
+
+    private void updateSelectedDeploymentPoint(String positionText) {
+        double[] coordinates = parseDeploymentCoordinates(positionText);
+        if (coordinates != null) {
+            HcrTacticalMapBridge.setSelectedDeploymentPoint(coordinates[0], coordinates[1]);
+        } else {
+            HcrTacticalMapBridge.clearSelectedDeploymentPoint();
+        }
+    }
+
+    private boolean isPendingDeploySelection(String positionText, String command) {
+        return Objects.equals(pendingDeployPosition, positionText)
+            && Objects.equals(pendingDeployCommand, command);
+    }
+
+    private void clearPendingDeploySelection() {
+        pendingDeployPosition = null;
+        pendingDeployCommand = null;
+        HcrTacticalMapBridge.clearSelectedDeploymentPoint();
     }
 
     private static double[] parseDeploymentCoordinates(String positionText) {
@@ -466,7 +518,7 @@ public class UnifiedDeployScreen extends Screen {
 
     @Override
     public void removed() {
-        HcrTacticalMapBridge.clearSelectedDeploymentPoint();
+        clearPendingDeploySelection();
         super.removed();
     }
 
@@ -539,14 +591,45 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void refreshDeployButtonStates() {
+        if (!waitingForDeploySelection) {
+            clearPendingDeploySelection();
+        }
         for (EspButton button : deployButtons) {
             button.setEnabled(waitingForDeploySelection);
         }
+        refreshDeployButtonLabels();
         if (outpostRedeployButton != null) {
             outpostRedeployButton.setLabel(buildRedeployLabel());
             outpostRedeployButton.setEnabled(
                 !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
         }
+    }
+
+    private void refreshDeployButtonLabels() {
+        for (EspButton button : deployButtons) {
+            String baseLabel = deployButtonBaseLabels.get(button);
+            if (baseLabel == null) {
+                continue;
+            }
+            button.setLabel(buildDeployButtonLabel(
+                baseLabel,
+                deployButtonPositions.get(button),
+                deployButtonCommands.get(button)
+            ));
+        }
+    }
+
+    private String buildDeployButtonLabel(String baseLabel, String positionText, String command) {
+        if (!isPendingDeploySelection(positionText, command)) {
+            return baseLabel;
+        }
+
+        String suffix = " \u00a7f（确认？）";
+        int coordinateStart = baseLabel.indexOf(" \u00a77(");
+        if (coordinateStart >= 0) {
+            return baseLabel.substring(0, coordinateStart) + suffix + baseLabel.substring(coordinateStart);
+        }
+        return baseLabel + suffix;
     }
 
     // ==================== 渲染 ====================
@@ -694,7 +777,7 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     @Override
-    public boolean shouldCloseOnEsc() { return true; }
+    public boolean shouldCloseOnEsc() { return !waitingForDeploySelection; }
 
     @Override
     public boolean isPauseScreen() { return false; }
