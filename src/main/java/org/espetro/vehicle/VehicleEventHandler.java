@@ -9,7 +9,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
-import org.espetro.team.CommanderSkillManager;
 
 /**
  * 载具事件处理器
@@ -29,10 +28,6 @@ public class VehicleEventHandler {
             Espetro.LOGGER.debug("载具 {} 已死亡，移除追踪", entity.getUUID());
         }
 
-        if (CommanderSkillManager.isVehicleSupplyStationEntity(entity)) {
-            CommanderSkillManager.getInstance().onVehicleSupplyStationDestroyed(entity);
-            Espetro.LOGGER.debug("载具补给站实体 {} 已死亡，清理补给站", entity.getUUID());
-        }
     }
 
     @SubscribeEvent
@@ -50,11 +45,6 @@ public class VehicleEventHandler {
             }
         }
 
-        if (CommanderSkillManager.isVehicleSupplyStationEntity(entity)
-            && entity.getRemovalReason() == Entity.RemovalReason.KILLED) {
-            CommanderSkillManager.getInstance().onVehicleSupplyStationDestroyed(entity);
-            Espetro.LOGGER.debug("载具补给站实体 {} 已被杀毁，清理补给站", entity.getUUID());
-        }
     }
 
     /**

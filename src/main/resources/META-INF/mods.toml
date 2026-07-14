@@ -85,7 +85,7 @@ side = "BOTH"
 
 [[dependencies."${mod_id}"]]
 modId = "architectury"
-mandatory = true
+mandatory = false
 versionRange = "[${architectury_version},)"
 ordering = "AFTER"
 side = "BOTH"
@@ -99,7 +99,7 @@ side = "BOTH"
 
 [[dependencies."${mod_id}"]]
 modId = "kubejs"
-mandatory = true
+mandatory = false
 versionRange = "[${kubejs_version},)"
 ordering = "AFTER"
 side = "BOTH"

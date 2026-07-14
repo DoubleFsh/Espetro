@@ -1,25 +1,12 @@
 package org.espetro.team;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.fml.ModList;
 import org.espetro.Espetro;
@@ -38,12 +25,6 @@ import java.util.UUID;
 public class CommanderSkillManager {
 
     private static CommanderSkillManager INSTANCE;
-    private static final String SUPPLY_STATION_TAG = "espetro_vehicle_supply_station";
-    private static final String SUPPLY_STATION_ID_DATA = "espetro_vehicle_supply_station_id";
-    private static final String SUPPLY_STATION_BLOCK_ID_DATA = "espetro_vehicle_supply_station_block_id";
-    private static final String SUPPLY_STATION_BLOCK_X_DATA = "espetro_vehicle_supply_station_block_x";
-    private static final String SUPPLY_STATION_BLOCK_Y_DATA = "espetro_vehicle_supply_station_block_y";
-    private static final String SUPPLY_STATION_BLOCK_Z_DATA = "espetro_vehicle_supply_station_block_z";
     private static final String ESPOINTS_ARTILLERY_PACKET_CLASS_NAME =
         "com.example.espoints.network.OpenArtillerySupportMapMessage";
     private static final int MAX_ARTILLERY_REQUEST_HISTORY = 128;
@@ -55,8 +36,61 @@ public class CommanderSkillManager {
     public record SkillView(String id, String displayName, String description, String stats) {
     }
 
+    public record SkillStatus(String id,
+                              String displayName,
+                              boolean registered,
+                              boolean commander,
+                              boolean phaseAllowed,
+                              boolean onCooldown,
+                              int cooldownSeconds,
+                              boolean targetMap,
+                              boolean canUse,
+                              String phase) {
+        public String getId() {
+            return id;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public boolean isRegistered() {
+            return registered;
+        }
+
+        public boolean isCommander() {
+            return commander;
+        }
+
+        public boolean isPhaseAllowed() {
+            return phaseAllowed;
+        }
+
+        public boolean isOnCooldown() {
+            return onCooldown;
+        }
+
+        public int getCooldownSeconds() {
+            return cooldownSeconds;
+        }
+
+        public boolean isTargetMap() {
+            return targetMap;
+        }
+
+        public boolean canUse() {
+            return canUse;
+        }
+
+        public String getPhase() {
+            return phase;
+        }
+    }
+
     public record ArtillerySupportRequest(UUID commanderId,
                                           String commanderName,
+                                          String skillId,
+                                          String skillName,
                                           String team,
                                           ResourceKey<Level> dimension,
                                           double x,
@@ -71,6 +105,14 @@ public class CommanderSkillManager {
 
         public String getCommanderName() {
             return commanderName;
+        }
+
+        public String getSkillId() {
+            return skillId;
+        }
+
+        public String getSkillName() {
+            return skillName;
         }
 
         public String getTeam() {
@@ -125,21 +167,6 @@ public class CommanderSkillManager {
             MinecraftServer server = Espetro.getServer();
             return server == null ? null : server.getPlayerList().getPlayer(commanderId);
         }
-    }
-
-    private record PlannedSupplyStationBlock(BlockPos pos, BlockState state, String blockId) {
-    }
-
-    public record VehicleSupplyStationPlacement(String entityType,
-                                                String customName,
-                                                int x,
-                                                int y,
-                                                int z,
-                                                float yaw,
-                                                VehicleSupplyStationBlockPlacement block) {
-    }
-
-    public record VehicleSupplyStationBlockPlacement(String blockId, int x, int y, int z) {
     }
 
     private CommanderSkillManager() {
@@ -222,7 +249,6 @@ public class CommanderSkillManager {
             packetClass.getMethod("sendTo", ServerPlayer.class).invoke(null, commander);
             pendingTargetSkillIds.put(commander.getUUID(),
                 skillId == null || skillId.isBlank() ? EspetroCommanderSkills.DEFAULT_ARTILLERY_SKILL_ID : skillId);
-            Espetro.sendToPlayer(commander, "\u00a7a正在打开战术地图选点界面，右键选择目标点。");
             return true;
         } catch (ReflectiveOperationException e) {
             Espetro.LOGGER.warn("无法通过 ESPoints 打开指挥官技能战术地图", e);
@@ -272,6 +298,8 @@ public class CommanderSkillManager {
         ArtillerySupportRequest request = new ArtillerySupportRequest(
             commander.getUUID(),
             commander.getName().getString(),
+            definition != null ? definition.id() : skillId,
+            skillName,
             commanderTeam,
             level.dimension(),
             x,
@@ -339,126 +367,6 @@ public class CommanderSkillManager {
         }
     }
 
-    public int runDroneDetection(ServerPlayer commander, double range, int durationSeconds) {
-        MinecraftServer server = commander.getServer();
-        if (server == null) return -1;
-
-        String commanderTeam = normalizeTeam(Espetro.getPlayerTeam(commander));
-        if (commanderTeam == null) {
-            Espetro.sendToPlayer(commander, "\u00a7c你不属于任何阵营，无法发动无人机侦测！");
-            return -1;
-        }
-
-        int durationTicks = durationSeconds * 20;
-
-        int detectedCount = 0;
-        for (ServerPlayer target : server.getPlayerList().getPlayers()) {
-            if (target == commander) continue;
-            if (target.level() != commander.level()) continue;
-
-            String targetTeam = normalizeTeam(Espetro.getPlayerTeam(target));
-            if (!commanderTeam.equals(targetTeam)) {
-                if (commander.distanceTo(target) <= range) {
-                    target.addEffect(new MobEffectInstance(MobEffects.GLOWING, durationTicks, 0, false, false, true));
-                    detectedCount++;
-                }
-            }
-        }
-
-        Espetro.LOGGER.info("指挥官 {} 发动无人机侦测，检测到 {} 名敌方玩家",
-            commander.getName().getString(), detectedCount);
-        return detectedCount;
-    }
-
-    public boolean deployVehicleSupplyStation(ServerPlayer commander, List<VehicleSupplyStationPlacement> placements) {
-        ServerLevel level = commander.serverLevel();
-        BlockPos basePos = commander.blockPosition();
-        String commanderTeam = normalizeTeam(Espetro.getPlayerTeam(commander));
-        if (commanderTeam == null || commanderTeam.isBlank()) {
-            Espetro.sendToPlayer(commander, "\u00a7c你不属于任何阵营，无法部署载具补给站！");
-            return false;
-        }
-
-        List<Entity> plannedEntities = new ArrayList<>();
-        List<PlannedSupplyStationBlock> plannedBlocks = new ArrayList<>();
-        List<BlockPos> plannedBlockPositions = new ArrayList<>();
-        UUID stationId = UUID.randomUUID();
-        if (placements == null || placements.isEmpty()) {
-            Espetro.sendToPlayer(commander, "\u00a7c载具补给站脚本没有提供可生成实体！");
-            return false;
-        }
-
-        for (VehicleSupplyStationPlacement placement : placements) {
-            BlockPos pos = basePos.offset(placement.x(), placement.y(), placement.z());
-            if (!level.isInWorldBounds(pos)) {
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站位置超出世界边界！");
-                return false;
-            }
-
-            PlannedSupplyStationBlock plannedBlock = planSupplyStationBlock(placement, pos);
-            if (plannedBlock == null) {
-                String blockId = placement.block() != null ? placement.block().blockId() : "<missing>";
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站配置包含无效方块: " + blockId);
-                return false;
-            }
-            if (!level.isInWorldBounds(plannedBlock.pos())) {
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站方块位置超出世界边界！");
-                return false;
-            }
-            if (plannedBlockPositions.contains(plannedBlock.pos())) {
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站方块位置重复: " + plannedBlock.pos().toShortString());
-                return false;
-            }
-            if (!level.isEmptyBlock(plannedBlock.pos())) {
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站方块位置已有方块: " + plannedBlock.pos().toShortString());
-                return false;
-            }
-
-            Entity entity = createSupplyStationEntity(level, placement, pos, commanderTeam, stationId, basePos, plannedBlock);
-            if (entity == null) {
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站配置包含无效实体: " + placement.entityType());
-                return false;
-            }
-
-            plannedEntities.add(entity);
-            plannedBlocks.add(plannedBlock);
-            plannedBlockPositions.add(plannedBlock.pos());
-        }
-
-        if (plannedEntities.isEmpty()) {
-            Espetro.sendToPlayer(commander, "\u00a7c载具补给站没有可生成实体！");
-            return false;
-        }
-
-        List<BlockPos> placedBlocks = new ArrayList<>();
-        for (PlannedSupplyStationBlock plannedBlock : plannedBlocks) {
-            if (!level.setBlock(plannedBlock.pos(), plannedBlock.state(), 3)) {
-                rollbackSupplyStationBlocks(level, placedBlocks);
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站方块放置失败！");
-                return false;
-            }
-            placedBlocks.add(plannedBlock.pos());
-        }
-
-        List<Entity> addedEntities = new ArrayList<>();
-        for (Entity entity : plannedEntities) {
-            if (!level.addFreshEntity(entity)) {
-                rollbackSupplyStationEntities(addedEntities);
-                rollbackSupplyStationBlocks(level, placedBlocks);
-                Espetro.sendToPlayer(commander, "\u00a7c载具补给站实体生成失败！");
-                return false;
-            }
-            addedEntities.add(entity);
-        }
-
-        level.playSound(null, basePos, SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.8f, 1.0f);
-        Espetro.sendToPlayer(commander, "\u00a7a载具补给站已部署！位置: "
-            + basePos.getX() + ", " + basePos.getY() + ", " + basePos.getZ());
-        Espetro.LOGGER.info("指挥官 {} 在 {} 部署载具补给站，生成 {} 个实体和 {} 个方块",
-            commander.getName().getString(), basePos, plannedEntities.size(), plannedBlocks.size());
-        return true;
-    }
-
     public boolean isOnCooldown(UUID uuid, CommanderSkillType type) {
         return type != null && isOnCooldown(uuid, type.getId());
     }
@@ -493,6 +401,32 @@ public class CommanderSkillManager {
         return data;
     }
 
+    public SkillStatus getSkillStatus(ServerPlayer commander, String skillId) {
+        String normalizedSkillId = skillId == null ? "" : skillId.trim();
+        KubeCommanderSkillDefinition definition = EspetroCommanderSkills.getDefinition(normalizedSkillId);
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        boolean commanderAllowed = commander != null && VoteManager.getInstance().isCommander(commander.getUUID());
+        boolean phaseAllowed = phase == GamePhase.BATTLE || phase == GamePhase.DEPLOYING;
+        int cooldownSeconds = commander == null ? 0
+            : getRemainingCooldownSeconds(commander.getUUID(), normalizedSkillId);
+        boolean onCooldown = cooldownSeconds > 0;
+        boolean registered = definition != null;
+        boolean canUse = registered && commanderAllowed && phaseAllowed && !onCooldown;
+
+        return new SkillStatus(
+            normalizedSkillId,
+            definition != null ? definition.displayName() : normalizedSkillId,
+            registered,
+            commanderAllowed,
+            phaseAllowed,
+            onCooldown,
+            cooldownSeconds,
+            definition != null && definition.isTargetMapTrigger(),
+            canUse,
+            phase.name()
+        );
+    }
+
     public List<SkillView> getSkillViews() {
         Map<String, SkillView> views = new HashMap<>();
         for (KubeCommanderSkillDefinition definition : EspetroCommanderSkills.getDefinitions()) {
@@ -516,10 +450,18 @@ public class CommanderSkillManager {
         }
     }
 
+    public ArtillerySupportRequest getLatestCommanderSkillTargetRequest() {
+        return getLatestArtillerySupportRequest();
+    }
+
     public List<ArtillerySupportRequest> getArtillerySupportRequestsSnapshot() {
         synchronized (artillerySupportRequests) {
             return List.copyOf(artillerySupportRequests);
         }
+    }
+
+    public List<ArtillerySupportRequest> getCommanderSkillTargetRequestsSnapshot() {
+        return getArtillerySupportRequestsSnapshot();
     }
 
     public List<ArtillerySupportRequest> drainArtillerySupportRequests() {
@@ -530,198 +472,8 @@ public class CommanderSkillManager {
         }
     }
 
-    private Entity createSupplyStationEntity(
-        ServerLevel level,
-        VehicleSupplyStationPlacement placement,
-        BlockPos pos,
-        String team,
-        UUID stationId,
-        BlockPos stationCenter,
-        PlannedSupplyStationBlock plannedBlock
-    ) {
-        EntityType<?> entityType = resolveConfiguredEntityType(placement.entityType());
-        if (entityType == null) {
-            return null;
-        }
-
-        double x = pos.getX() + 0.5;
-        double y = pos.getY();
-        double z = pos.getZ() + 0.5;
-
-        Entity entity = entityType.create(level);
-        if (entity == null) {
-            return null;
-        }
-        entity.setPos(x, y, z);
-
-        String customName = placement.customName();
-        if (customName != null && !customName.isBlank()) {
-            entity.setCustomName(Component.literal(customName));
-            entity.setCustomNameVisible(true);
-        }
-
-        entity.setYRot(placement.yaw());
-        entity.setYHeadRot(placement.yaw());
-        entity.addTag(SUPPLY_STATION_TAG);
-        entity.addTag("espetro_vehicle_supply_station_team_" + team);
-        entity.addTag("espetro_vehicle_supply_station_id_" + stationId);
-        entity.addTag("espetro_team_" + team);
-        entity.addTag("espetro_commander_skill");
-        CompoundTag data = entity.getPersistentData();
-        data.putString("espetro_vehicle_supply_station_team", team);
-        data.putUUID(SUPPLY_STATION_ID_DATA, stationId);
-        data.putInt("espetro_vehicle_supply_station_x", stationCenter.getX());
-        data.putInt("espetro_vehicle_supply_station_y", stationCenter.getY());
-        data.putInt("espetro_vehicle_supply_station_z", stationCenter.getZ());
-        data.putString(SUPPLY_STATION_BLOCK_ID_DATA, plannedBlock.blockId());
-        data.putInt(SUPPLY_STATION_BLOCK_X_DATA, plannedBlock.pos().getX());
-        data.putInt(SUPPLY_STATION_BLOCK_Y_DATA, plannedBlock.pos().getY());
-        data.putInt(SUPPLY_STATION_BLOCK_Z_DATA, plannedBlock.pos().getZ());
-        return entity;
-    }
-
-    private PlannedSupplyStationBlock planSupplyStationBlock(VehicleSupplyStationPlacement placement, BlockPos entityPos) {
-        VehicleSupplyStationBlockPlacement blockConfig = placement.block();
-        if (blockConfig == null) {
-            return null;
-        }
-
-        Block block = resolveConfiguredBlock(blockConfig.blockId());
-        if (block == null) {
-            return null;
-        }
-
-        BlockPos blockPos = entityPos.offset(blockConfig.x(), blockConfig.y(), blockConfig.z());
-        return new PlannedSupplyStationBlock(blockPos, block.defaultBlockState(), blockConfig.blockId());
-    }
-
-    private void rollbackSupplyStationBlocks(ServerLevel level, List<BlockPos> placedBlocks) {
-        for (BlockPos pos : placedBlocks) {
-            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
-        }
-    }
-
-    private void rollbackSupplyStationEntities(List<Entity> entities) {
-        for (Entity entity : entities) {
-            if (!entity.isRemoved()) {
-                entity.discard();
-            }
-        }
-    }
-
-    public static boolean isVehicleSupplyStationEntity(Entity entity) {
-        return entity != null && entity.getTags().contains(SUPPLY_STATION_TAG);
-    }
-
-    public void onVehicleSupplyStationDestroyed(Entity destroyedEntity) {
-        if (!(destroyedEntity.level() instanceof ServerLevel level)) {
-            return;
-        }
-
-        CompoundTag destroyedData = destroyedEntity.getPersistentData();
-        if (!destroyedData.hasUUID(SUPPLY_STATION_ID_DATA)) {
-            return;
-        }
-
-        UUID stationId = destroyedData.getUUID(SUPPLY_STATION_ID_DATA);
-        List<Entity> stationEntities = findSupplyStationEntities(level, stationId, destroyedEntity);
-        Map<BlockPos, String> blocksToRemove = new HashMap<>();
-        for (Entity entity : stationEntities) {
-            collectSupplyStationBlock(blocksToRemove, entity);
-        }
-
-        for (Map.Entry<BlockPos, String> entry : blocksToRemove.entrySet()) {
-            removeSupplyStationBlock(level, entry.getKey(), entry.getValue());
-        }
-
-        for (Entity entity : stationEntities) {
-            if (entity.getUUID().equals(destroyedEntity.getUUID())) {
-                continue;
-            }
-            if (!entity.isRemoved()) {
-                entity.discard();
-            }
-        }
-
-        Espetro.LOGGER.debug("载具补给站 {} 已清理，删除 {} 个实体和 {} 个方块",
-            stationId, stationEntities.size(), blocksToRemove.size());
-    }
-
-    private List<Entity> findSupplyStationEntities(ServerLevel level, UUID stationId, Entity destroyedEntity) {
-        List<Entity> entities = new ArrayList<>();
-        entities.add(destroyedEntity);
-
-        for (Entity entity : level.getAllEntities()) {
-            if (entity.getUUID().equals(destroyedEntity.getUUID())) {
-                continue;
-            }
-            if (isSameSupplyStation(entity, stationId)) {
-                entities.add(entity);
-            }
-        }
-
-        return entities;
-    }
-
-    private boolean isSameSupplyStation(Entity entity, UUID stationId) {
-        if (!isVehicleSupplyStationEntity(entity)) {
-            return false;
-        }
-        CompoundTag data = entity.getPersistentData();
-        return data.hasUUID(SUPPLY_STATION_ID_DATA) && data.getUUID(SUPPLY_STATION_ID_DATA).equals(stationId);
-    }
-
-    private void collectSupplyStationBlock(Map<BlockPos, String> blocksToRemove, Entity entity) {
-        CompoundTag data = entity.getPersistentData();
-        if (!data.contains(SUPPLY_STATION_BLOCK_X_DATA)
-            || !data.contains(SUPPLY_STATION_BLOCK_Y_DATA)
-            || !data.contains(SUPPLY_STATION_BLOCK_Z_DATA)) {
-            return;
-        }
-
-        BlockPos pos = new BlockPos(
-            data.getInt(SUPPLY_STATION_BLOCK_X_DATA),
-            data.getInt(SUPPLY_STATION_BLOCK_Y_DATA),
-            data.getInt(SUPPLY_STATION_BLOCK_Z_DATA)
-        );
-        blocksToRemove.put(pos, data.getString(SUPPLY_STATION_BLOCK_ID_DATA));
-    }
-
-    private void removeSupplyStationBlock(ServerLevel level, BlockPos pos, String blockId) {
-        Block block = resolveConfiguredBlock(blockId);
-        if (block == null) {
-            return;
-        }
-
-        BlockState currentState = level.getBlockState(pos);
-        if (currentState.getBlock() == block) {
-            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
-        }
-    }
-
-    private EntityType<?> resolveConfiguredEntityType(String entityType) {
-        ResourceLocation location = parseRegistryLocation(entityType);
-        if (location == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(location)) {
-            return null;
-        }
-        return BuiltInRegistries.ENTITY_TYPE.get(location);
-    }
-
-    private Block resolveConfiguredBlock(String blockId) {
-        ResourceLocation location = parseRegistryLocation(blockId);
-        if (location == null || !BuiltInRegistries.BLOCK.containsKey(location)) {
-            return null;
-        }
-        return BuiltInRegistries.BLOCK.get(location);
-    }
-
-    private ResourceLocation parseRegistryLocation(String id) {
-        if (id == null || id.isBlank()) {
-            return null;
-        }
-        return id.contains(":")
-            ? ResourceLocation.tryParse(id)
-            : ResourceLocation.withDefaultNamespace(id);
+    public List<ArtillerySupportRequest> drainCommanderSkillTargetRequests() {
+        return drainArtillerySupportRequests();
     }
 
     private String normalizeTeam(String team) {

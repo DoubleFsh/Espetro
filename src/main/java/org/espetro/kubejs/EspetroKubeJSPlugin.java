@@ -59,6 +59,8 @@ public class EspetroKubeJSPlugin extends KubeJSPlugin {
         event.add("EspetroGamePhase", GamePhase.class);
         event.add("EspetroCommanderSkillType", CommanderSkillType.class);
         event.add("EspetroArtillerySupportRequest", CommanderSkillManager.ArtillerySupportRequest.class);
+        event.add("EspetroCommanderSkillTargetRequest", CommanderSkillManager.ArtillerySupportRequest.class);
+        event.add("EspetroCommanderSkillStatus", CommanderSkillManager.SkillStatus.class);
 
         event.add("EspetroClassCountManager", ClassCountManager.class);
         event.add("EspetroClassEquipment", ClassEquipment.class);

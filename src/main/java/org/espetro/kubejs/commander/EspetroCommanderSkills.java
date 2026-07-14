@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public final class EspetroCommanderSkills {
     public static final String DEFAULT_ARTILLERY_SKILL_ID = "artillery_155";
@@ -135,34 +136,34 @@ public final class EspetroCommanderSkills {
         return CommanderSkillManager.getInstance().beginArtilleryTargetSelection(commander);
     }
 
-    public static int droneDetection(KubeCommanderSkillEvent event, double range, int durationSeconds) {
-        return event == null ? -1 : CommanderSkillManager.getInstance().runDroneDetection(
-            event.getCommander(), range, durationSeconds);
+    public static boolean isOnCooldown(ServerPlayer commander, String skillId) {
+        return commander != null && isOnCooldown(commander.getUUID(), skillId);
     }
 
-    public static boolean deployVehicleSupplyStation(KubeCommanderSkillEvent event, Object config) {
-        return event != null && event.getEffects().deployVehicleSupplyStation(config);
+    public static boolean isOnCooldown(UUID commanderId, String skillId) {
+        return commanderId != null && CommanderSkillManager.getInstance().isOnCooldown(commanderId, skillId);
     }
 
-    public static boolean fireBatched(KubeCommanderSkillEvent event, Object config) {
-        return event != null && event.getEffects().fireBatched(config);
+    public static int getCooldownSeconds(ServerPlayer commander, String skillId) {
+        return commander == null ? 0 : getCooldownSeconds(commander.getUUID(), skillId);
     }
 
-    public static boolean fireEntity(KubeCommanderSkillEvent event,
-                                     String entityId,
-                                     double spawnX,
-                                     double spawnY,
-                                     double spawnZ,
-                                     double targetX,
-                                     double targetY,
-                                     double targetZ,
-                                     double velocity) {
-        return event != null && event.getEffects().fireEntity(
-            entityId, spawnX, spawnY, spawnZ, targetX, targetY, targetZ, velocity);
+    public static int getCooldownSeconds(UUID commanderId, String skillId) {
+        return commanderId == null ? 0
+            : CommanderSkillManager.getInstance().getRemainingCooldownSeconds(commanderId, skillId);
     }
 
-    public static double[] randomPointInCircle(KubeCommanderSkillEvent event, double x, double z, double radius) {
-        return event == null ? new double[] {x, z} : event.getEffects().randomPointInCircle(x, z, radius);
+    public static Map<String, Integer> getCooldowns(ServerPlayer commander) {
+        return commander == null ? Map.of()
+            : CommanderSkillManager.getInstance().getCooldownData(commander.getUUID());
+    }
+
+    public static CommanderSkillManager.SkillStatus getStatus(ServerPlayer commander, String skillId) {
+        return CommanderSkillManager.getInstance().getSkillStatus(commander, skillId);
+    }
+
+    public static boolean canUse(ServerPlayer commander, String skillId) {
+        return getStatus(commander, skillId).canUse();
     }
 
     public static KubeCommanderSkillEvent event(KubeCommanderSkillDefinition definition,

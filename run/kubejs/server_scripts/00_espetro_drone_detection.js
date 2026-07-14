@@ -1,11 +1,10 @@
 // Espetro 默认指挥官技能实现脚本：无人机侦测。
-// 本文件由 Espetro 首次启动时写入；效果尽量使用 KubeJS 封装的原版对象方法实现。
-var EspetroDroneMobEffects = Java.loadClass('net.minecraft.world.effect.MobEffects')
+// 本文件由 Espetro 首次启动时写入；效果使用 KubeJS 封装的原版对象方法实现。
 
 EspetroCommanderSkills.on('drone_detection', event => {
   const range = 100.0
   const durationSeconds = 10
-  const commander = event.commander()
+  const commanderId = String(event.commanderId())
   const commanderTeam = event.team()
   const level = event.level()
 
@@ -14,16 +13,17 @@ EspetroCommanderSkills.on('drone_detection', event => {
     return false
   }
 
-  let count = 0
+  var count = 0
   const players = level.getPlayers()
-  for (let i = 0; i < players.size(); i++) {
-    const target = players.get(i)
-    if (String(target.getUUID()) === String(commander.getUUID())) continue
-    const targetTeam = Espetro.getPlayerTeam(target)
+  for (var i = 0; i < players.size(); i++) {
+    var target = players.get(i)
+    var profile = target.getProfile()
+    if (profile != null && String(profile.getId()) === commanderId) continue
+    var targetTeam = Espetro.getPlayerTeam(target)
     if (targetTeam == null || String(targetTeam) === String(commanderTeam)) continue
-    if (target.getDistance(commander.getX(), commander.getY(), commander.getZ()) > range) continue
+    if (target.getDistance(event.x(), event.y(), event.z()) > range) continue
 
-    target.getPotionEffects().add(EspetroDroneMobEffects.GLOWING, durationSeconds * 20, 0, false, false)
+    target.getPotionEffects().add('minecraft:glowing', durationSeconds * 20, 0, false, false)
     count++
   }
 

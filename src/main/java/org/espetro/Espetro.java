@@ -25,6 +25,7 @@ import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -33,7 +34,6 @@ import org.espetro.bastion.BastionManager;
 import org.espetro.kubejs.EspetroKubeJSDefaultScripts;
 import org.espetro.network.NetworkManager;
 import org.espetro.runtime.ServerRuntimeMaintenance;
-import org.espetro.script.CommanderScriptManager;
 import org.espetro.config.GameConfig;
 import org.espetro.stamina.StaminaManager;
 import org.espetro.team.TeamManager;
@@ -75,7 +75,7 @@ public class Espetro {
     public static Object KEY_SKILL;  // Y - 指挥官技能
 
     public Espetro() {
-        EspetroKubeJSDefaultScripts.ensureDefaultScripts();
+        ensureKubeJSDefaultScriptsIfLoaded();
 
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -91,6 +91,12 @@ public class Espetro {
 
     public static MinecraftServer getServer() {
         return serverInstance;
+    }
+
+    private static void ensureKubeJSDefaultScriptsIfLoaded() {
+        if (ModList.get().isLoaded("kubejs")) {
+            EspetroKubeJSDefaultScripts.ensureDefaultScripts();
+        }
     }
 
     // ========== 辅助方法 ==========
@@ -216,7 +222,7 @@ public class Espetro {
         @SubscribeEvent
         public static void commonSetup(FMLCommonSetupEvent event) {
             event.enqueueWork(() -> {
-                EspetroKubeJSDefaultScripts.ensureDefaultScripts();
+                ensureKubeJSDefaultScriptsIfLoaded();
                 NetworkManager.registerNetwork();
                 // 初始化职业人数管理器
                 new ClassCountManager();
@@ -234,8 +240,6 @@ public class Espetro {
                 org.espetro.team.OutpostManager.init();
                 // 初始化指挥官技能管理器
                 org.espetro.team.CommanderSkillManager.init();
-                // 初始化指挥官技能内部调度器
-                CommanderScriptManager.init();
             });
         }
 
@@ -368,7 +372,6 @@ public class Espetro {
             serverInstance = event.getServer();
             disableNaturalRegeneration(event.getServer());
             ServerRuntimeMaintenance.getInstance().reset();
-            CommanderScriptManager.getInstance().reset();
             // 初始化所有配置（首次加载）
             reloadAllConfigs();
             // 初始化职业人数记分板
@@ -399,7 +402,6 @@ public class Espetro {
             TeamPackManager.getInstance().clearRuntimeState();
             VehicleManager.getInstance().clearRuntimeState();
             ServerRuntimeMaintenance.getInstance().reset();
-            CommanderScriptManager.getInstance().reset();
             StaminaManager.clear();
             serverInstance = null;
         }
@@ -504,7 +506,6 @@ public class Espetro {
             if (event.phase == TickEvent.Phase.END) {
                 GameStateManager.getInstance().onServerTick();
                 ServerRuntimeMaintenance.getInstance().onServerTick();
-                CommanderScriptManager.getInstance().onServerTick();
                 org.espetro.team.CommanderSkillManager.getInstance().onServerTick();
             }
         }

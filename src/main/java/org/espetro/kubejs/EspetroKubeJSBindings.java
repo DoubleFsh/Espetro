@@ -381,17 +381,34 @@ public final class EspetroKubeJSBindings {
         return commanderSkills().submitArtillerySupportTarget(commander, x, z);
     }
 
+    public static boolean submitCommanderSkillTarget(ServerPlayer commander, double x, double z) {
+        return commanderSkills().submitArtillerySupportTarget(commander, x, z);
+    }
+
     @Nullable
     public static CommanderSkillManager.ArtillerySupportRequest getLatestArtillerySupportRequest() {
         return commanderSkills().getLatestArtillerySupportRequest();
+    }
+
+    @Nullable
+    public static CommanderSkillManager.ArtillerySupportRequest getLatestCommanderSkillTargetRequest() {
+        return commanderSkills().getLatestCommanderSkillTargetRequest();
     }
 
     public static List<CommanderSkillManager.ArtillerySupportRequest> getArtillerySupportRequests() {
         return commanderSkills().getArtillerySupportRequestsSnapshot();
     }
 
+    public static List<CommanderSkillManager.ArtillerySupportRequest> getCommanderSkillTargetRequests() {
+        return commanderSkills().getCommanderSkillTargetRequestsSnapshot();
+    }
+
     public static List<CommanderSkillManager.ArtillerySupportRequest> drainArtillerySupportRequests() {
         return commanderSkills().drainArtillerySupportRequests();
+    }
+
+    public static List<CommanderSkillManager.ArtillerySupportRequest> drainCommanderSkillTargetRequests() {
+        return commanderSkills().drainCommanderSkillTargetRequests();
     }
 
     public static int getCommanderSkillCooldown(Object playerRef, String skillId) {
@@ -402,9 +419,23 @@ public final class EspetroKubeJSBindings {
         return commanderSkills().getRemainingCooldownSeconds(uuid, skillId);
     }
 
+    public static boolean isCommanderSkillOnCooldown(Object playerRef, String skillId) {
+        UUID uuid = uuidOrNull(playerRef);
+        return uuid != null && skillId != null && !skillId.isBlank()
+            && commanderSkills().isOnCooldown(uuid, skillId);
+    }
+
     public static Map<String, Integer> getCommanderSkillCooldowns(Object playerRef) {
         UUID uuid = uuidOrNull(playerRef);
         return uuid == null ? Map.of() : commanderSkills().getCooldownData(uuid);
+    }
+
+    public static CommanderSkillManager.SkillStatus getCommanderSkillStatus(Object playerRef, String skillId) {
+        return commanderSkills().getSkillStatus(getPlayer(playerRef), skillId);
+    }
+
+    public static boolean canUseCommanderSkill(Object playerRef, String skillId) {
+        return commanderSkills().getSkillStatus(getPlayer(playerRef), skillId).canUse();
     }
 
     public static SpawnPointConfig.SpawnPoint getSpawnPoint(String team) {

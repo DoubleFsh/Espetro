@@ -85,7 +85,7 @@ side = "BOTH"
 
 [[dependencies."espetro"]]
 modId = "architectury"
-mandatory = true
+mandatory = false
 versionRange = "[9.1.12,)"
 ordering = "AFTER"
 side = "BOTH"
@@ -99,7 +99,7 @@ side = "BOTH"
 
 [[dependencies."espetro"]]
 modId = "kubejs"
-mandatory = true
+mandatory = false
 versionRange = "[2001.6.5-build.26,)"
 ordering = "AFTER"
 side = "BOTH"

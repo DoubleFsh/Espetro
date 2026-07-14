@@ -17,20 +17,17 @@
 
 | 类 | 职责 |
 | --- | --- |
-| `org.espetro.api.EspetroAPI` | 对外阵营、小队、队长、指挥官查询和155火炮支援坐标提交/队列读取 |
+| `org.espetro.api.EspetroAPI` | 对外阵营、小队、队长、指挥官查询、指挥官技能选点提交/队列读取和冷却/状态查询 |
 | `org.espetro.config.GameConfig` | `game.json` 加载与 getter，包括游戏流程、兵力和秒制体力参数 |
 | `org.espetro.data.EspetroDataResources` | 数据包资源优先级、列表和 UTF-8 读取 |
 | `org.espetro.kubejs.EspetroKubeJSPlugin` | KubeJS 硬依赖插件入口，注册脚本绑定、类过滤、指挥官技能 API、ESPoints 可选绑定和 MUtil 绑定 |
-| `org.espetro.kubejs.EspetroKubeJSBindings` | KubeJS 全局 `Espetro` facade，封装常用服务端 API、指挥官技能入口、战术地图打开、管理器 getter 和155火炮兼容队列 |
+| `org.espetro.kubejs.EspetroKubeJSBindings` | KubeJS 全局 `Espetro` facade，封装常用服务端 API、指挥官技能入口、战术地图打开、管理器 getter、冷却/状态查询和选点兼容队列 |
 | `org.espetro.kubejs.EspetroKubeJSDefaultScripts` | 首次启动时按技能写入独立的默认 KubeJS 指挥官技能注册/实现脚本，并停用旧版合并默认脚本 |
 | `org.espetro.kubejs.commander.CommanderSkillBuilder` | KubeJS 指挥官技能创建 builder |
-| `org.espetro.kubejs.commander.EspetroCommanderSkills` | KubeJS 指挥官技能注册、回调执行、战术地图打开和默认效果辅助 API |
+| `org.espetro.kubejs.commander.EspetroCommanderSkills` | KubeJS 指挥官技能注册、回调执行、战术地图打开和冷却/状态查询 |
 | `org.espetro.kubejs.commander.KubeCommanderSkillDefinition` | KubeJS 注册的单个指挥官技能定义 |
 | `org.espetro.kubejs.commander.KubeCommanderSkillEvent` | KubeJS 指挥官技能回调事件 |
 | `org.espetro.runtime.ServerRuntimeMaintenance` | 分摊运行时清理和维护任务 |
-| `org.espetro.script.CommanderScriptManager` | KubeJS 指挥官技能效果辅助 API 使用的服务端 tick 调度器 |
-| `org.espetro.script.CommanderScriptEvent` | KubeJS 指挥官技能事件基类 |
-| `org.espetro.script.CommanderScriptAPI` | KubeJS 指挥官技能可选效果辅助 API，包括命令执行、延迟调度、随机点、实体发射和两批火炮辅助调度；默认 155 火炮脚本不依赖它 |
 
 ## 阵营、职业与状态
 
@@ -50,7 +47,7 @@
 | `TroopCountManager` | 双方兵力、初始化、修改和死亡扣除 |
 | `VoteManager` | 指挥官候选、投票、结果和当前指挥官 |
 | `CommanderSkillType` | 指挥官技能兼容 ID，包括 `drone_detection`、`vehicle_supply_station` 和 `artillery_155` |
-| `CommanderSkillManager` | KubeJS 技能权限、冷却、ESPoints 火炮选点桥接、默认技能效果 API 和 `ArtillerySupportRequest` 兼容队列 |
+| `CommanderSkillManager` | KubeJS 技能权限、冷却、ESPoints 选点桥接、状态查询和选点兼容队列 |
 | `SpawnPointConfig` | 双方部署点数据包配置 |
 
 ## 小队与部署设施

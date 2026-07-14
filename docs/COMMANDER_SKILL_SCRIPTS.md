@@ -63,23 +63,22 @@ EspetroCommanderSkills.create('artillery_155')
 在 `server_scripts` 中使用 `EspetroCommanderSkills.on(id, callback)` 注册技能效果：
 
 ```js
-var DroneMobEffects = Java.loadClass('net.minecraft.world.effect.MobEffects')
-
 EspetroCommanderSkills.on('drone_detection', event => {
   const range = 100.0
-  const commander = event.commander()
+  const commanderId = String(event.commanderId())
   const level = event.level()
   let count = 0
 
   const players = level.getPlayers()
   for (let i = 0; i < players.size(); i++) {
     const target = players.get(i)
-    if (String(target.getUUID()) === String(commander.getUUID())) continue
+    const profile = target.getProfile()
+    if (profile != null && String(profile.getId()) === commanderId) continue
     const targetTeam = Espetro.getPlayerTeam(target)
     if (targetTeam == null || String(targetTeam) === String(event.team())) continue
-    if (target.getDistance(commander.getX(), commander.getY(), commander.getZ()) > range) continue
+    if (target.getDistance(event.x(), event.y(), event.z()) > range) continue
 
-    target.getPotionEffects().add(DroneMobEffects.GLOWING, 10 * 20, 0, false, false)
+    target.getPotionEffects().add('minecraft:glowing', 10 * 20, 0, false, false)
     count++
   }
 
@@ -88,7 +87,7 @@ EspetroCommanderSkills.on('drone_detection', event => {
 })
 ```
 
-回调返回 `false` 表示技能失败，不进入冷却。返回 `true`、`undefined` 或其他值表示成功。默认脚本尽量使用 KubeJS 已封装的原版方法，例如 `level.getPlayers()`、`level.getBlock(...)`、`level.createEntity(...)`、`entity.spawn()`、`entity.setMotionX/Y/Z(...)` 和 `livingEntity.getPotionEffects().add(...)`。`event.effects()` 和 `EspetroCommanderSkills.*` 中的 Java 辅助方法保留给兼容或复杂场景使用，默认技能不依赖它们。
+回调返回 `false` 表示技能失败，不进入冷却。返回 `true`、`undefined` 或其他值表示成功。默认脚本使用 KubeJS 已封装的原版方法，例如 `level.getPlayers()`、`level.getBlock(...)`、`level.createEntity(...)`、`entity.mergeNbt(...)`、`entity.spawn()`、`entity.setMotionX/Y/Z(...)` 和 `livingEntity.getPotionEffects().add(...)`。Espetro 不提供技能效果辅助 API，技能效果应由 KubeJS、Minecraft 原版封装方法或其他模组暴露的类实现。
 
 `KubeCommanderSkillEvent` 常用方法：
 
@@ -105,7 +104,6 @@ EspetroCommanderSkills.on('drone_detection', event => {
 | `getX()` / `getY()` / `getZ()` | 事件坐标；选点技能中 X/Z 来自 ESPoints，Y 为 Espetro 服务端高度图结果。 |
 | `getBlockPos()` / `getBlockX()` / `getBlockY()` / `getBlockZ()` | 方块坐标。 |
 | `getRequest()` / `request()` | 选点技能的 `ArtillerySupportRequest`，普通技能为 `null`。 |
-| `effects()` / `getEffects()` / `getApi()` | Espetro 提供的效果辅助 API。 |
 | `tell(message)` | 给指挥官发送消息。 |
 | `broadcastTeam(message)` / `broadcastAll(message)` | 广播消息。 |
 
@@ -121,11 +119,8 @@ EspetroCommanderSkills.on('drone_detection', event => {
 | `execute(player, id)` / `activate(player, id)` | 从 KubeJS 手动触发技能，仍执行权限、阶段和冷却校验。 |
 | `openTargetMap(player, id)` / `openTacticalMap(player, id)` | 直接打开 ESPoints 选点地图并记录回调技能 ID。 |
 | `openArtilleryMap(player)` | 打开默认 `artillery_155` 选点地图。 |
-| `droneDetection(event, range, durationSeconds)` | 兼容辅助：高亮指定范围内敌方玩家，返回数量；失败返回 `-1`。默认脚本改用 `level.getPlayers()` 和 `getPotionEffects().add(...)`。 |
-| `deployVehicleSupplyStation(event, config)` | 兼容辅助：按脚本配置部署载具补给站。默认脚本改用 `level.getBlock(...).set(...)`、`level.createEntity(...)` 和 `entity.spawn()`。 |
-| `fireEntity(event, ...)` | 可选 Java 辅助 API，生成实体并设置朝向目标的初速度。 |
-| `fireBatched(event, config)` | 可选 Java 辅助 API，按两批火炮支援逻辑调度实体发射；默认 155 火炮脚本不依赖它。 |
-| `randomPointInCircle(event, x, z, radius)` | 返回圆形范围内随机 `[x, z]`。 |
+| `isOnCooldown(player, id)` / `getCooldownSeconds(player, id)` / `getCooldowns(player)` | 查询指挥官技能冷却。 |
+| `getStatus(player, id)` / `canUse(player, id)` | 查询技能注册、权限、阶段、冷却和可用状态。 |
 
 ## 默认技能
 
@@ -134,24 +129,23 @@ EspetroCommanderSkills.on('drone_detection', event => {
 无人机侦测应高亮一定范围内的敌方玩家：
 
 ```js
-var DroneMobEffects = Java.loadClass('net.minecraft.world.effect.MobEffects')
-
 EspetroCommanderSkills.on('drone_detection', event => {
   const range = 100.0
   const durationSeconds = 10
-  const commander = event.commander()
+  const commanderId = String(event.commanderId())
   const level = event.level()
   let count = 0
 
   const players = level.getPlayers()
   for (let i = 0; i < players.size(); i++) {
     const target = players.get(i)
-    if (String(target.getUUID()) === String(commander.getUUID())) continue
+    const profile = target.getProfile()
+    if (profile != null && String(profile.getId()) === commanderId) continue
     const targetTeam = Espetro.getPlayerTeam(target)
     if (targetTeam == null || String(targetTeam) === String(event.team())) continue
-    if (target.getDistance(commander.getX(), commander.getY(), commander.getZ()) > range) continue
+    if (target.getDistance(event.x(), event.y(), event.z()) > range) continue
 
-    target.getPotionEffects().add(DroneMobEffects.GLOWING, durationSeconds * 20, 0, false, false)
+    target.getPotionEffects().add('minecraft:glowing', durationSeconds * 20, 0, false, false)
     count++
   }
 
@@ -164,24 +158,20 @@ EspetroCommanderSkills.on('drone_detection', event => {
 ### 载具补给站
 
 ```js
-var SupplyBuiltInRegistries = Java.loadClass('net.minecraft.core.registries.BuiltInRegistries')
-var SupplyResourceLocation = Java.loadClass('net.minecraft.resources.ResourceLocation')
-var SupplyComponent = Java.loadClass('net.minecraft.network.chat.Component')
-
 EspetroCommanderSkills.on('vehicle_supply_station', event => {
   const x = event.blockX()
   const y = event.blockY()
   const z = event.blockZ()
 
-  event.level().getBlock(x + 2, y, z).set(SupplyResourceLocation.tryParse('minecraft:barrel'))
+  event.level().getBlock(x + 2, y, z).set('minecraft:barrel')
 
-  const type = SupplyBuiltInRegistries.ENTITY_TYPE.get(SupplyResourceLocation.tryParse('minecraft:armor_stand'))
-  const entity = event.level().createEntity(type)
+  const entity = event.level().createEntity('minecraft:armor_stand')
   entity.setPositionAndRotation(x + 0.5, y, z + 0.5, 0, 0)
-  entity.setCustomName(SupplyComponent.literal('载具补给站'))
-  entity.setCustomNameVisible(true)
-  entity.addTag('espetro_vehicle_supply_station')
-  entity.addTag('espetro_commander_skill')
+  entity.mergeNbt({
+    CustomName: '{"text":"载具补给站"}',
+    CustomNameVisible: 1,
+    Tags: ['espetro_vehicle_supply_station', 'espetro_commander_skill']
+  })
   entity.spawn()
   return true
 })
@@ -191,7 +181,7 @@ EspetroCommanderSkills.on('vehicle_supply_station', event => {
 
 `artillery_155` 使用 `targetMap()` 注册。玩家右键 ESPoints 战术地图后，Espetro 构造包含目标坐标的事件，再执行 KubeJS 回调。
 
-默认生成的 `server_scripts/00_espetro_artillery_155.js` 使用纯 KubeJS 实现火力效果：脚本维护 `ServerEvents.tick` 调度队列，并通过 `event.level().createEntity(...)`、`entity.mergeNbt(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 生成斜向下发射的实体。Espetro 不负责该技能的实体生成，Java 侧的 `fireBatched` 只是保留给脚本作者选择使用的辅助 API。
+默认生成的 `server_scripts/00_espetro_artillery_155.js` 使用纯 KubeJS 实现火力效果：脚本维护 `ServerEvents.tick` 调度队列，并通过 `event.level().createEntity(...)`、`entity.mergeNbt(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 生成斜向下发射的实体。Espetro 不负责该技能的实体生成。
 
 默认文件中的调度结构如下。技能回调只负责把 JavaScript 发射任务压入队列；实际发射发生在后续服务端 tick 中。
 
@@ -280,9 +270,12 @@ EspetroCommanderSkills.on('smoke_barrage', event => {
   const z = event.getZ()
 
   for (let i = 0; i < 8; i++) {
-    const p = EspetroCommanderSkills.randomPointInCircle(event, x, z, 10)
-    event.effects().command(
-      `execute in ${dim} run particle minecraft:campfire_cosy_smoke ${p[0]} ${y + 1} ${p[1]} 1 1 1 0.02 80 force`
+    const angle = Math.random() * Math.PI * 2
+    const radius = Math.sqrt(Math.random()) * 10
+    const px = x + Math.cos(angle) * radius
+    const pz = z + Math.sin(angle) * radius
+    event.server().runCommandSilent(
+      `execute in ${dim} run particle minecraft:campfire_cosy_smoke ${px} ${y + 1} ${pz} 1 1 1 0.02 80 force`
     )
   }
   return true

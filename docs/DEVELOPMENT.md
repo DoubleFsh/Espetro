@@ -10,7 +10,7 @@
   -> ClassCountManager / SquadManager
   -> StaminaManager
   -> BastionManager / TeamPackManager / VehicleManager
-  -> CommanderSkillManager / EspetroCommanderSkills / CommanderScriptManager
+  -> CommanderSkillManager / EspetroCommanderSkills
   -> NetworkManager
   -> ClientGameState 与各 GUI/HUD
 ```
@@ -26,7 +26,7 @@
 1. `FactionDataProvider` 在 `ServerAboutToStartEvent` 加载编制。
 2. `Espetro.onServerStarting` 保存服务器实例并调用 `reloadAllConfigs()`。
 3. 初始化记分板职业计数、兵站、队包和游戏状态。
-4. 每个服务器 tick 更新阶段、运行时维护、KubeJS 指挥官技能调度任务和指挥官技能；玩家 tick 更新服务端权威体力状态。
+4. 每个服务器 tick 更新阶段、运行时维护和指挥官技能；玩家 tick 更新服务端权威体力状态。
 5. 停服时清空玩家职业装备并清理世界实体/内存状态。
 
 ## 对外 API
@@ -38,7 +38,8 @@ String team = EspetroAPI.getPlayerTeam(serverPlayer); // ATTACK / DEFEND / null
 int squadId = EspetroAPI.getPlayerSquadId(serverPlayer.getUUID());
 boolean leader = EspetroAPI.isSquadLeader(serverPlayer.getUUID());
 boolean commander = EspetroAPI.isCommander(serverPlayer.getUUID());
-boolean accepted = EspetroAPI.submitArtillerySupportTarget(serverPlayer, x, z);
+boolean accepted = EspetroAPI.submitCommanderSkillTarget(serverPlayer, x, z);
+var status = EspetroAPI.getCommanderSkillStatus(serverPlayer, "artillery_155");
 ```
 
 调用约束：
@@ -46,7 +47,7 @@ boolean accepted = EspetroAPI.submitArtillerySupportTarget(serverPlayer, x, z);
 - 这些方法读取服务端状态，只应在逻辑服务端使用。
 - 玩家未在线或尚未选队时可能返回 `null`/`-1`/`false`。
 - 不要缓存权限超过一个 tick；指挥官和队长可能在运行时变更。
-- `submitArtillerySupportTarget` 是 ESPoints 选点后的服务端入口，Espetro 会重新校验指挥官权限、阶段和冷却，并用 `ServerLevel#getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)` 补出 Y 坐标。
+- `submitCommanderSkillTarget` 是 ESPoints 选点后的服务端入口，Espetro 会重新校验指挥官权限、阶段和冷却，并用 `ServerLevel#getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)` 补出 Y 坐标；`submitArtillerySupportTarget` 保留为旧名称兼容别名。
 
 ### `Espetro`
 
@@ -67,14 +68,13 @@ Espetro.reloadAllConfigs();
 - `kubejs/server_scripts` 调用 `EspetroCommanderSkills.on(id, callback)` 实现技能效果。
 - 默认脚本按技能拆分，例如 `00_espetro_drone_detection.js`、`00_espetro_vehicle_supply_station.js` 和 `00_espetro_artillery_155.js`。
 - `CommanderSkillManager` 只负责权限、阶段、冷却、技能界面同步和 ESPoints 战术地图选点桥接。
-- `CommanderScriptManager` 只保留服务端 tick 调度能力，供 KubeJS 效果辅助 API 延迟发射实体或延迟执行回调。
 
 技能触发支持两类：
 
 - `activate`：点击指挥官技能后直接执行 KubeJS 回调。
 - `target_map`/`artillery_target`：点击技能后打开 ESPoints 选点地图，`CommanderSkillManager` 记录待回调技能 ID，右键坐标回传后执行该技能的 KubeJS 回调。
 
-`CommanderScriptAPI` 作为 `KubeCommanderSkillEvent.effects()` 暴露，提供日志、命令、调度、随机圆点、实体发射和 `fireBatched(config)` 这类可选 Java 辅助能力。默认指挥官技能优先使用 KubeJS 封装的原版方法实现：无人机侦测使用 `level.getPlayers()` 和 `target.getPotionEffects().add(...)`；载具补给站使用 `level.getBlock(...).set(...)`、`level.createEntity(...)` 和 `entity.spawn()`；155 火炮支援脚本使用纯 KubeJS tick 调度、`level.createEntity(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 发射实体，不依赖 Java 侧火炮调度器。
+Espetro 不提供指挥官技能效果辅助 API。默认指挥官技能使用 KubeJS 封装的原版方法实现：无人机侦测使用 `level.getPlayers()` 和 `target.getPotionEffects().add(...)`；载具补给站使用 `level.getBlock(...).set(...)`、`level.createEntity(...)`、`entity.mergeNbt(...)` 和 `entity.spawn()`；155 火炮支援脚本使用纯 KubeJS tick 调度、`level.createEntity(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 发射实体。
 
 完整脚本结构和火炮参数见 `docs/COMMANDER_SKILL_SCRIPTS.md`。
 
@@ -88,7 +88,7 @@ KubeJS 脚本全局绑定：
 
 - `Espetro`：脚本友好的 facade，提供广播、玩家队伍/职业/小队查询、兵力、阶段、兵站、队包、前哨、载具和指挥官技能入口。
 - `EspetroCommanderSkills`、`EspetroCommanderSkillBuilder`、`EspetroCommanderSkillDefinition`、`EspetroCommanderSkillEvent`：指挥官技能创建、注册、回调和事件对象。
-- `EspetroAPI`、`EspetroMod`、`EspetroGameConfig`、`EspetroGamePhase`、`EspetroCommanderSkillType`、`EspetroArtillerySupportRequest`：直接暴露的 Java API/常量类。
+- `EspetroAPI`、`EspetroMod`、`EspetroGameConfig`、`EspetroGamePhase`、`EspetroCommanderSkillType`、`EspetroCommanderSkillTargetRequest`、`EspetroCommanderSkillStatus`、`EspetroArtillerySupportRequest`：直接暴露的 Java API/常量类。
 - `EspetroClassCountManager`、`EspetroClassEquipment`、`EspetroClassSelectManager`、`EspetroFactionDataLoader`、`EspetroFactionDataProvider`、`EspetroGameStateManager`、`EspetroNetworkManager`、`EspetroSquadManager`、`EspetroSpawnPointConfig`、`EspetroTeamManager`、`EspetroVoteManager`、`EspetroTroopCountManager`、`EspetroCommanderSkillManager`、`EspetroBastionManager`、`EspetroTeamPackManager`、`EspetroOutpostManager`、`EspetroVehicleConfig`、`EspetroVehicleManager`：底层管理器和工具类绑定。
 - `ESPointsCommanderScriptAPI`、`ESPointsTacticalMarkerManager`、`ESPointsTacticalMarkerType`、`ESPointsTacticalMapJsonConfig`：安装 ESPoints 时可用的战术地图与标点绑定。
 - `MUtil`、`MUtilMod`：MUtil 主类绑定。
@@ -116,7 +116,7 @@ ServerEvents.tick(event => {
 })
 ```
 
-KubeJS 脚本与 Java API 一样应在逻辑服务端主线程修改游戏状态。玩家未在线或尚未选队时，查询方法可能返回 `null`、`-1` 或 `false`。`ArtillerySupportRequest` 队列 API 保留用于兼容和观测；默认技能效果由 KubeJS `server_scripts` 执行。
+KubeJS 脚本与 Java API 一样应在逻辑服务端主线程修改游戏状态。玩家未在线或尚未选队时，查询方法可能返回 `null`、`-1` 或 `false`。指挥官技能选点队列 API 保留用于兼容和观测；默认技能效果由 KubeJS `server_scripts` 执行。
 
 ## 编制与职业
 
@@ -262,16 +262,16 @@ int cooldown = skills.getRemainingCooldownSeconds(
 | 技能 ID | 枚举 | 服务端行为 |
 | --- | --- | --- |
 | `drone_detection` | `DRONE_DETECTION` 兼容 ID | 由 KubeJS startup 脚本注册；默认 server 脚本使用 `level.getPlayers()` 和 `getPotionEffects().add(...)` 高亮范围内敌方玩家 |
-| `vehicle_supply_station` | `VEHICLE_SUPPLY_STATION` 兼容 ID | 由 KubeJS startup 脚本注册；默认 server 脚本使用 `level.getBlock(...).set(...)` 和 `level.createEntity(...).spawn()` 部署 |
+| `vehicle_supply_station` | `VEHICLE_SUPPLY_STATION` 兼容 ID | 由 KubeJS startup 脚本注册；默认 server 脚本使用 `level.getBlock(...).set(...)`、`level.createEntity(...)`、`entity.mergeNbt(...)` 和 `entity.spawn()` 部署 |
 | `artillery_155` | `ARTILLERY_155` 兼容 ID | 由 KubeJS startup 脚本注册为 `targetMap`；打开 ESPoints 战术地图选点，回传后执行 KubeJS 回调 |
 
-155火炮支援生命周期：
+指挥官选点技能生命周期（默认示例为 `artillery_155`）：
 
 1. 客户端指挥官技能界面发送 `CommanderSkillPacket` 到服务端。
 2. `CommanderSkillManager#activateSkill(ServerPlayer, String)` 校验指挥官、游戏阶段和对应技能 ID 的冷却。
 3. 对 `target_map`/`artillery_target` 技能定义，`CommanderSkillManager` 记录技能 ID，并使用反射调用 `com.example.espoints.network.OpenArtillerySupportMapMessage#sendTo(ServerPlayer)`。ESPoints 仍是 `mods.toml` 中的 `mandatory = false` 软依赖。
 4. ESPoints 客户端打开居中的 `ArtillerySupportMapScreen`，复用 `TacticalMapHUD` 的嵌入式地图渲染、滚轮缩放和左键拖拽。
-5. 玩家右键地图后，ESPoints 将屏幕坐标转换为战术地图世界 X/Z，发 C2S 包回服务端，并通过 `EspetroAPI.submitArtillerySupportTarget` 交给 Espetro。
+5. 玩家右键地图后，ESPoints 将屏幕坐标转换为战术地图世界 X/Z，发 C2S 包回服务端，并通过 `EspetroAPI.submitCommanderSkillTarget` 交给 Espetro；旧版 ESPoints 可继续调用 `submitArtillerySupportTarget`。
 6. Espetro 再次校验权限、阶段和冷却，用高度图补出 Y 坐标，创建 `CommanderSkillManager.ArtillerySupportRequest`。
 7. `CommanderSkillManager` 构造带目标坐标的 `KubeCommanderSkillEvent`，并调用 `EspetroCommanderSkills` 执行该技能在 KubeJS `server_scripts` 中注册的回调；没有待回调技能 ID 时回退到 `artillery_155`。
 8. 回调成功后 Espetro 记录兼容队列、同步技能冷却；默认脚本通过纯 KubeJS 队列按两批从目标上空斜向创建实体，并用 `entity.setMotionX/Y/Z(...)` 设置初速度。实体 ID、目标 Y、覆盖半径、发射源范围、速度、批次数量、批次间隔和总体入射角都由 `server_scripts` 中的 JavaScript 配置决定。

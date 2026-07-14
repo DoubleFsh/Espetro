@@ -7,6 +7,7 @@ import org.espetro.team.SquadManager;
 import org.espetro.team.VoteManager;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -63,10 +64,25 @@ public class EspetroAPI {
     }
 
     /**
+     * ESPoints 在服务端将战术地图选点转换为世界坐标后调用。
+     * 这是通用指挥官技能选点入口；旧的 submitArtillerySupportTarget 保留为兼容别名。
+     */
+    public static boolean submitCommanderSkillTarget(ServerPlayer commander, double x, double z) {
+        return CommanderSkillManager.getInstance().submitArtillerySupportTarget(commander, x, z);
+    }
+
+    /**
      * 获取最近一次155火炮支援请求；不会从队列中移除。
      */
     public static CommanderSkillManager.ArtillerySupportRequest getLatestArtillerySupportRequest() {
         return CommanderSkillManager.getInstance().getLatestArtillerySupportRequest();
+    }
+
+    /**
+     * 获取最近一次指挥官技能地图选点请求；不会从队列中移除。
+     */
+    public static CommanderSkillManager.ArtillerySupportRequest getLatestCommanderSkillTargetRequest() {
+        return CommanderSkillManager.getInstance().getLatestCommanderSkillTargetRequest();
     }
 
     /**
@@ -77,10 +93,46 @@ public class EspetroAPI {
     }
 
     /**
+     * 获取当前缓存的指挥官技能地图选点请求快照；不会从队列中移除。
+     */
+    public static List<CommanderSkillManager.ArtillerySupportRequest> getCommanderSkillTargetRequests() {
+        return CommanderSkillManager.getInstance().getCommanderSkillTargetRequestsSnapshot();
+    }
+
+    /**
      * 获取并清空155火炮支援请求兼容队列，可供 KubeJS 或其他服务端逻辑联动。
      */
     public static List<CommanderSkillManager.ArtillerySupportRequest> drainArtillerySupportRequests() {
         return CommanderSkillManager.getInstance().drainArtillerySupportRequests();
+    }
+
+    /**
+     * 获取并清空指挥官技能地图选点请求兼容队列。
+     */
+    public static List<CommanderSkillManager.ArtillerySupportRequest> drainCommanderSkillTargetRequests() {
+        return CommanderSkillManager.getInstance().drainCommanderSkillTargetRequests();
+    }
+
+    public static int getCommanderSkillCooldown(ServerPlayer commander, String skillId) {
+        return commander == null ? 0
+            : CommanderSkillManager.getInstance().getRemainingCooldownSeconds(commander.getUUID(), skillId);
+    }
+
+    public static Map<String, Integer> getCommanderSkillCooldowns(ServerPlayer commander) {
+        return commander == null ? Map.of()
+            : CommanderSkillManager.getInstance().getCooldownData(commander.getUUID());
+    }
+
+    public static boolean isCommanderSkillOnCooldown(ServerPlayer commander, String skillId) {
+        return commander != null && CommanderSkillManager.getInstance().isOnCooldown(commander.getUUID(), skillId);
+    }
+
+    public static CommanderSkillManager.SkillStatus getCommanderSkillStatus(ServerPlayer commander, String skillId) {
+        return CommanderSkillManager.getInstance().getSkillStatus(commander, skillId);
+    }
+
+    public static boolean canUseCommanderSkill(ServerPlayer commander, String skillId) {
+        return getCommanderSkillStatus(commander, skillId).canUse();
     }
 
     private static String getPlayerTeamById(UUID playerId) {

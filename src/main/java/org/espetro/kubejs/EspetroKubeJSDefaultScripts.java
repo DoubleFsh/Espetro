@@ -7,64 +7,32 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 public final class EspetroKubeJSDefaultScripts {
-    private static final String LEGACY_STARTUP_SCRIPT = "kubejs/startup_scripts/00_espetro_commander_skills.js";
-    private static final String LEGACY_SERVER_SCRIPT = "kubejs/server_scripts/00_espetro_commander_skills.js";
-    private static final String LEGACY_STARTUP_MARKER = "// Espetro 默认指挥官技能注册脚本。";
-    private static final String LEGACY_SERVER_MARKER = "// Espetro 默认指挥官技能实现脚本。";
-
     private EspetroKubeJSDefaultScripts() {
     }
 
     public static void ensureDefaultScripts() {
         Path gameDir = FMLPaths.GAMEDIR.get();
-        migrateLegacyDefaultScript(gameDir.resolve(LEGACY_STARTUP_SCRIPT), LEGACY_STARTUP_MARKER);
-        migrateLegacyDefaultScript(gameDir.resolve(LEGACY_SERVER_SCRIPT), LEGACY_SERVER_MARKER);
 
         writeDefaultScript(gameDir.resolve("kubejs/startup_scripts/00_espetro_drone_detection.js"),
-            DEFAULT_DRONE_DETECTION_STARTUP_SCRIPT, "// Espetro 默认指挥官技能注册脚本：无人机侦测。");
+            DEFAULT_DRONE_DETECTION_STARTUP_SCRIPT);
         writeDefaultScript(gameDir.resolve("kubejs/startup_scripts/00_espetro_vehicle_supply_station.js"),
-            DEFAULT_VEHICLE_SUPPLY_STATION_STARTUP_SCRIPT, "// Espetro 默认指挥官技能注册脚本：载具补给站。");
+            DEFAULT_VEHICLE_SUPPLY_STATION_STARTUP_SCRIPT);
         writeDefaultScript(gameDir.resolve("kubejs/startup_scripts/00_espetro_artillery_155.js"),
-            DEFAULT_ARTILLERY_155_STARTUP_SCRIPT, "// Espetro 默认指挥官技能注册脚本：155火炮支援。");
+            DEFAULT_ARTILLERY_155_STARTUP_SCRIPT);
 
         writeDefaultScript(gameDir.resolve("kubejs/server_scripts/00_espetro_drone_detection.js"),
-            DEFAULT_DRONE_DETECTION_SERVER_SCRIPT, "// Espetro 默认指挥官技能实现脚本：无人机侦测。");
+            DEFAULT_DRONE_DETECTION_SERVER_SCRIPT);
         writeDefaultScript(gameDir.resolve("kubejs/server_scripts/00_espetro_vehicle_supply_station.js"),
-            DEFAULT_VEHICLE_SUPPLY_STATION_SERVER_SCRIPT, "// Espetro 默认指挥官技能实现脚本：载具补给站。");
+            DEFAULT_VEHICLE_SUPPLY_STATION_SERVER_SCRIPT);
         writeDefaultScript(gameDir.resolve("kubejs/server_scripts/00_espetro_artillery_155.js"),
-            DEFAULT_ARTILLERY_155_SERVER_SCRIPT, "// Espetro 默认指挥官技能实现脚本：155火炮支援。");
+            DEFAULT_ARTILLERY_155_SERVER_SCRIPT);
     }
 
-    private static void migrateLegacyDefaultScript(Path path, String marker) {
+    private static void writeDefaultScript(Path path, String source) {
         try {
-            if (!Files.isRegularFile(path)) {
-                return;
-            }
-
-            String current = Files.readString(path, StandardCharsets.UTF_8);
-            if (!current.startsWith(marker)) {
-                return;
-            }
-
-            Path disabledPath = path.resolveSibling(path.getFileName() + ".disabled");
-            Files.move(path, disabledPath, StandardCopyOption.REPLACE_EXISTING);
-            Espetro.LOGGER.info("已停用旧版合并 KubeJS 指挥官技能脚本: {} -> {}", path, disabledPath);
-        } catch (IOException e) {
-            Espetro.LOGGER.warn("无法停用旧版合并 KubeJS 指挥官技能脚本: {}", path, e);
-        }
-    }
-
-    private static void writeDefaultScript(Path path, String source, String marker) {
-        try {
-            if (Files.isRegularFile(path)) {
-                String current = Files.readString(path, StandardCharsets.UTF_8);
-                if (current.startsWith(marker) && !current.equals(source)) {
-                    Files.writeString(path, source, StandardCharsets.UTF_8);
-                    Espetro.LOGGER.info("已更新默认 KubeJS 指挥官技能脚本: {}", path);
-                }
+            if (Files.exists(path)) {
                 return;
             }
             Files.createDirectories(path.getParent());
@@ -113,13 +81,12 @@ public final class EspetroKubeJSDefaultScripts {
 
     private static final String DEFAULT_DRONE_DETECTION_SERVER_SCRIPT = """
         // Espetro 默认指挥官技能实现脚本：无人机侦测。
-        // 本文件由 Espetro 首次启动时写入；效果尽量使用 KubeJS 封装的原版对象方法实现。
-        var EspetroDroneMobEffects = Java.loadClass('net.minecraft.world.effect.MobEffects')
+        // 本文件由 Espetro 首次启动时写入；效果使用 KubeJS 封装的原版对象方法实现。
 
         EspetroCommanderSkills.on('drone_detection', event => {
           const range = 100.0
           const durationSeconds = 10
-          const commander = event.commander()
+          const commanderId = String(event.commanderId())
           const commanderTeam = event.team()
           const level = event.level()
 
@@ -128,16 +95,17 @@ public final class EspetroKubeJSDefaultScripts {
             return false
           }
 
-          let count = 0
+          var count = 0
           const players = level.getPlayers()
-          for (let i = 0; i < players.size(); i++) {
-            const target = players.get(i)
-            if (String(target.getUUID()) === String(commander.getUUID())) continue
-            const targetTeam = Espetro.getPlayerTeam(target)
+          for (var i = 0; i < players.size(); i++) {
+            var target = players.get(i)
+            var profile = target.getProfile()
+            if (profile != null && String(profile.getId()) === commanderId) continue
+            var targetTeam = Espetro.getPlayerTeam(target)
             if (targetTeam == null || String(targetTeam) === String(commanderTeam)) continue
-            if (target.getDistance(commander.getX(), commander.getY(), commander.getZ()) > range) continue
+            if (target.getDistance(event.x(), event.y(), event.z()) > range) continue
 
-            target.getPotionEffects().add(EspetroDroneMobEffects.GLOWING, durationSeconds * 20, 0, false, false)
+            target.getPotionEffects().add('minecraft:glowing', durationSeconds * 20, 0, false, false)
             count++
           }
 
@@ -149,21 +117,14 @@ public final class EspetroKubeJSDefaultScripts {
 
     private static final String DEFAULT_VEHICLE_SUPPLY_STATION_SERVER_SCRIPT = """
         // Espetro 默认指挥官技能实现脚本：载具补给站。
-        // 本文件由 Espetro 首次启动时写入；效果尽量使用 KubeJS 封装的原版对象方法实现。
-        var EspetroSupplyBuiltInRegistries = Java.loadClass('net.minecraft.core.registries.BuiltInRegistries')
-        var EspetroSupplyResourceLocation = Java.loadClass('net.minecraft.resources.ResourceLocation')
-        var EspetroSupplyComponent = Java.loadClass('net.minecraft.network.chat.Component')
-        var EspetroSupplyUUID = Java.loadClass('java.util.UUID')
-        var EspetroSupplySoundEvents = Java.loadClass('net.minecraft.sounds.SoundEvents')
+        // 本文件由 Espetro 首次启动时写入；效果使用 KubeJS 封装的原版对象方法实现。
 
         EspetroCommanderSkills.on('vehicle_supply_station', event => {
-          const commander = event.commander()
           const team = event.team()
           const level = event.level()
           const x = event.blockX()
           const y = event.blockY()
           const z = event.blockZ()
-          const stationId = EspetroSupplyUUID.randomUUID()
 
           if (team == null || String(team).length === 0) {
             event.tell('§c你不属于任何阵营，无法部署载具补给站！')
@@ -175,58 +136,53 @@ public final class EspetroKubeJSDefaultScripts {
             event.tell('§c载具补给站方块位置已有方块: ' + (x + 2) + ', ' + y + ', ' + z)
             return false
           }
-          barrel.set(espetroSupplyId('minecraft:barrel'))
+          barrel.set(Utils.id('minecraft', 'barrel'))
 
-          const entityType = espetroSupplyEntityType('minecraft:armor_stand')
-          if (entityType == null) {
-            barrel.set(espetroSupplyId('minecraft:air'))
-            event.tell('§c载具补给站实体类型无效。')
-            return false
-          }
-
-          const entity = level.createEntity(entityType)
-          if (entity == null) {
-            barrel.set(espetroSupplyId('minecraft:air'))
+          const spawned = espetroSupplySummonEntity(level, 'minecraft:armor_stand', x + 0.5, y, z + 0.5, team)
+          if (!spawned) {
+            barrel.set(Utils.id('minecraft', 'air'))
             event.tell('§c载具补给站实体创建失败。')
             return false
           }
-
-          entity.setPositionAndRotation(x + 0.5, y, z + 0.5, 0, 0)
-          entity.setCustomName(EspetroSupplyComponent.literal('载具补给站'))
-          entity.setCustomNameVisible(true)
-          entity.addTag('espetro_vehicle_supply_station')
-          entity.addTag('espetro_vehicle_supply_station_team_' + team)
-          entity.addTag('espetro_vehicle_supply_station_id_' + stationId)
-          entity.addTag('espetro_team_' + team)
-          entity.addTag('espetro_commander_skill')
-
-          const data = entity.getPersistentData()
-          data.putString('espetro_vehicle_supply_station_team', String(team))
-          data.putUUID('espetro_vehicle_supply_station_id', stationId)
-          data.putInt('espetro_vehicle_supply_station_x', x)
-          data.putInt('espetro_vehicle_supply_station_y', y)
-          data.putInt('espetro_vehicle_supply_station_z', z)
-          data.putString('espetro_vehicle_supply_station_block_id', 'minecraft:barrel')
-          data.putInt('espetro_vehicle_supply_station_block_x', x + 2)
-          data.putInt('espetro_vehicle_supply_station_block_y', y)
-          data.putInt('espetro_vehicle_supply_station_block_z', z)
-
-          entity.spawn()
-          commander.playSound(EspetroSupplySoundEvents.ITEM_PICKUP, 0.8, 1.0)
           event.tell('§a载具补给站已部署！位置: ' + x + ', ' + y + ', ' + z)
           console.info('[Espetro] vehicle_supply_station deployed through KubeJS wrappers')
           return true
         })
 
-        function espetroSupplyId(id) {
-          const normalized = String(id).indexOf(':') >= 0 ? String(id) : 'minecraft:' + id
-          return EspetroSupplyResourceLocation.tryParse(normalized)
+        function espetroSupplySummonEntity(level, id, x, y, z, team) {
+          var tags = [
+            'espetro_vehicle_supply_station',
+            'espetro_vehicle_supply_station_team_' + team,
+            'espetro_team_' + team,
+            'espetro_commander_skill'
+          ]
+          var command = 'summon ' + id + ' '
+            + espetroSupplyCommandNumber(x) + ' '
+            + espetroSupplyCommandNumber(y) + ' '
+            + espetroSupplyCommandNumber(z) + ' '
+            + "{CustomName:'{\\"text\\":\\"载具补给站\\"}',CustomNameVisible:1b,Tags:" + espetroSupplyNbtStringList(tags) + '}'
+          var result = level.runCommandSilent(command)
+          if (result <= 0) {
+            console.warn('[Espetro] vehicle_supply_station summon command failed: ' + command)
+          }
+          return result > 0
         }
 
-        function espetroSupplyEntityType(id) {
-          const location = espetroSupplyId(id)
-          if (location == null || !EspetroSupplyBuiltInRegistries.ENTITY_TYPE.containsKey(location)) return null
-          return EspetroSupplyBuiltInRegistries.ENTITY_TYPE.get(location)
+        function espetroSupplyNbtStringList(values) {
+          var result = []
+          for (var i = 0; i < values.length; i++) {
+            result.push(espetroSupplyNbtString(values[i]))
+          }
+          return '[' + result.join(',') + ']'
+        }
+
+        function espetroSupplyNbtString(value) {
+          return '"' + String(value).replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"') + '"'
+        }
+
+        function espetroSupplyCommandNumber(value) {
+          const number = Number(value)
+          return Number.isFinite(number) ? number.toFixed(3) : '0.000'
         }
 
         function espetroSupplyIsReplaceable(block) {
@@ -238,18 +194,30 @@ public final class EspetroKubeJSDefaultScripts {
     private static final String DEFAULT_ARTILLERY_155_SERVER_SCRIPT = """
         // Espetro 默认指挥官技能实现脚本：155火炮支援。
         // 本文件由 Espetro 首次启动时写入；火炮效果完全由 KubeJS server_scripts 实现。
-        var EspetroArtilleryBuiltInRegistries = Java.loadClass('net.minecraft.core.registries.BuiltInRegistries')
-        var EspetroArtilleryResourceLocation = Java.loadClass('net.minecraft.resources.ResourceLocation')
-        var EspetroArtilleryTagParser = Java.loadClass('net.minecraft.nbt.TagParser')
         var EspetroArtilleryTasks = []
         var EspetroArtilleryTick = 0
+        var EspetroArtilleryRandomSeed = 135791357
+        var EspetroArtilleryJavaRandom = null
+        var EspetroArtilleryEntityId = 'superbwarfare:mortar_shell'
+        var EspetroArtilleryScriptVersion = 'rejection-random-xz-20260715-0038'
+
+        console.info('[Espetro] artillery_155 script loaded: ' + EspetroArtilleryScriptVersion)
+
+        try {
+          if (typeof Java !== 'undefined') {
+            EspetroArtilleryJavaRandom = Java.loadClass('java.util.concurrent.ThreadLocalRandom')
+          }
+        } catch (error) {
+          console.warn('[Espetro] artillery_155 Java random unavailable, using script fallback: ' + error)
+          EspetroArtilleryJavaRandom = null
+        }
 
         ServerEvents.tick(event => {
           EspetroArtilleryTick++
           if (EspetroArtilleryTasks.length === 0) return
 
-          for (let i = EspetroArtilleryTasks.length - 1; i >= 0; i--) {
-            const task = EspetroArtilleryTasks[i]
+          for (var i = EspetroArtilleryTasks.length - 1; i >= 0; i--) {
+            var task = EspetroArtilleryTasks[i]
             if (task.tick <= EspetroArtilleryTick) {
               try {
                 task.run()
@@ -270,22 +238,17 @@ public final class EspetroKubeJSDefaultScripts {
 
         EspetroCommanderSkills.on('artillery_155', event => {
           const fired = espetroFirePureKubeArtillery(event, {
-            entity: 'minecraft:tnt',
-            nbt: '{Fuse:260s}',
-            targetY: event.y(),
+            entity: EspetroArtilleryEntityId,
+            spawnY: 20,
+            downwardVelocity: 30 / 20,
             impactRadius: 90,
-            launchHeight: 600,
-            clampSpawnYToBuildHeight: true,
-            sourceDistance: 160,
-            sourceRange: 70,
-            velocity: 3.5,
             firstBatchShots: 2,
-            firstBatchIntervalTicks: 20 * 20,
-            secondBatchDelayTicks: 2 * 20 * 20,
+            firstBatchIntervalTicks: 50,
+            secondBatchDelayTicks: 20 * 20,
             secondBatchWaves: 6,
             secondBatchIntervalTicks: 4 * 20,
             secondBatchEntitiesPerWave: 4,
-            approachYawDegrees: Math.random() * 360
+            debugChat: false
           })
           console.info('[Espetro] artillery_155 queued through KubeJS wrappers: ' + fired)
           return fired
@@ -298,16 +261,26 @@ public final class EspetroKubeJSDefaultScripts {
           }
 
           const cfg = espetroNormalizeArtilleryConfig(event, config)
-          if (cfg.entityType == null) {
+          if (cfg.entity == null || cfg.entity.length === 0) {
             event.tell('§c155火炮支援实体 ID 无效: ' + cfg.entity)
             return false
           }
+          console.info('[Espetro] artillery_155 target center: '
+            + espetroCommandNumber(cfg.centerX) + ', '
+            + espetroCommandNumber(cfg.targetY) + ', '
+            + espetroCommandNumber(cfg.centerZ))
+          espetroDebugTell(cfg, '目标中心: '
+            + espetroCommandNumber(cfg.centerX) + ', '
+            + espetroCommandNumber(cfg.targetY) + ', '
+            + espetroCommandNumber(cfg.centerZ)
+            + ' 半径=' + espetroCommandNumber(cfg.impactRadius)
+            + ' 生成高度=目标Y+' + espetroCommandNumber(cfg.spawnY))
 
-          for (let i = 0; i < cfg.firstBatchShots; i++) {
+          for (var i = 0; i < cfg.firstBatchShots; i++) {
             espetroQueueArtilleryWave(event, cfg, i * cfg.firstBatchIntervalTicks, 1)
           }
 
-          for (let wave = 0; wave < cfg.secondBatchWaves; wave++) {
+          for (var wave = 0; wave < cfg.secondBatchWaves; wave++) {
             espetroQueueArtilleryWave(
               event,
               cfg,
@@ -319,6 +292,7 @@ public final class EspetroKubeJSDefaultScripts {
           const total = cfg.firstBatchShots + cfg.secondBatchWaves * cfg.secondBatchEntitiesPerWave
           if (total > 0) {
             event.tell('§a155火炮支援已排定，预计发射实体: ' + total)
+            espetroDebugTell(cfg, '排定实体总数: ' + total)
           }
           return total > 0
         }
@@ -326,153 +300,202 @@ public final class EspetroKubeJSDefaultScripts {
         function espetroNormalizeArtilleryConfig(event, config) {
           const firstInterval = espetroIntConfig(config, 'firstBatchIntervalTicks', 20 * 20)
           const firstShots = espetroIntConfig(config, 'firstBatchShots', 2)
-          const entity = espetroStringConfig(config, 'entity', espetroStringConfig(config, 'entityId', 'minecraft:tnt'))
-          const level = event.level()
-          const targetY = espetroNumberConfig(config, 'targetY', event.y())
-          const launchHeight = espetroNumberConfig(config, 'launchHeight', 600)
-          const minSpawnY = espetroNumberConfig(config, 'minSpawnY', level.getMinBuildHeight() + 2)
-          const maxSpawnY = espetroNumberConfig(config, 'maxSpawnY', level.getMaxBuildHeight() - 2)
+          const entity = espetroStringConfig(config, 'entity', EspetroArtilleryEntityId)
           return {
-            level: level,
+            event: event,
+            level: event.level(),
+            dimensionId: event.dimensionId(),
             commander: event.commander(),
             skillId: event.skillId(),
             entity: entity,
-            entityType: espetroArtilleryEntityType(entity),
-            nbt: espetroStringConfig(config, 'nbt', ''),
-            centerX: event.x(),
-            centerZ: event.z(),
-            targetY: targetY,
+            centerX: espetroNumberValue(espetroTargetCoordinate(event, 'x', 0), 0),
+            centerZ: espetroNumberValue(espetroTargetCoordinate(event, 'z', 0), 0),
+            targetY: espetroNumberValue(espetroTargetCoordinate(event, 'y', 0), 0),
+            spawnY: espetroNumberConfig(config, 'spawnY', 180),
+            downwardVelocity: Math.max(0, espetroNumberConfig(config, 'downwardVelocity', 30 / 20)),
             impactRadius: Math.max(0, espetroNumberConfig(config, 'impactRadius', espetroNumberConfig(config, 'radius', 80))),
-            launchHeight: launchHeight,
-            minSpawnY: Math.min(minSpawnY, maxSpawnY),
-            maxSpawnY: Math.max(minSpawnY, maxSpawnY),
-            clampSpawnYToBuildHeight: espetroBooleanConfig(config, 'clampSpawnYToBuildHeight', true),
-            sourceDistance: Math.max(0, espetroNumberConfig(config, 'sourceDistance', 260)),
-            sourceRange: Math.max(0, espetroNumberConfig(config, 'sourceRange', espetroNumberConfig(config, 'sourceSpread', 90))),
-            velocity: Math.max(0, espetroNumberConfig(config, 'velocity', 3.2)),
-            inaccuracy: Math.max(0, espetroNumberConfig(config, 'inaccuracy', 0)),
-            approachYawDegrees: espetroNumberConfig(config, 'approachYawDegrees', Math.random() * 360),
             firstBatchShots: Math.max(0, firstShots),
             firstBatchIntervalTicks: Math.max(0, firstInterval),
             secondBatchDelayTicks: Math.max(0, espetroIntConfig(config, 'secondBatchDelayTicks', firstShots * firstInterval)),
             secondBatchWaves: Math.max(0, espetroIntConfig(config, 'secondBatchWaves', espetroIntConfig(config, 'secondBatchTimes', 6))),
             secondBatchIntervalTicks: Math.max(0, espetroIntConfig(config, 'secondBatchIntervalTicks', 4 * 20)),
-            secondBatchEntitiesPerWave: Math.max(0, espetroIntConfig(config, 'secondBatchEntitiesPerWave', espetroIntConfig(config, 'secondBatchEntitiesPerShot', 4)))
+            secondBatchEntitiesPerWave: Math.max(0, espetroIntConfig(config, 'secondBatchEntitiesPerWave', espetroIntConfig(config, 'secondBatchEntitiesPerShot', 4))),
+            debugChat: espetroBooleanConfig(config, 'debugChat', false)
           }
         }
 
         function espetroQueueArtilleryWave(event, cfg, delayTicks, count) {
-          for (let i = 0; i < count; i++) {
-            const target = espetroRandomPointInCircle(cfg.centerX, cfg.centerZ, cfg.impactRadius)
-            const source = espetroRandomSourcePoint(target[0], target[1], cfg)
-            const targetX = target[0] + espetroRandomSigned(cfg.inaccuracy)
-            const targetZ = target[1] + espetroRandomSigned(cfg.inaccuracy)
-            let spawnY = cfg.targetY + cfg.launchHeight
-            if (cfg.clampSpawnYToBuildHeight) {
-              spawnY = espetroClamp(spawnY, cfg.minSpawnY, cfg.maxSpawnY)
-            }
-            const motion = espetroMotionToward(source[0], spawnY, source[1], targetX, cfg.targetY, targetZ, cfg.velocity)
-            const rotation = espetroRotationFromMotion(motion)
-            espetroScheduleArtilleryTask(delayTicks, () => {
-              espetroSpawnArtilleryEntity(cfg, source[0], spawnY, source[1], targetX, cfg.targetY, targetZ, motion, rotation)
-            })
+          var radius = espetroPlainNumber(cfg.impactRadius, 0)
+          for (var i = 0; i < count; i++) {
+            espetroQueueArtilleryShot(cfg, delayTicks, radius, i, count)
           }
         }
 
-        function espetroSpawnArtilleryEntity(cfg, spawnX, spawnY, spawnZ, targetX, targetY, targetZ, motion, rotation) {
-          espetroLoadChunk(cfg.level, spawnX, spawnZ)
-          espetroLoadChunk(cfg.level, targetX, targetZ)
+        function espetroQueueArtilleryShot(cfg, delayTicks, radius, shotIndex, waveCount) {
+          var random = espetroRandomPointInCircle(cfg.centerX, cfg.centerZ, radius)
+          var spawn = random.point
+          var spawnY = espetroArtillerySpawnY(cfg)
+          console.info('[Espetro] artillery_155 queued shot index='
+            + shotIndex + ' center='
+            + espetroCommandNumber(cfg.centerX) + ', '
+            + espetroCommandNumber(cfg.centerZ) + ' radius='
+            + espetroCommandNumber(radius) + ' spawn='
+            + espetroCommandNumber(spawn[0]) + ', '
+            + espetroCommandNumber(spawnY) + ', '
+            + espetroCommandNumber(spawn[1])
+            + ' offset=' + espetroCommandNumber(random.offsetX) + ', '
+            + espetroCommandNumber(random.offsetZ)
+            + ' distance=' + espetroCommandNumber(random.distance)
+            + ' random=' + espetroCommandNumber(random.angleUnit) + '/'
+            + espetroCommandNumber(random.distanceUnit))
+          espetroDebugTell(cfg, '排队 delay=' + Math.floor(delayTicks)
+            + ' tick, 批内 ' + (shotIndex + 1) + '/' + waveCount
+            + ' -> ' + espetroCommandNumber(spawn[0])
+            + ', ' + espetroCommandNumber(spawnY)
+            + ', ' + espetroCommandNumber(spawn[1])
+            + ' 偏移=' + espetroCommandNumber(random.offsetX)
+            + '/' + espetroCommandNumber(random.offsetZ)
+            + ' 距离=' + espetroCommandNumber(random.distance)
+            + ' rand=' + espetroCommandNumber(random.angleUnit)
+            + '/' + espetroCommandNumber(random.distanceUnit))
+          espetroScheduleArtilleryTask(delayTicks, () => {
+            espetroSpawnArtilleryEntity(cfg, spawn[0], spawnY, spawn[1])
+          })
+        }
 
-          const entity = cfg.level.createEntity(cfg.entityType)
-          if (entity == null) {
-            console.warn('[Espetro] artillery_155 could not create entity: ' + cfg.entity)
+        function espetroSpawnArtilleryEntity(cfg, spawnX, spawnY, spawnZ) {
+          var command = 'summon ' + cfg.entity + ' '
+            + espetroCommandNumber(spawnX) + ' '
+            + espetroCommandNumber(spawnY) + ' '
+            + espetroCommandNumber(spawnZ) + ' {Motion:[0.0d,'
+            + espetroNbtDouble(-cfg.downwardVelocity) + ',0.0d]}'
+          var result = cfg.level.runCommandSilent(command)
+          if (result <= 0) {
+            console.warn('[Espetro] artillery_155 summon command failed: ' + command)
+            espetroDebugTell(cfg, '§c/summon 失败: ' + command)
             return false
           }
 
-          const nbt = espetroParseNbt(cfg.nbt)
-          if (nbt != null) {
-            entity.mergeNbt(nbt)
-          }
-
-          entity.setPositionAndRotation(spawnX, spawnY, spawnZ, rotation[0], rotation[1])
-          entity.setMotionX(motion[0])
-          entity.setMotionY(motion[1])
-          entity.setMotionZ(motion[2])
-          entity.addTag('espetro_commander_skill')
-          entity.addTag('espetro_artillery_155')
-
-          const data = entity.getPersistentData()
-          data.putString('espetro_commander_skill', String(cfg.skillId))
-          data.putDouble('espetro_artillery_target_x', targetX)
-          data.putDouble('espetro_artillery_target_y', targetY)
-          data.putDouble('espetro_artillery_target_z', targetZ)
-
-          entity.spawn()
-          entity.setMotionX(motion[0])
-          entity.setMotionY(motion[1])
-          entity.setMotionZ(motion[2])
+          console.info('[Espetro] artillery_155 summoned ' + cfg.entity + ' at '
+            + espetroCommandNumber(spawnX) + ', '
+            + espetroCommandNumber(spawnY) + ', '
+            + espetroCommandNumber(spawnZ))
+          espetroDebugTell(cfg, '/summon 返回=' + result + ' 坐标='
+            + espetroCommandNumber(spawnX) + ', '
+            + espetroCommandNumber(spawnY) + ', '
+            + espetroCommandNumber(spawnZ))
+          var verify = cfg.level.runCommandSilent('execute positioned '
+            + espetroCommandNumber(spawnX) + ' '
+            + espetroCommandNumber(spawnY) + ' '
+            + espetroCommandNumber(spawnZ)
+            + ' if entity @e[type=' + cfg.entity + ',distance=..4]')
+          console.info('[Espetro] artillery_155 summon verify near spawn: ' + verify)
+          espetroDebugTell(cfg, '附近炮弹校验=' + verify)
           return true
         }
 
-        function espetroArtilleryEntityType(id) {
-          const location = espetroArtilleryId(id)
-          if (location == null || !EspetroArtilleryBuiltInRegistries.ENTITY_TYPE.containsKey(location)) return null
-          return EspetroArtilleryBuiltInRegistries.ENTITY_TYPE.get(location)
-        }
-
-        function espetroArtilleryId(id) {
-          const normalized = String(id).indexOf(':') >= 0 ? String(id) : 'minecraft:' + id
-          return EspetroArtilleryResourceLocation.tryParse(normalized)
-        }
-
-        function espetroParseNbt(nbt) {
-          const trimmed = (nbt || '').trim()
-          if (trimmed.length === 0) return null
+        function espetroDebugTell(cfg, message) {
+          if (!cfg.debugChat) return
           try {
-            return EspetroArtilleryTagParser.parseTag(trimmed)
+            cfg.event.tell('§7[Espetro 155调试] ' + message)
           } catch (error) {
-            console.warn('[Espetro] artillery_155 ignored invalid entity NBT: ' + error)
-            return null
+            console.warn('[Espetro] artillery_155 debug chat failed: ' + error)
           }
         }
 
-        function espetroLoadChunk(level, x, z) {
-          level.getChunk(Math.floor(x / 16), Math.floor(z / 16))
+        function espetroArtillerySpawnY(cfg) {
+          return espetroPlainNumber(cfg.targetY, 0) + Math.max(1, espetroPlainNumber(cfg.spawnY, 20))
         }
 
         function espetroRandomPointInCircle(centerX, centerZ, radius) {
-          const angle = Math.random() * Math.PI * 2
-          const distance = Math.sqrt(Math.random()) * Math.max(0, radius)
-          return [
-            centerX + Math.cos(angle) * distance,
-            centerZ + Math.sin(angle) * distance
-          ]
+          var x = espetroPlainNumber(centerX, 0)
+          var z = espetroPlainNumber(centerZ, 0)
+          var r = Math.max(0, espetroPlainNumber(radius, 0))
+          if (r <= 0) {
+            return {
+              point: [x, z],
+              angleUnit: 0,
+              distanceUnit: 0,
+              offsetX: 0,
+              offsetZ: 0,
+              distance: 0
+            }
+          }
+
+          var offsetX = 0
+          var offsetZ = 0
+          var randomX = 0
+          var randomZ = 0
+          var radiusSquared = r * r
+          var distanceSquared = 0
+          for (var attempt = 0; attempt < 16; attempt++) {
+            randomX = espetroRandomUnit()
+            randomZ = espetroRandomUnit()
+            offsetX = (randomX * 2 - 1) * r
+            offsetZ = (randomZ * 2 - 1) * r
+            distanceSquared = offsetX * offsetX + offsetZ * offsetZ
+            if (distanceSquared <= radiusSquared && distanceSquared > 0.000001) break
+          }
+
+          while (distanceSquared > radiusSquared) {
+            offsetX = offsetX * 0.5
+            offsetZ = offsetZ * 0.5
+            distanceSquared = offsetX * offsetX + offsetZ * offsetZ
+          }
+          if (distanceSquared <= 0.000001) {
+            offsetX = (randomX >= 0.5 ? 0.5 : -0.5) * r
+            offsetZ = (randomZ >= 0.5 ? 0.25 : -0.25) * r
+            distanceSquared = offsetX * offsetX + offsetZ * offsetZ
+          }
+
+          return {
+            point: [
+              espetroPlainNumber(x, 0) + espetroPlainNumber(offsetX, 0),
+              espetroPlainNumber(z, 0) + espetroPlainNumber(offsetZ, 0)
+            ],
+            angleUnit: randomX,
+            distanceUnit: randomZ,
+            offsetX: offsetX,
+            offsetZ: offsetZ,
+            distance: espetroSqrt(distanceSquared)
+          }
         }
 
-        function espetroRandomSourcePoint(targetX, targetZ, cfg) {
-          const radians = cfg.approachYawDegrees * Math.PI / 180
-          const directionX = Math.cos(radians)
-          const directionZ = Math.sin(radians)
-          const centerX = targetX - directionX * cfg.sourceDistance
-          const centerZ = targetZ - directionZ * cfg.sourceDistance
-          const offset = espetroRandomPointInCircle(0, 0, cfg.sourceRange)
-          return [centerX + offset[0], centerZ + offset[1]]
+        function espetroSqrt(value) {
+          var number = espetroPlainNumber(value, 0)
+          if (number <= 0) return 0
+          var result = Math.sqrt(number)
+          return isFinite(result) ? result : 0
         }
 
-        function espetroMotionToward(spawnX, spawnY, spawnZ, targetX, targetY, targetZ, velocity) {
-          const dx = targetX - spawnX
-          const dy = targetY - spawnY
-          const dz = targetZ - spawnZ
-          const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
-          if (length <= 0.000001 || velocity <= 0) return [0, 0, 0]
-          return [dx / length * velocity, dy / length * velocity, dz / length * velocity]
+        function espetroRandomUnit() {
+          if (EspetroArtilleryJavaRandom != null) {
+            try {
+              var javaRandom = espetroPlainNumber(EspetroArtilleryJavaRandom.current().nextDouble(), NaN)
+              if (isFinite(javaRandom) && javaRandom >= 0 && javaRandom < 1) return javaRandom
+            } catch (error) {
+              console.warn('[Espetro] artillery_155 Java random failed, using script fallback: ' + error)
+              EspetroArtilleryJavaRandom = null
+            }
+          }
+          return espetroFallbackRandomUnit()
         }
 
-        function espetroRotationFromMotion(motion) {
-          const horizontal = Math.sqrt(motion[0] * motion[0] + motion[2] * motion[2])
-          const yaw = Math.atan2(motion[2], motion[0]) * 180 / Math.PI - 90
-          const pitch = -(Math.atan2(motion[1], horizontal) * 180 / Math.PI)
-          return [yaw, pitch]
+        function espetroFallbackRandomUnit() {
+          var seed = Math.floor(espetroPlainNumber(EspetroArtilleryRandomSeed, 135791357))
+          seed = (seed * 48271) % 2147483647
+          if (seed <= 0) seed += 2147483646
+          EspetroArtilleryRandomSeed = seed
+          return seed / 2147483647
+        }
+
+        function espetroCommandNumber(value) {
+          var number = espetroPlainNumber(value, NaN)
+          return isFinite(number) ? number.toFixed(3) : '0.000'
+        }
+
+        function espetroNbtDouble(value) {
+          return espetroCommandNumber(value) + 'd'
         }
 
         function espetroStringConfig(config, key, fallback) {
@@ -480,31 +503,71 @@ public final class EspetroKubeJSDefaultScripts {
           return value === undefined || value === null ? fallback : String(value)
         }
 
-        function espetroNumberConfig(config, key, fallback) {
-          const value = Number(config && config[key])
-          return Number.isFinite(value) ? value : fallback
+        function espetroTargetCoordinate(event, axis, fallback) {
+          var blockPosValue = null
+          try {
+            blockPosValue = event.blockPos()
+          } catch (error) {
+            blockPosValue = null
+          }
+
+          const blockPosNumber = espetroBlockPosAxis(blockPosValue, axis, NaN)
+          if (isFinite(blockPosNumber)) return blockPosNumber
+
+          const blockMethod = axis === 'x' ? 'blockX' : axis === 'y' ? 'blockY' : 'blockZ'
+          const exactMethod = axis
+          return espetroNumberValue(espetroCall(event, blockMethod), espetroNumberValue(espetroCall(event, exactMethod), fallback))
         }
 
-        function espetroBooleanConfig(config, key, fallback) {
-          const value = config && config[key]
+        function espetroCall(target, method) {
+          try {
+            const value = target[method]
+            return typeof value === 'function' ? value.call(target) : value
+          } catch (error) {
+            return null
+          }
+        }
+
+        function espetroBlockPosAxis(blockPos, axis, fallback) {
+          if (blockPos == null) return fallback
+          const text = String(blockPos)
+          const named = text.match(new RegExp(axis + '=(-?\\\\d+)'))
+          if (named != null && named.length > 1) {
+            return espetroNumberValue(named[1], fallback)
+          }
+
+          const values = text.match(/-?\\\\d+/g)
+          if (values == null || values.length < 3) return fallback
+          const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+          return espetroNumberValue(values[index], fallback)
+        }
+
+        function espetroNumberValue(value, fallback) {
           if (value === undefined || value === null) return fallback
-          return value === true || String(value).toLowerCase() === 'true'
+          if (typeof value === 'number') return isFinite(value) ? value : fallback
+          if (value.doubleValue) return espetroNumberValue(value.doubleValue(), fallback)
+          if (value.intValue) return espetroNumberValue(value.intValue(), fallback)
+          return espetroPlainNumber(value, fallback)
+        }
+
+        function espetroPlainNumber(value, fallback) {
+          if (value === undefined || value === null) return fallback
+          var number = parseFloat(String(value))
+          return isFinite(number) ? number : fallback
+        }
+
+        function espetroNumberConfig(config, key, fallback) {
+          return espetroNumberValue(config && config[key], fallback)
         }
 
         function espetroIntConfig(config, key, fallback) {
           return Math.round(espetroNumberConfig(config, key, fallback))
         }
 
-        function espetroRandomSigned(value) {
-          return value <= 0 ? 0 : (Math.random() * 2 - 1) * value
-        }
-
-        function espetroClamp(value, min, max) {
-          return Math.max(min, Math.min(max, value))
-        }
-
-        function espetroFiniteNumber(value) {
-          return Number.isFinite(value) ? value : 0
+        function espetroBooleanConfig(config, key, fallback) {
+          const value = config && config[key]
+          if (value === undefined || value === null) return fallback
+          return value === true || String(value).toLowerCase() === 'true'
         }
         """;
 }
