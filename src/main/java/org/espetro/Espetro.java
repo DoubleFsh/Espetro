@@ -144,6 +144,8 @@ public class Espetro {
         NetworkManager.syncSquadsToTeam("ATTACK");
         NetworkManager.syncSquadsToTeam("DEFEND");
 
+        org.espetro.tutorial.TutorialManager.getInstance().onConfigReloaded();
+
         LOGGER.info("Espetro 所有配置已热重载完成");
     }
 

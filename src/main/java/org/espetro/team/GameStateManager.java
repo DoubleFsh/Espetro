@@ -78,6 +78,7 @@ public class GameStateManager {
         this.currentPhase = phase;
         Espetro.LOGGER.info("游戏阶段切换: {}", phase.getDisplayName());
         NetworkManager.broadcastGamePhase(phase);
+        org.espetro.tutorial.TutorialManager.getInstance().onPhaseChanged(phase);
     }
 
     // ========== 队伍选择阶段 ==========
@@ -625,6 +626,8 @@ public class GameStateManager {
         player.sendSystemMessage(Component.literal("§e请选择你的阵营！按 §aK键 §e打开阵营选择界面"));
         player.sendSystemMessage(Component.literal("§e攻击方 §7或 §9防守方"));
         player.sendSystemMessage(Component.literal("§6========================================"));
+
+        org.espetro.tutorial.TutorialManager.getInstance().onPlayerJoin(player, false);
     }
 
     public void onPlayerLeave(UUID uuid) {
@@ -632,6 +635,7 @@ public class GameStateManager {
         teamSelectedPlayers.remove(uuid);
         midGameJoiners.remove(uuid);
         deployClassSelected.remove(uuid);
+        org.espetro.tutorial.TutorialManager.getInstance().onPlayerLeave(uuid);
     }
 
     public void applyWaitingState(ServerPlayer player) {
@@ -665,6 +669,8 @@ public class GameStateManager {
         player.sendSystemMessage(Component.literal("§e⚡ 战场上需要增援！请选择你的阵营"));
         player.sendSystemMessage(Component.literal("§e按上方按钮选择 §c进攻方 §e或 §9防守方"));
         player.sendSystemMessage(Component.literal("§6========================================"));
+
+        org.espetro.tutorial.TutorialManager.getInstance().onPlayerJoin(player, true);
     }
 
     public void onMidGameTeamSelected(ServerPlayer player, String team) {

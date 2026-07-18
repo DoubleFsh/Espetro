@@ -5,6 +5,8 @@
       <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/latvian/mods/rhino-forge/2001.2.2-build.17_mapped_official_1.20.1/rhino-forge-2001.2.2-build.17_mapped_official_1.20.1.jar!/" />
     </CLASSES>
     <JAVADOC />
-    <SOURCES />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/latvian/mods/rhino-forge/2001.2.2-build.17_mapped_official_1.20.1/rhino-forge-2001.2.2-build.17_mapped_official_1.20.1-sources.jar!/" />
+    </SOURCES>
   </library>
 </component>

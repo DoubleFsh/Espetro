@@ -23,5 +23,10 @@
     "jump_cost": 15,
     "regen_delay_seconds": 4,
     "regen_per_second": 2
+  },
+  "tutorial": {
+    "enabled": true,
+    "show_on_join": true,
+    "allow_skip": true
   }
 }

@@ -71,6 +71,13 @@ minecraft {
         client {
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             property 'forge.enabledGameTestNamespaces', mod_id
+
+            // Hybrid GPU workaround (Intel + broken/mismatched NVIDIA userspace):
+            // force Mesa / Intel so GLFW can create an OpenGL context.
+            // Safe no-op on pure Intel/AMD; override by unsetting env in the IDE if needed.
+            environment '__GLX_VENDOR_LIBRARY_NAME', 'mesa'
+            environment 'DRI_PRIME', '1'
+            environment '__EGL_VENDOR_LIBRARY_FILENAMES', '/usr/share/glvnd/egl_vendor.d/50_mesa.json'
         }
 
         server {

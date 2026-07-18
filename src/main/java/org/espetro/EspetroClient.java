@@ -32,6 +32,10 @@ public class EspetroClient {
             .addListener(EspetroClient::onRenderNameTag);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onLivingJump);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onScreenRender);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onScreenMouseClick);
     }
 
     // ==================== 事件处理方法 ====================
@@ -90,9 +94,28 @@ public class EspetroClient {
 
     private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc != null && mc.screen == null && mc.level != null) {
-            org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
-            org.espetro.client.gui.StaminaOverlay.render(event.getGuiGraphics(), mc);
+        if (mc != null && mc.level != null) {
+            if (mc.screen == null) {
+                org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
+                org.espetro.client.gui.StaminaOverlay.render(event.getGuiGraphics(), mc);
+                org.espetro.client.gui.TutorialOverlay.render(event.getGuiGraphics(), mc);
+            }
+        }
+    }
+
+    private static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc != null && org.espetro.client.gui.TutorialOverlay.isVisible()) {
+            org.espetro.client.gui.TutorialOverlay.render(event.getGuiGraphics(), mc);
+        }
+    }
+
+    private static void onScreenMouseClick(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
+        if (event.getButton() != 0) {
+            return;
+        }
+        if (org.espetro.client.gui.TutorialOverlay.handleClick(event.getMouseX(), event.getMouseY())) {
+            event.setCanceled(true);
         }
     }
 

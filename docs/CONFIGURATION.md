@@ -88,6 +88,11 @@ world/datapacks/espetro_server_config/
     "jump_cost": 15,
     "regen_delay_seconds": 4,
     "regen_per_second": 2
+  },
+  "tutorial": {
+    "enabled": false,
+    "show_on_join": true,
+    "allow_skip": true
   }
 }
 ```
@@ -146,6 +151,38 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `jump_cost` | 15 | 每次跳跃消耗的体力 |
 | `regen_delay_seconds` | 4 | 最后一次消耗后，开始恢复前等待的秒数 |
 | `regen_per_second` | 2 | 恢复期间每秒恢复的体力 |
+
+### `tutorial`
+
+引导式新手教程：不打断正常 8 阶段对局，在进服与关键节点弹出分步提示（屏幕卡片 + 聊天可点击操作）。进度仅本会话有效；「跳过」后本会话不再自动弹出。重进服务器会重新开始；也可用命令手动打开。
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `enabled` | `false` | 总开关。生产服建议关闭；教学服在世界数据包中设为 `true` |
+| `show_on_join` | `true` | 进服是否自动推送欢迎与当前阶段步骤 |
+| `allow_skip` | `true` | 是否允许「跳过教程」；为 `false` 时仍可「下一步 / 关闭当前」 |
+
+教学服示例（世界数据包覆盖 `game.json` 片段）：
+
+```json
+"tutorial": {
+  "enabled": true,
+  "show_on_join": true,
+  "allow_skip": true
+}
+```
+
+玩家命令（无需 OP）：
+
+| 命令 | 说明 |
+| --- | --- |
+| `/espetro tutorial` | 重新打开欢迎/当前阶段教程 |
+| `/espetro tutorial next` | 下一步 |
+| `/espetro tutorial dismiss` | 关闭当前步骤（队列中有后续则继续展示） |
+| `/espetro tutorial skip` | 跳过本会话全部教程 |
+| `/espetro tutorial status` | 查看开关与本会话状态 |
+
+`/reload` 或 `/espetro reload` 后会重新读取 `tutorial` 节点；若 `enabled` 变为 `false`，会清除在线玩家的教程卡片。
 
 持续奔跑会在开始时结算一次消耗，之后每秒结算一次；跳跃按次结算。停止消耗后经过 `regen_delay_seconds`，立即恢复一次，之后每秒按 `regen_per_second` 恢复。
 

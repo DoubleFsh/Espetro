@@ -135,8 +135,14 @@ public class ClassSelectPacket {
             if (VoteManager.getInstance().isCommander(player.getUUID())) {
                 giveBastionWandIfNeeded(player);
                 giveVehicleDeployStickIfNeeded(player);
+                org.espetro.tutorial.TutorialManager.getInstance()
+                    .tryShow(player, org.espetro.tutorial.TutorialStep.BASTION);
+                org.espetro.tutorial.TutorialManager.getInstance()
+                    .tryShow(player, org.espetro.tutorial.TutorialStep.VEHICLE);
             }
             org.espetro.team.TeamPackManager.getInstance().syncTeamPackItem(player);
+            org.espetro.tutorial.TutorialManager.getInstance()
+                .tryShow(player, org.espetro.tutorial.TutorialStep.TEAM_PACK);
 
             String team = countManager.getEffectivePlayerTeam(player.getUUID());
             String factionId = countManager.getPlayerFaction(player.getUUID());

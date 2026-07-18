@@ -45,6 +45,11 @@ public class GameConfig {
     private static int staminaRegenDelaySeconds = 4;
     private static int staminaRegenPerSecond = 2;
 
+    // ========== 新手教程 ==========
+    private static boolean tutorialEnabled = false;
+    private static boolean tutorialShowOnJoin = true;
+    private static boolean tutorialAllowSkip = true;
+
     private static boolean loaded = false;
 
     /**
@@ -100,6 +105,14 @@ public class GameConfig {
                         getInt(stamina, "regen_per_second", staminaRegenPerSecond));
                 }
 
+                // 新手教程
+                if (root.has("tutorial")) {
+                    JsonObject tutorial = root.getAsJsonObject("tutorial");
+                    tutorialEnabled = getBoolean(tutorial, "enabled", tutorialEnabled);
+                    tutorialShowOnJoin = getBoolean(tutorial, "show_on_join", tutorialShowOnJoin);
+                    tutorialAllowSkip = getBoolean(tutorial, "allow_skip", tutorialAllowSkip);
+                }
+
                 loaded = true;
                 Espetro.LOGGER.info("已从 {} 加载游戏配置: 需要{}人, 部署{}秒, 守方指挥官投票{}秒, 攻方指挥官投票{}秒, 守方编制选择{}秒, 攻方编制选择{}秒, 编制池{}个",
                     EspetroDataResources.describeSource(resource), requiredPlayers, deployTimeoutSeconds,
@@ -113,6 +126,8 @@ public class GameConfig {
                         : String.format("上限%d | 奔跑每秒消耗%d | 跳跃消耗%d | %d秒后每秒恢复%d",
                             playerStamina, sprintStaminaCostPerSecond, jumpStaminaCost,
                             staminaRegenDelaySeconds, staminaRegenPerSecond));
+                Espetro.LOGGER.info("教程配置: enabled={} show_on_join={} allow_skip={}",
+                    tutorialEnabled, tutorialShowOnJoin, tutorialAllowSkip);
                 return;
             }
 
@@ -129,6 +144,11 @@ public class GameConfig {
 
     private static double getDouble(JsonObject obj, String key, double defaultValue) {
         if (obj.has(key)) return obj.get(key).getAsDouble();
+        return defaultValue;
+    }
+
+    private static boolean getBoolean(JsonObject obj, String key, boolean defaultValue) {
+        if (obj.has(key)) return obj.get(key).getAsBoolean();
         return defaultValue;
     }
 
@@ -163,6 +183,9 @@ public class GameConfig {
         jumpStaminaCost = 15;
         staminaRegenDelaySeconds = 4;
         staminaRegenPerSecond = 2;
+        tutorialEnabled = false;
+        tutorialShowOnJoin = true;
+        tutorialAllowSkip = true;
         loaded = false;
         loadConfig(server);
     }
@@ -247,5 +270,17 @@ public class GameConfig {
 
     public static int getStaminaRegenPerSecond() {
         return staminaRegenPerSecond;
+    }
+
+    public static boolean isTutorialEnabled() {
+        return tutorialEnabled;
+    }
+
+    public static boolean isTutorialShowOnJoin() {
+        return tutorialShowOnJoin;
+    }
+
+    public static boolean isTutorialAllowSkip() {
+        return tutorialAllowSkip;
     }
 }

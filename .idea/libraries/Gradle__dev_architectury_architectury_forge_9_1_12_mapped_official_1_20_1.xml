@@ -5,6 +5,8 @@
       <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/architectury/architectury-forge/9.1.12_mapped_official_1.20.1/architectury-forge-9.1.12_mapped_official_1.20.1.jar!/" />
     </CLASSES>
     <JAVADOC />
-    <SOURCES />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/architectury/architectury-forge/9.1.12_mapped_official_1.20.1/architectury-forge-9.1.12_mapped_official_1.20.1-sources.jar!/" />
+    </SOURCES>
   </library>
 </component>

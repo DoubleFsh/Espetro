@@ -1,0 +1,15 @@
+Java Launcher: /home/kaguya/java/zulu17.64.17-ca-jdk17.0.18-linux_x64/bin/java
+Arguments: '--task, SRG_TO_MCP, --input, /home/kaguya/.gradle/caches/modules-2/files-2.1/dev.architectury/architectury-forge/9.1.12/f99d8f8dbc47eae7607a718768e3a117bd475938/architectury-forge-9.1.12.jar, --output, /home/kaguya/.gradle/caches/forge_gradle/deobf_dependencies/dev/architectury/architectury-forge/9.1.12_mapped_official_1.20.1/architectury-forge-9.1.12_mapped_official_1.20.1.jar, --mcp, /home/kaguya/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip, --strip-signatures'
+Classpath:
+ - /home/kaguya/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/installertools/1.4.4/installertools-1.4.4-fatjar.jar
+Working directory: /home/kaguya/IdeaProjects/Espetro/build/_RenameSrg2Mcp_625111221
+Main class: net.minecraftforge.installertools.ConsoleTool
+====================================
+Task: SRG_TO_MCP
+Input:  /home/kaguya/.gradle/caches/modules-2/files-2.1/dev.architectury/architectury-forge/9.1.12/f99d8f8dbc47eae7607a718768e3a117bd475938/architectury-forge-9.1.12.jar
+Output: /home/kaguya/.gradle/caches/forge_gradle/deobf_dependencies/dev/architectury/architectury-forge/9.1.12_mapped_official_1.20.1/architectury-forge-9.1.12_mapped_official_1.20.1.jar
+MCP:    /home/kaguya/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip
+Loading MCP Data
+Processing ZIP file
+Stripped Manifest of sha digests
+Process complete

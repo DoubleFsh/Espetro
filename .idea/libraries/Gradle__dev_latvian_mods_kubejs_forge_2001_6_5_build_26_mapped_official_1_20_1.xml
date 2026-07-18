@@ -5,6 +5,8 @@
       <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/latvian/mods/kubejs-forge/2001.6.5-build.26_mapped_official_1.20.1/kubejs-forge-2001.6.5-build.26_mapped_official_1.20.1.jar!/" />
     </CLASSES>
     <JAVADOC />
-    <SOURCES />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/forge_gradle/deobf_dependencies/dev/latvian/mods/kubejs-forge/2001.6.5-build.26_mapped_official_1.20.1/kubejs-forge-2001.6.5-build.26_mapped_official_1.20.1-sources.jar!/" />
+    </SOURCES>
   </library>
 </component>

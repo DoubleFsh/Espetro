@@ -340,6 +340,9 @@ public class BastionEventHandler {
             return;
         }
 
+        org.espetro.tutorial.TutorialManager.getInstance()
+            .tryShow(player, org.espetro.tutorial.TutorialStep.RESUPPLY);
+
         // 智能补给：检查背包已有数量，补充到上限
         int givenItems = 0;
         StringBuilder detail = new StringBuilder();

@@ -123,6 +123,8 @@ public final class StaminaManager {
         return PLAYER_STAMINA.computeIfAbsent(player.getUUID(), ignored -> {
             PlayerStamina state = new PlayerStamina(GameConfig.getPlayerStamina());
             sync(player, state);
+            org.espetro.tutorial.TutorialManager.getInstance()
+                .tryShow(player, org.espetro.tutorial.TutorialStep.STAMINA);
             return state;
         });
     }

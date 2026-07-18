@@ -42,6 +42,10 @@ KubeJS 是强制依赖。加载时会自动暴露 `Espetro`、`EspetroAPI`、`Es
 | 部署界面 `C` | 职业选择 |
 | 部署界面 `B` | 小队界面 |
 
+## 新手教程
+
+引导式对局教程可在数据包 `data/espetro/config/game.json` 的 `tutorial` 节点中开关（默认 `enabled: false`）。开启后进服与阶段切换会弹出分步提示，覆盖队伍、投票、编制、部署、小队、兵站、队包、前哨、载具、指挥官技能、体力与兵力等。玩家可用 `/espetro tutorial` 重开或跳过。详见 [配置文档](docs/CONFIGURATION.md) 的 `tutorial` 小节。
+
 ## 配置
 
 业务配置全部使用 JSON 数据包，可通过世界数据包覆盖并使用 `/reload` 或 `/espetro reload` 热重载：
@@ -69,6 +73,18 @@ cd /home/shushu/IdeaProjects/Espetro
 ```
 
 产物位于 `build/libs/espetro-<version>.jar`。
+
+### 开发客户端启动（双显卡 / GLFW 报错）
+
+若出现 `Failed to find a valid GLFW profile` / `GLXBadFBConfig`，多为 NVIDIA 驱动与内核模块版本不一致。项目已在 `runClient` 中默认强制走 Intel Mesa：
+
+```bash
+./gradlew runClient
+# 或
+./scripts/run-client.sh
+```
+
+根因修复：更新内核/驱动包后**重启系统**，再确认 `nvidia-smi` 与 `glxinfo -B` 正常。
 
 ## 文档
 

@@ -267,6 +267,24 @@ public class NetworkManager {
             StaminaJumpPacket::read,
             StaminaJumpPacket::handle
         );
+
+        // 新手教程同步（S→C）
+        NET.registerMessage(
+            nextId(),
+            TutorialSyncPacket.class,
+            TutorialSyncPacket::write,
+            TutorialSyncPacket::read,
+            TutorialSyncPacket::handle
+        );
+
+        // 新手教程操作（C→S）
+        NET.registerMessage(
+            nextId(),
+            TutorialActionPacket.class,
+            TutorialActionPacket::write,
+            TutorialActionPacket::read,
+            TutorialActionPacket::handle
+        );
     }
 
     /**
@@ -663,6 +681,8 @@ public class NetworkManager {
         }
 
         NET.send(PacketDistributor.PLAYER.with(() -> player), new VehicleDeployScreenPacket(list));
+        org.espetro.tutorial.TutorialManager.getInstance()
+            .tryShow(player, org.espetro.tutorial.TutorialStep.VEHICLE);
     }
 
     /**
@@ -772,6 +792,21 @@ public class NetworkManager {
         );
 
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
+
+        org.espetro.tutorial.TutorialManager tutorial = org.espetro.tutorial.TutorialManager.getInstance();
+        tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.UNIFIED_DEPLOY);
+        tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.CLASS_SELECT);
+        tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.SQUAD);
+        if (bm.isWaitingForBastion(player.getUUID())) {
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.RESPAWN_FLOW);
+        }
+        if (isCmd) {
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.BASTION);
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.VEHICLE);
+        }
+        if ("DEFEND".equals(team) && org.espetro.team.OutpostManager.getInstance().isAvailable()) {
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.OUTPOST);
+        }
     }
 
     /**
@@ -926,5 +961,14 @@ public class NetworkManager {
         CommanderSkillSyncPacket packet = new CommanderSkillSyncPacket(isCommander, cooldowns,
             org.espetro.team.CommanderSkillManager.getInstance().getSkillViews());
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
+
+        if (isCommander) {
+            org.espetro.tutorial.TutorialManager tutorial =
+                org.espetro.tutorial.TutorialManager.getInstance();
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.COMMANDER_SKILLS);
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.SKILL_DRONE);
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.SKILL_SUPPLY);
+            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.SKILL_ARTY);
+        }
     }
 }

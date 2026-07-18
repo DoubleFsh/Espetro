@@ -280,4 +280,14 @@ public class ClientPacketHandlers {
                 packet.isCommander(), packet.getCooldowns(), packet.getSkills());
         }
     }
+
+    // ==================== TutorialSyncPacket ====================
+
+    public static void handleTutorialSync(byte action, String stepId, int index, int total, boolean allowSkip) {
+        if (action == org.espetro.network.TutorialSyncPacket.ACTION_CLEAR) {
+            org.espetro.client.gui.TutorialOverlay.clear();
+            return;
+        }
+        org.espetro.client.gui.TutorialOverlay.show(stepId, index, total, allowSkip);
+    }
 }

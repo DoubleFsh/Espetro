@@ -308,5 +308,48 @@ public class EspetroCommand {
                 return 1;
             })
         );
+
+        // 新手教程：任意玩家可用（不继承管理员 requires）
+        dispatcher.register(Commands.literal("espetro")
+            .then(Commands.literal("tutorial")
+                .executes(ctx -> {
+                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                    org.espetro.tutorial.TutorialManager.getInstance().reopen(player);
+                    return 1;
+                })
+                .then(Commands.literal("next")
+                    .executes(ctx -> {
+                        ServerPlayer player = ctx.getSource().getPlayerOrException();
+                        org.espetro.tutorial.TutorialManager.getInstance()
+                            .handleAction(player, org.espetro.tutorial.TutorialManager.Action.NEXT, null);
+                        return 1;
+                    })
+                )
+                .then(Commands.literal("skip")
+                    .executes(ctx -> {
+                        ServerPlayer player = ctx.getSource().getPlayerOrException();
+                        org.espetro.tutorial.TutorialManager.getInstance().skipAll(player);
+                        return 1;
+                    })
+                )
+                .then(Commands.literal("dismiss")
+                    .executes(ctx -> {
+                        ServerPlayer player = ctx.getSource().getPlayerOrException();
+                        org.espetro.tutorial.TutorialManager.getInstance()
+                            .handleAction(player, org.espetro.tutorial.TutorialManager.Action.DISMISS, null);
+                        return 1;
+                    })
+                )
+                .then(Commands.literal("status")
+                    .executes(ctx -> {
+                        ServerPlayer player = ctx.getSource().getPlayerOrException();
+                        String status = org.espetro.tutorial.TutorialManager.getInstance().statusLine(player);
+                        ctx.getSource().sendSystemMessage(
+                            Component.literal("§6[Espetro 教程] §f" + status));
+                        return 1;
+                    })
+                )
+            )
+        );
     }
 }
