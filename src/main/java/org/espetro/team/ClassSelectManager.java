@@ -116,6 +116,16 @@ public class ClassSelectManager {
             selectedFactionPool.add(allFactions.get(i).id);
         }
 
+        long distinctAffiliations = allFactions.stream()
+            .map(faction -> faction.factionId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .count();
+        if (distinctAffiliations < 2) {
+            Espetro.LOGGER.warn("可玩编制只有 {} 个不同 faction_id，攻守双方可能无法选择互不冲突的阵营",
+                distinctAffiliations);
+        }
+
         Espetro.LOGGER.info("本局编制池（{}个）：{}", selectedFactionPool.size(), selectedFactionPool);
     }
 
@@ -128,20 +138,33 @@ public class ClassSelectManager {
 
     /**
      * 获取指定队伍当前可选择的编制列表。
-     * 攻方选择时会排除守方已确定的编制，避免双方使用同一编制。
+     * 第二方选择时会排除第一方最终编制所属 faction_id 下的全部编制。
      */
     public List<String> getAvailableFactionPoolForTeam(String team) {
         List<String> source = selectedFactionPool != null && !selectedFactionPool.isEmpty()
             ? selectedFactionPool
             : getAllPlayableFactionIds();
 
-        List<String> available = new ArrayList<>();
+        int targetSize = Math.max(1, GameConfig.getFactionPoolSize());
+        LinkedHashSet<String> available = new LinkedHashSet<>();
         for (String factionId : source) {
             if (isFactionAvailableForTeam(team, factionId)) {
                 available.add(factionId);
+                if (available.size() >= targetSize) break;
             }
         }
-        return available;
+
+        // 第二方选择时会排除第一方已经确定的编制；从池外补足候选数，
+        // 避免界面从 3×2 的六张卡片退化为五张。
+        if (available.size() < targetSize) {
+            for (String factionId : getAllPlayableFactionIds()) {
+                if (isFactionAvailableForTeam(team, factionId)) {
+                    available.add(factionId);
+                    if (available.size() >= targetSize) break;
+                }
+            }
+        }
+        return new ArrayList<>(available);
     }
 
     /**
@@ -158,13 +181,20 @@ public class ClassSelectManager {
         if (factionId == null || factionId.isBlank()) {
             return false;
         }
-        if ("ATTACK".equals(team) && factionId.equals(finalDefendClass)) {
+        String opponentFaction = "ATTACK".equals(team) ? finalDefendClass
+            : "DEFEND".equals(team) ? finalAttackClass : null;
+        return opponentFaction == null || !hasSameFactionId(factionId, opponentFaction);
+    }
+
+    private boolean hasSameFactionId(String firstFormationId, String secondFormationId) {
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        FactionDataLoader.FactionData first = loader.getFaction(firstFormationId);
+        FactionDataLoader.FactionData second = loader.getFaction(secondFormationId);
+        if (first == null || second == null || first.factionId == null || second.factionId == null) {
             return false;
         }
-        if ("DEFEND".equals(team) && factionId.equals(finalAttackClass)) {
-            return false;
-        }
-        return true;
+        // 用户选择精确字符串比较：不 trim、不忽略大小写。
+        return first.factionId.equals(second.factionId);
     }
 
     private List<String> getAllPlayableFactionIds() {
@@ -180,6 +210,7 @@ public class ClassSelectManager {
             }
             ids.add(faction.id);
         }
+        Collections.sort(ids);
         return ids;
     }
 

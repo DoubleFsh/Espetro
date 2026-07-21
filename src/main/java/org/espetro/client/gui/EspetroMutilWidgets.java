@@ -12,10 +12,10 @@ import java.util.regex.Pattern;
 
 final class EspetroMutilWidgets {
 
-    static final int BACKDROP = 0x7A3A3A3A;
-    static final int PANEL = 0x88363636;
-    static final int PANEL_SOFT = 0x66363636;
-    static final int BORDER = 0xA06D7482;
+    static final int BACKDROP = 0xB0121517;
+    static final int PANEL = 0xE0191C1E;
+    static final int PANEL_SOFT = 0xB0212527;
+    static final int BORDER = 0xA05B6260;
     static final int BORDER_ACTIVE = 0xFFE8B85C;
     static final int TEXT = 0xFFFFFFFF;
     static final int MUTED = 0xFFD4D8E0;
@@ -28,6 +28,7 @@ final class EspetroMutilWidgets {
     static final int POSITIVE = 0xFF75D58A;
     static final int WARNING = 0xFFFFB44C;
     static final int NEGATIVE = 0xFFFF6666;
+    static final int PHASE_HEADER_HEIGHT = 42;
 
     private static final Pattern FORMAT_CODE = Pattern.compile("(?i)\u00a7[0-9A-FK-OR]");
 
@@ -94,6 +95,81 @@ final class EspetroMutilWidgets {
         return "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
     }
 
+    /** Adds a three-line phase/status header at the very top of a screen. */
+    static int addPhaseHeader(GuiElement root, int screenWidth, String title,
+                              String status, String detail, int accentColor) {
+        addMutablePhaseHeader(root, screenWidth, title, status, detail, accentColor);
+        return PHASE_HEADER_HEIGHT;
+    }
+
+    /**
+     * Adds a phase header whose strings can be refreshed in place.  Periodic phase
+     * packets should update this object instead of replacing the whole GUI tree.
+     */
+    static PhaseHeader addMutablePhaseHeader(GuiElement root, int screenWidth, String title,
+                                             String status, String detail, int accentColor) {
+        root.addChild(rect(0, 0, screenWidth, PHASE_HEADER_HEIGHT, 0xEC15181A));
+        root.addChild(rect(0, 0, 3, PHASE_HEADER_HEIGHT, accentColor));
+        root.addChild(rect(0, PHASE_HEADER_HEIGHT - 1, screenWidth, 1, 0x705B6260));
+        Text titleText = centeredText(6, 4, Math.max(1, screenWidth - 12),
+            title == null ? "" : title, TEXT);
+        Text statusText = centeredText(6, 16, Math.max(1, screenWidth - 12),
+            status == null ? "" : status, MUTED);
+        Text detailText = centeredText(6, 28, Math.max(1, screenWidth - 12),
+            detail == null ? "" : detail, DIM);
+        root.addChild(titleText);
+        root.addChild(statusText);
+        root.addChild(detailText);
+        return new PhaseHeader(titleText, statusText, detailText);
+    }
+
+    static final class PhaseHeader {
+        private final Text title;
+        private final Text status;
+        private final Text detail;
+
+        private PhaseHeader(Text title, Text status, Text detail) {
+            this.title = title;
+            this.status = status;
+            this.detail = detail;
+        }
+
+        void setTitle(String value) {
+            title.setText(value);
+        }
+
+        void setStatus(String value) {
+            status.setText(value);
+        }
+
+        void setDetail(String value) {
+            detail.setText(value);
+        }
+    }
+
+    static String trimToWidth(String value, int maxWidth) {
+        if (value == null) {
+            return "";
+        }
+        String plain = stripFormatting(value);
+        if (Minecraft.getInstance().font.width(plain) <= maxWidth) {
+            return value;
+        }
+        String suffix = "...";
+        int suffixWidth = Minecraft.getInstance().font.width(suffix);
+        return Minecraft.getInstance().font.plainSubstrByWidth(
+            plain, Math.max(0, maxWidth - suffixWidth)) + suffix;
+    }
+
+    static void drawScaledString(GuiGraphics graphics, String value, int x, int y,
+                                 int color, float scale) {
+        graphics.pose().pushPose();
+        graphics.pose().scale(scale, scale, 1.0f);
+        graphics.drawString(Minecraft.getInstance().font, Component.literal(value),
+            Math.round(x / scale), Math.round(y / scale), color, false);
+        graphics.pose().popPose();
+    }
+
     static class Panel extends GuiElement {
         private int color;
         private int borderColor;
@@ -136,6 +212,8 @@ final class EspetroMutilWidgets {
         private String value;
         private int color;
         private final boolean centered;
+        private final boolean fixedWidth;
+        private float textScale = 1.0f;
 
         Text(int x, int y, int width, String value, int color, boolean centered) {
             super(x, y, width > 0 ? width : Minecraft.getInstance().font.width(stripFormatting(value)),
@@ -143,17 +221,29 @@ final class EspetroMutilWidgets {
             this.value = value == null ? "" : value;
             this.color = color;
             this.centered = centered;
+            this.fixedWidth = width > 0;
         }
 
         void setText(String value) {
             this.value = value == null ? "" : value;
-            if (!centered) {
-                setWidth(Minecraft.getInstance().font.width(stripFormatting(this.value)));
+            if (!fixedWidth) {
+                setWidth(Math.max(1, Math.round(
+                    Minecraft.getInstance().font.width(stripFormatting(this.value)) * textScale)));
             }
         }
 
         void setColor(int color) {
             this.color = color;
+        }
+
+        Text setTextScale(float scale) {
+            this.textScale = Math.max(0.5f, Math.min(1.0f, scale));
+            setHeight(Math.max(1, Math.round(Minecraft.getInstance().font.lineHeight * textScale)));
+            if (!fixedWidth) {
+                setWidth(Math.max(1, Math.round(
+                    Minecraft.getInstance().font.width(stripFormatting(value)) * textScale)));
+            }
+            return this;
         }
 
         @Override
@@ -162,12 +252,16 @@ final class EspetroMutilWidgets {
                 return;
             }
 
+            String drawnValue = fixedWidth
+                ? trimToWidth(value, Math.max(8, (int) (getWidth() / textScale)))
+                : value;
+            int drawnWidth = Math.round(
+                Minecraft.getInstance().font.width(stripFormatting(drawnValue)) * textScale);
             int tx = x + getX();
             if (centered) {
-                tx += Math.max(0, (getWidth() - Minecraft.getInstance().font.width(stripFormatting(value))) / 2);
+                tx += Math.max(0, (getWidth() - drawnWidth) / 2);
             }
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(value),
-                tx, y + getY(), color, false);
+            drawScaledString(graphics, drawnValue, tx, y + getY(), color, textScale);
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
     }
@@ -213,12 +307,13 @@ final class EspetroMutilWidgets {
         private String label;
         private boolean enabled = true;
         private boolean selected = false;
-        private int normalColor = 0x60404040;
-        private int hoverColor = 0x80585858;
-        private int selectedColor = 0x80564022;
-        private int disabledColor = 0x38404040;
-        private int borderColor = 0x706D7482;
+        private int normalColor = 0xB01B1E20;
+        private int hoverColor = 0xD0435145;
+        private int selectedColor = 0xD04A4329;
+        private int disabledColor = 0x70181B1D;
+        private int borderColor = 0x805B6260;
         private int textColor = TEXT;
+        private float textScale = 1.0f;
 
         ActionButton(int x, int y, int width, int height, String label, Runnable action) {
             super(x, y, width, height);
@@ -263,6 +358,11 @@ final class EspetroMutilWidgets {
             return this;
         }
 
+        ActionButton setTextScale(float scale) {
+            this.textScale = Math.max(0.5f, Math.min(1.0f, scale));
+            return this;
+        }
+
         @Override
         public boolean onMouseClick(int mouseX, int mouseY, int button) {
             if (button != 0 || !enabled || !isVisible() || !hasFocus()) {
@@ -293,15 +393,17 @@ final class EspetroMutilWidgets {
                 graphics.renderOutline(bx, by, getWidth(), getHeight(), outline);
             }
 
-            int labelWidth = Minecraft.getInstance().font.width(stripFormatting(label));
-            String drawnLabel = trimToWidth(label, Math.max(8, getWidth() - 10));
-            labelWidth = Minecraft.getInstance().font.width(stripFormatting(drawnLabel));
+            int logicalTextWidth = Math.max(8, (int) ((getWidth() - 6) / textScale));
+            String drawnLabel = trimToWidth(label, logicalTextWidth);
+            int labelWidth = Math.round(
+                Minecraft.getInstance().font.width(stripFormatting(drawnLabel)) * textScale);
+            int textHeight = Math.max(1,
+                Math.round(Minecraft.getInstance().font.lineHeight * textScale));
             int color = enabled ? textColor : DIM;
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(drawnLabel),
-                bx + Math.max(4, (getWidth() - labelWidth) / 2),
-                by + Math.max(1, (getHeight() - Minecraft.getInstance().font.lineHeight) / 2),
-                color,
-                false);
+            drawScaledString(graphics, drawnLabel,
+                bx + Math.max(3, (getWidth() - labelWidth) / 2),
+                by + Math.max(1, (getHeight() - textHeight) / 2),
+                color, textScale);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }

@@ -28,11 +28,13 @@ public class ClassSelectScreenPacket {
     public static class FactionInfo {
         public final String id;
         public final String name;
+        public final String selectionImage;
         public final int voteCount;
 
-        public FactionInfo(String id, String name, int voteCount) {
+        public FactionInfo(String id, String name, String selectionImage, int voteCount) {
             this.id = id;
             this.name = name;
+            this.selectionImage = selectionImage != null ? selectionImage : "";
             this.voteCount = voteCount;
         }
     }
@@ -68,8 +70,9 @@ public class ClassSelectScreenPacket {
         for (int i = 0; i < count; i++) {
             String id = buf.readUtf();
             String name = buf.readUtf();
+            String selectionImage = buf.readUtf();
             int voteCount = buf.readVarInt();
-            factions.add(new FactionInfo(id, name, voteCount));
+            factions.add(new FactionInfo(id, name, selectionImage, voteCount));
         }
         String opponentTeamName = buf.readUtf();
         String opponentFaction = buf.readUtf();
@@ -87,6 +90,7 @@ public class ClassSelectScreenPacket {
         for (FactionInfo info : factions) {
             buf.writeUtf(info.id);
             buf.writeUtf(info.name);
+            buf.writeUtf(info.selectionImage);
             buf.writeVarInt(info.voteCount);
         }
         buf.writeUtf(opponentTeamName != null ? opponentTeamName : "");

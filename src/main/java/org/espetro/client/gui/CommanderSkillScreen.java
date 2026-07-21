@@ -18,6 +18,7 @@ public class CommanderSkillScreen extends MutilScreen {
     private List<CommanderSkillManager.SkillView> skills = new ArrayList<>();
     private boolean isCommander;
     private int lastCooldownSignature = Integer.MIN_VALUE;
+    private final Map<String, SkillRow> skillRows = new HashMap<>();
 
     public CommanderSkillScreen(boolean isCommander, Map<String, Integer> cooldowns) {
         this(isCommander, cooldowns, List.of());
@@ -47,11 +48,18 @@ public class CommanderSkillScreen extends MutilScreen {
 
     public void updateData(boolean isCommander, Map<String, Integer> cooldowns,
                            List<CommanderSkillManager.SkillView> skills) {
+        List<CommanderSkillManager.SkillView> nextSkills = skills != null
+            ? new ArrayList<>(skills) : new ArrayList<>();
+        boolean layoutChanged = this.isCommander != isCommander || !this.skills.equals(nextSkills);
         this.isCommander = isCommander;
-        setSkills(skills);
+        setSkills(nextSkills);
         setCooldowns(cooldowns);
         if (root != null) {
-            rebuildMutilRoot();
+            if (layoutChanged) {
+                rebuildMutilRoot();
+            } else {
+                refreshSkillRows();
+            }
         }
     }
 
@@ -75,6 +83,7 @@ public class CommanderSkillScreen extends MutilScreen {
 
     @Override
     protected void buildMutilRoot(GuiElement root) {
+        skillRows.clear();
         int panelW = Math.max(300, Math.min(420, this.width - 20));
         int panelH = Math.max(180, Math.min(320, this.height - 24));
         int panelX = (this.width - panelW) / 2;
@@ -118,7 +127,9 @@ public class CommanderSkillScreen extends MutilScreen {
 
         int cardColor = onCooldown ? 0x55363636 : 0x60404040;
         int borderColor = onCooldown ? EspetroMutilWidgets.BORDER : 0x806D7482;
-        root.addChild(EspetroMutilWidgets.panel(x, y, width, cardH, cardColor, borderColor));
+        EspetroMutilWidgets.Panel panel = EspetroMutilWidgets.panel(
+            x, y, width, cardH, cardColor, borderColor);
+        root.addChild(panel);
 
         root.addChild(EspetroMutilWidgets.text(x + 8, y + 6,
             "\u00a7e" + skill.displayName(), EspetroMutilWidgets.GOLD));
@@ -135,15 +146,14 @@ public class CommanderSkillScreen extends MutilScreen {
         int btnX = x + width - btnW - 8;
         int btnY = y + (cardH - btnH) / 2;
 
-        if (onCooldown) {
-            String cdText = cooldownSec + "秒";
-            root.addChild(EspetroMutilWidgets.button(btnX, btnY, btnW, btnH, cdText, () -> {})
-                .setEnabled(false)
-                .setTextColor(EspetroMutilWidgets.DIM));
-        } else {
-            root.addChild(EspetroMutilWidgets.button(btnX, btnY, btnW, btnH, "发动", () -> activateSkill(skill.id()))
-                .setTextColor(EspetroMutilWidgets.POSITIVE));
-        }
+        EspetroMutilWidgets.ActionButton button = EspetroMutilWidgets.button(
+            btnX, btnY, btnW, btnH,
+            onCooldown ? cooldownSec + "秒" : "发动",
+            () -> activateSkill(skill.id()))
+            .setEnabled(!onCooldown)
+            .setTextColor(onCooldown ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.POSITIVE);
+        root.addChild(button);
+        skillRows.put(skill.id(), new SkillRow(panel, button));
 
         return y + cardH;
     }
@@ -166,6 +176,29 @@ public class CommanderSkillScreen extends MutilScreen {
         return signature;
     }
 
+    private void refreshSkillRows() {
+        for (CommanderSkillManager.SkillView skill : skills) {
+            SkillRow row = skillRows.get(skill.id());
+            if (row == null) {
+                continue;
+            }
+            int cooldownSec = getRemainingCooldownSeconds(skill.id());
+            boolean onCooldown = cooldownSec > 0;
+            row.panel()
+                .setColor(onCooldown ? 0x55363636 : 0x60404040)
+                .setBorderColor(onCooldown ? EspetroMutilWidgets.BORDER : 0x806D7482);
+            row.button()
+                .setLabel(onCooldown ? cooldownSec + "秒" : "发动")
+                .setEnabled(!onCooldown)
+                .setTextColor(onCooldown ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.POSITIVE);
+        }
+        lastCooldownSignature = getCooldownSignature();
+    }
+
+    private record SkillRow(EspetroMutilWidgets.Panel panel,
+                            EspetroMutilWidgets.ActionButton button) {
+    }
+
     private void activateSkill(String skillId) {
         NetworkManager.sendCommanderSkillActivate(skillId);
         Minecraft.getInstance().setScreen(null);
@@ -180,7 +213,7 @@ public class CommanderSkillScreen extends MutilScreen {
 
         int cooldownSignature = getCooldownSignature();
         if (cooldownSignature != lastCooldownSignature) {
-            rebuildMutilRoot();
+            refreshSkillRows();
         }
     }
 

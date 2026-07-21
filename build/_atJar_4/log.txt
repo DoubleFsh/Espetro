@@ -1,7 +1,0 @@
-Java Launcher: /home/kaguya/java/zulu17.64.17-ca-jdk17.0.18-linux_x64/bin/java
-Arguments: '--inJar, /home/kaguya/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-injected.jar, --outJar, /home/kaguya/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.20_mapped_official_1.20.1/forge-1.20.1-47.4.20_mapped_official_1.20.1.jar, --logFile, accesstransform.log, --atFile, /home/kaguya/IdeaProjects/Espetro/build/_atJar_4/parent_at.cfg'
-Classpath:
- - /home/kaguya/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/accesstransformers/8.2.14/accesstransformers-8.2.14-fatjar.jar
-Working directory: /home/kaguya/IdeaProjects/Espetro/build/_atJar_4
-Main class: net.minecraftforge.accesstransformer.TransformerProcessor
-====================================

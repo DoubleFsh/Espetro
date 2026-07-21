@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -208,6 +209,17 @@ public class UnifiedDeployScreenPacket {
     public String getFactionIcon() { return factionIcon; }
     public List<ClassInfo> getClasses() { return classes; }
     public Map<String, Integer> getClassCounts() { return classCounts; }
+    public Map<String, Map<String, Integer>> getVariantCounts() {
+        Map<String, Map<String, Integer>> result = new java.util.HashMap<>();
+        for (ClassInfo classInfo : classes) {
+            Map<String, Integer> perClass = new java.util.HashMap<>();
+            for (VariantInfo variant : classInfo.variants) {
+                perClass.put(variant.variantId, variant.currentCount);
+            }
+            result.put(classInfo.classId, perClass);
+        }
+        return result;
+    }
     public boolean hasDeployPoint() { return hasDeployPoint; }
     public String getDeployPointPos() { return deployPointPos; }
     public List<BastionItem> getBastions() { return bastions; }
@@ -229,23 +241,28 @@ public class UnifiedDeployScreenPacket {
         public final String name;
         public final String description;
         public final String role;
+        public final String icon;
         public final int maxPlayers;
         public final int currentCount;
         public final int troopValue;
         public final int healthBonus;
         public final float speedBonus;
+        public final List<VariantInfo> variants;
 
-        public ClassInfo(String classId, String name, String description, String role,
-                         int maxPlayers, int currentCount, int troopValue, int healthBonus, float speedBonus) {
+        public ClassInfo(String classId, String name, String description, String role, String icon,
+                         int maxPlayers, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
             this.description = description;
             this.role = role;
+            this.icon = icon;
             this.maxPlayers = maxPlayers;
             this.currentCount = currentCount;
             this.troopValue = troopValue;
             this.healthBonus = healthBonus;
             this.speedBonus = speedBonus;
+            this.variants = variants != null ? variants : new ArrayList<>();
         }
 
         public ClassInfo(FriendlyByteBuf buf) {
@@ -253,11 +270,17 @@ public class UnifiedDeployScreenPacket {
             this.name = buf.readUtf();
             this.description = buf.readUtf();
             this.role = buf.readUtf();
+            this.icon = buf.readUtf();
             this.maxPlayers = buf.readVarInt();
             this.currentCount = buf.readVarInt();
             this.troopValue = buf.readVarInt();
             this.healthBonus = buf.readVarInt();
             this.speedBonus = buf.readFloat();
+            int variantCount = buf.readVarInt();
+            this.variants = new ArrayList<>(variantCount);
+            for (int i = 0; i < variantCount; i++) {
+                this.variants.add(new VariantInfo(buf));
+            }
         }
 
         public void write(FriendlyByteBuf buf) {
@@ -265,42 +288,96 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(name);
             buf.writeUtf(description);
             buf.writeUtf(role);
+            buf.writeUtf(icon == null ? "" : icon);
             buf.writeVarInt(maxPlayers);
             buf.writeVarInt(currentCount);
             buf.writeVarInt(troopValue);
             buf.writeVarInt(healthBonus);
             buf.writeFloat(speedBonus);
+            buf.writeVarInt(variants.size());
+            for (VariantInfo variant : variants) variant.write(buf);
+        }
+    }
+
+    public static class VariantInfo {
+        public final String variantId;
+        public final String name;
+        public final String description;
+        public final int maxPlayers;
+        public int currentCount;
+
+        public VariantInfo(String variantId, String name, String description,
+                           int maxPlayers, int currentCount) {
+            this.variantId = variantId;
+            this.name = name;
+            this.description = description;
+            this.maxPlayers = maxPlayers;
+            this.currentCount = currentCount;
+        }
+
+        public VariantInfo(FriendlyByteBuf buf) {
+            this(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readVarInt());
+        }
+
+        public void write(FriendlyByteBuf buf) {
+            buf.writeUtf(variantId);
+            buf.writeUtf(name != null ? name : variantId);
+            buf.writeUtf(description != null ? description : "");
+            buf.writeVarInt(maxPlayers);
+            buf.writeVarInt(currentCount);
         }
     }
 
     public static class BastionItem {
+        public static final String TYPE_HAB = "hab";
+        public static final String TYPE_RALLY = "rally";
+        public static final String TYPE_OUTPOST = "outpost";
+
         public final java.util.UUID id;
         public final String name;
         public final String pos;
+        public final String type;
+        public final String status;
 
         public BastionItem(java.util.UUID id, String name, String pos) {
+            this(id, name, pos,
+                id.getMostSignificantBits() == 0L ? TYPE_OUTPOST : TYPE_HAB, "");
+        }
+
+        public BastionItem(java.util.UUID id, String name, String pos, String type, String status) {
             this.id = id;
             this.name = name;
             this.pos = pos;
+            this.type = type == null ? TYPE_HAB : type;
+            this.status = status == null ? "" : status;
         }
 
         public BastionItem(FriendlyByteBuf buf) {
             this.id = buf.readUUID();
             this.name = buf.readUtf();
             this.pos = buf.readUtf();
+            this.type = buf.readUtf();
+            this.status = buf.readUtf();
         }
 
         public void write(FriendlyByteBuf buf) {
             buf.writeUUID(id);
             buf.writeUtf(name);
             buf.writeUtf(pos);
+            buf.writeUtf(type);
+            buf.writeUtf(status);
         }
 
         /**
          * 判断是否为前哨基地（用特殊 UUID 标记：MSB=0, LSB=index+1）
          */
         public boolean isOutpost() {
-            return id.getMostSignificantBits() == 0L && id.getLeastSignificantBits() > 0L;
+            return TYPE_OUTPOST.equals(type)
+                || (id.getMostSignificantBits() == 0L && id.getLeastSignificantBits() > 0L);
+        }
+
+        public boolean isRally() {
+            return TYPE_RALLY.equals(type);
         }
 
         /**
@@ -398,6 +475,24 @@ public class UnifiedDeployScreenPacket {
                 member.write(buf);
             }
         }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof SquadInfo that)) return false;
+            return id == that.id
+                && memberCount == that.memberCount
+                && maxMembers == that.maxMembers
+                && isLocked == that.isLocked
+                && Objects.equals(name, that.name)
+                && Objects.equals(leaderName, that.leaderName)
+                && Objects.equals(members, that.members);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, name, memberCount, maxMembers, isLocked, leaderName, members);
+        }
     }
 
     public static class SquadMemberInfo {
@@ -429,6 +524,21 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(className);
             buf.writeBoolean(leader);
             buf.writeBoolean(commander);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof SquadMemberInfo that)) return false;
+            return leader == that.leader
+                && commander == that.commander
+                && Objects.equals(playerName, that.playerName)
+                && Objects.equals(className, that.className);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(playerName, className, leader, commander);
         }
     }
 }

@@ -3,6 +3,7 @@ package org.espetro.vehicle;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -36,15 +37,27 @@ public class VehicleEventHandler {
 
         Entity entity = event.getEntity();
         if (entity.getTags().contains("espetro_vehicle")) {
+            VehicleManager.getInstance().updateVehicleLocation(entity);
             if (entity.getRemovalReason() == Entity.RemovalReason.KILLED) {
                 VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
                 Espetro.LOGGER.debug("载具 {} 已被杀毁，移除追踪并处理兵力扣除", entity.getUUID());
-            } else {
+            } else if (entity.getRemovalReason() == Entity.RemovalReason.DISCARDED) {
                 VehicleManager.getInstance().onVehicleRemoved(entity.getUUID());
-                Espetro.LOGGER.debug("载具 {} 已离开世界，移除追踪", entity.getUUID());
+                Espetro.LOGGER.debug("载具 {} 已被主动移除，清除追踪", entity.getUUID());
+            } else {
+                Espetro.LOGGER.debug("载具 {} 暂时离开已加载世界，保留停服清理追踪", entity.getUUID());
             }
         }
 
+    }
+
+    @SubscribeEvent
+    public static void onVehicleJoinLevel(EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide()) return;
+        Entity entity = event.getEntity();
+        if (entity.getTags().contains("espetro_vehicle")) {
+            VehicleManager.getInstance().updateVehicleLocation(entity);
+        }
     }
 
     /**

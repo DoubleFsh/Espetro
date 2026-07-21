@@ -118,9 +118,16 @@ key_key.hotbar.6:key.keyboard.6
 key_key.hotbar.7:key.keyboard.7
 key_key.hotbar.8:key.keyboard.8
 key_key.hotbar.9:key.keyboard.9
+key_key.auratip.close_tip:key.keyboard.delete
+key_key.auratip.dev.open_datapack_menu:key.keyboard.f6
+key_key.auratip.dev.open_java_menu:key.keyboard.f7
+key_key.auratip.dev.open_kjs_menu:key.keyboard.f8
+key_key.auratip.dev.enqueue_client_tip:key.keyboard.f9
+key_key.auratip.dev.trigger_showtip:key.keyboard.f10
 key_key.espetro.team:key.keyboard.k
 key_key.espetro.class:key.keyboard.b
 key_key.espetro.skill:key.keyboard.y
+key_key.espetro.radial:key.keyboard.left.alt
 key_key.espoints.open_gui:key.keyboard.j
 key_key.espoints.tactical_map:key.keyboard.v
 key_key.espoints.map_config:key.keyboard.x

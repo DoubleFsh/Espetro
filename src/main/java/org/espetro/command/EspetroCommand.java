@@ -210,6 +210,17 @@ public class EspetroCommand {
                                     ctx.getSource().sendSystemMessage(Component.literal("§7可用职业: " + String.join(", ", loader.getClassIdsForFaction(factionId))));
                                     return 0;
                                 }
+                                if (!factionId.equals(kit.factionId)) {
+                                    ctx.getSource().sendSystemMessage(Component.literal("§c职业 " + classId
+                                        + " 不属于编制 " + factionId));
+                                    return 0;
+                                }
+                                if (kit.variants == null || kit.variants.size() != 1) {
+                                    ctx.getSource().sendSystemMessage(Component.literal("§c职业 " + classId
+                                        + " 有多个装备变体，请使用 /espetro setclass " + factionId + " "
+                                        + classId + " variant <变体ID> " + playerName));
+                                    return 0;
+                                }
 
                                 var server = ctx.getSource().getServer();
                                 var player = server.getPlayerList().getPlayerByName(playerName);
@@ -222,6 +233,38 @@ public class EspetroCommand {
                                 ctx.getSource().sendSystemMessage(Component.literal("§a已为 " + playerName + " 装备: " + kit.name));
                                 return 1;
                             })
+                        )
+                        .then(Commands.literal("variant")
+                            .then(Commands.argument("variant", StringArgumentType.string())
+                                .then(Commands.argument("player", StringArgumentType.string())
+                                    .executes(ctx -> {
+                                        String factionId = StringArgumentType.getString(ctx, "faction");
+                                        String classId = StringArgumentType.getString(ctx, "class");
+                                        String variantId = StringArgumentType.getString(ctx, "variant");
+                                        String playerName = StringArgumentType.getString(ctx, "player");
+                                        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+                                        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+                                        FactionDataLoader.ClassVariantData variant =
+                                            loader.getClassVariant(classId, variantId);
+                                        if (kit == null || !factionId.equals(kit.factionId) || variant == null) {
+                                            ctx.getSource().sendSystemMessage(Component.literal(
+                                                "§c无效的职业装备变体: " + factionId + "/" + classId + "/" + variantId));
+                                            return 0;
+                                        }
+                                        var player = ctx.getSource().getServer().getPlayerList()
+                                            .getPlayerByName(playerName);
+                                        if (player == null) {
+                                            ctx.getSource().sendSystemMessage(Component.literal(
+                                                "§c玩家不在线: " + playerName));
+                                            return 0;
+                                        }
+                                        ClassEquipment.equipPlayer(player, factionId, classId, variantId);
+                                        ctx.getSource().sendSystemMessage(Component.literal("§a已为 " + playerName
+                                            + " 装备: " + kit.name + " / " + variant.name));
+                                        return 1;
+                                    })
+                                )
+                            )
                         )
                     )
                 )

@@ -19,8 +19,11 @@ import java.util.List;
 public class SquadScreen extends MutilScreen {
 
     private static final int NO_SQUAD = -1;
-    private static final int ROW_H = 18;
-    private static final int GAP = 4;
+    private static final int BUTTON_H = 12;
+    private static final int ROW_H = 12;
+    private static final int GAP = 1;
+    private static final float TEXT_SCALE = 0.72f;
+    private static final float MEMBER_TEXT_SCALE = 0.68f;
 
     private final List<UnifiedDeployScreenPacket.SquadInfo> squads = new ArrayList<>();
     private final String team;
@@ -42,10 +45,13 @@ public class SquadScreen extends MutilScreen {
     }
 
     public void updateSquads(List<UnifiedDeployScreenPacket.SquadInfo> updatedSquads, int updatedMySquadId) {
-        this.squads.clear();
-        if (updatedSquads != null) {
-            this.squads.addAll(updatedSquads);
+        List<UnifiedDeployScreenPacket.SquadInfo> nextSquads = updatedSquads == null
+            ? List.of() : updatedSquads;
+        if (this.mySquadId == updatedMySquadId && this.squads.equals(nextSquads)) {
+            return;
         }
+        this.squads.clear();
+        this.squads.addAll(nextSquads);
         this.mySquadId = updatedMySquadId;
         if (findSquad(selectedSquadId) == null) {
             selectedSquadId = NO_SQUAD;
@@ -58,45 +64,56 @@ public class SquadScreen extends MutilScreen {
         }
     }
 
+    public void updateFromDeployPacket(UnifiedDeployScreenPacket packet) {
+        updateSquads(packet.getSquads(), packet.getMySquadId());
+        if (parent instanceof UnifiedDeployScreen deployScreen) {
+            deployScreen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
+            deployScreen.updateTimeRemaining(packet.getDeployTimeRemaining());
+            deployScreen.updateDeploymentState(
+                packet.isWaitingForDeploySelection(),
+                packet.getOutpostRedeployCooldownRemaining());
+        }
+    }
+
     @Override
     protected void buildMutilRoot(GuiElement root) {
-        int panelW = Math.max(280, Math.min(590, this.width - 20));
-        int panelH = Math.max(190, Math.min(250, this.height - 24));
+        int panelW = Math.max(250, Math.min(520, this.width - 12));
+        int panelH = Math.max(154, Math.min(210, this.height - 12));
         int panelX = (this.width - panelW) / 2;
-        int panelY = Math.max(8, (this.height - panelH) / 2);
+        int panelY = Math.max(4, (this.height - panelH) / 2);
 
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH,
             EspetroMutilWidgets.PANEL, EspetroMutilWidgets.BORDER));
 
-        root.addChild(EspetroMutilWidgets.text(panelX + 8, panelY + 8,
+        root.addChild(compactText(panelX + 5, panelY + 5,
             "\u00a76\u00a7l班组小队", EspetroMutilWidgets.GOLD));
-        root.addChild(EspetroMutilWidgets.text(panelX + 8, panelY + 20,
+        root.addChild(compactText(panelX + 5, panelY + 14,
             EspetroMutilWidgets.teamPrefix(team) + EspetroMutilWidgets.teamName(team),
             EspetroMutilWidgets.teamColor(team)));
 
-        EspetroMutilWidgets.ActionButton closeButton = EspetroMutilWidgets.button(
-            panelX + panelW - 48, panelY + 7, 40, 14, "关闭", this::returnToParent);
+        EspetroMutilWidgets.ActionButton closeButton = compactButton(
+            panelX + panelW - 35, panelY + 4, 30, BUTTON_H, "关闭", this::returnToParent);
         root.addChild(closeButton);
 
-        int inputY = panelY + 38;
-        int createW = 46;
-        int inputW = Math.min(180, panelW / 2 - createW - 14);
-        nameField = new NameField(panelX + 8, inputY, inputW, 16, "小队名称", this::createSquad);
+        int inputY = panelY + 25;
+        int createW = 32;
+        int inputW = Math.min(150, panelW / 2 - createW - 10);
+        nameField = new NameField(panelX + 5, inputY, inputW, BUTTON_H, "小队名称", this::createSquad);
         root.addChild(nameField);
-        root.addChild(EspetroMutilWidgets.button(panelX + 8 + inputW + 4, inputY, createW, 16,
+        root.addChild(compactButton(panelX + 5 + inputW + 3, inputY, createW, BUTTON_H,
             "创建", this::createSquad)
             .setTextColor(EspetroMutilWidgets.POSITIVE));
-        root.addChild(EspetroMutilWidgets.button(panelX + 8 + inputW + createW + 8, inputY, 46, 16,
+        root.addChild(compactButton(panelX + 5 + inputW + createW + 6, inputY, 32, BUTTON_H,
             "退出", NetworkManager::leaveSquad)
             .setEnabled(mySquadId != NO_SQUAD)
             .setTextColor(EspetroMutilWidgets.WARNING));
 
-        int contentY = panelY + 60;
-        int contentH = panelH - 68;
-        int detailW = Math.max(132, Math.min(240, (panelW - 22) / 2));
-        int listW = panelW - detailW - 20;
-        int listX = panelX + 8;
-        int detailX = listX + listW + 8;
+        int contentY = panelY + 40;
+        int contentH = panelH - 45;
+        int detailW = Math.max(112, Math.min(210, (panelW - 14) / 2));
+        int listW = panelW - detailW - 13;
+        int listX = panelX + 5;
+        int detailX = listX + listW + 3;
 
         buildSquadList(root, listX, contentY, listW, contentH);
         buildDetails(root, detailX, contentY, detailW, contentH);
@@ -106,26 +123,26 @@ public class SquadScreen extends MutilScreen {
         root.addChild(EspetroMutilWidgets.panel(x, y, width, height,
             EspetroMutilWidgets.PANEL_SOFT, EspetroMutilWidgets.BORDER));
 
-        ScrollableList list = new ScrollableList(x + 4, y + 4, width - 8, height - 8)
+        ScrollableList list = new ScrollableList(x + 3, y + 3, width - 6, height - 6)
             .setScrollStep(ROW_H + GAP)
             .setAlwaysShowScrollbar(true);
         root.addChild(list);
 
         if (squads.isEmpty()) {
-            list.addChild(EspetroMutilWidgets.centeredText(0, 6, width - 14,
+            list.addChild(compactCenteredText(0, 3, width - 10,
                 "暂无小队", EspetroMutilWidgets.MUTED));
             return;
         }
 
         int rowY = 0;
-        int buttonW = list.getWidth() - 26;
+        int buttonW = list.getWidth() - 18;
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
             boolean joined = squad.id == mySquadId;
             boolean full = squad.memberCount >= squad.maxMembers && !joined;
             String count = "\u00a77[" + squad.memberCount + "/" + squad.maxMembers + "]";
             String label = (joined ? "\u00a7a" : full ? "\u00a7c" : "\u00a7f") + squad.name + " " + count;
 
-            EspetroMutilWidgets.ActionButton joinButton = EspetroMutilWidgets.button(
+            EspetroMutilWidgets.ActionButton joinButton = compactButton(
                 0, rowY, buttonW, ROW_H, label, () -> NetworkManager.joinSquad(squad.id))
                 .setSelected(joined)
                 .setEnabled(!full)
@@ -133,8 +150,8 @@ public class SquadScreen extends MutilScreen {
             list.addChild(joinButton);
 
             String triangle = squad.id == selectedSquadId ? "\u25bc" : "\u25b6";
-            EspetroMutilWidgets.ActionButton detailButton = EspetroMutilWidgets.button(
-                buttonW + 4, rowY, 18, ROW_H, triangle, () -> {
+            EspetroMutilWidgets.ActionButton detailButton = compactButton(
+                buttonW + 2, rowY, 12, ROW_H, triangle, () -> {
                     selectedSquadId = selectedSquadId == squad.id ? NO_SQUAD : squad.id;
                     rebuildMutilRoot();
                 })
@@ -155,25 +172,25 @@ public class SquadScreen extends MutilScreen {
             return;
         }
 
-        root.addChild(EspetroMutilWidgets.text(x + 6, y + 6, width - 12,
-            "\u00a76\u00a7l" + squad.name, EspetroMutilWidgets.GOLD));
-        root.addChild(EspetroMutilWidgets.text(x + 6, y + 18, width - 12,
+        root.addChild(compactText(x + 4, y + 4, width - 8,
+            "\u00a76\u00a7l" + squad.name, EspetroMutilWidgets.GOLD, TEXT_SCALE));
+        root.addChild(compactText(x + 4, y + 13, width - 43,
             "\u00a77成员 " + squad.memberCount + "/" + squad.maxMembers,
-            EspetroMutilWidgets.MUTED));
+            EspetroMutilWidgets.MUTED, TEXT_SCALE));
 
         if (isLocalPlayerLeader(squad)) {
-            root.addChild(EspetroMutilWidgets.button(x + width - 50, y + 17, 42, 14,
+            root.addChild(compactButton(x + width - 36, y + 11, 32, BUTTON_H,
                 "删除", () -> NetworkManager.deleteSquad(squad.id))
                 .setTextColor(EspetroMutilWidgets.NEGATIVE));
         }
 
-        ScrollableList detailList = new ScrollableList(x + 6, y + 33, width - 12, height - 39)
-            .setScrollStep(12)
+        ScrollableList detailList = new ScrollableList(x + 4, y + 25, width - 8, height - 29)
+            .setScrollStep(8)
             .setAlwaysShowScrollbar(true);
         root.addChild(detailList);
 
         if (squad.members.isEmpty()) {
-            detailList.addChild(EspetroMutilWidgets.text(0, 0, "暂无成员", EspetroMutilWidgets.MUTED));
+            detailList.addChild(compactText(0, 0, "暂无成员", EspetroMutilWidgets.MUTED));
             return;
         }
 
@@ -182,10 +199,32 @@ public class SquadScreen extends MutilScreen {
             String label = member.leader
                 ? "[队长] " + member.playerName + " - " + member.className
                 : member.playerName + " - " + member.className;
-            detailList.addChild(EspetroMutilWidgets.text(0, lineY, detailList.getWidth() - 8,
-                label, ClientTacticalState.getSquadMemberColor(squad.id, member)));
-            lineY += 12;
+            detailList.addChild(compactText(0, lineY, detailList.getWidth() - 6,
+                label, ClientTacticalState.getSquadMemberColor(squad.id, member),
+                MEMBER_TEXT_SCALE));
+            lineY += 8;
         }
+    }
+
+    private static EspetroMutilWidgets.Text compactText(int x, int y, String value, int color) {
+        return EspetroMutilWidgets.text(x, y, value, color).setTextScale(TEXT_SCALE);
+    }
+
+    private static EspetroMutilWidgets.Text compactText(int x, int y, int width,
+                                                       String value, int color, float scale) {
+        return EspetroMutilWidgets.text(x, y, width, value, color).setTextScale(scale);
+    }
+
+    private static EspetroMutilWidgets.Text compactCenteredText(int x, int y, int width,
+                                                               String value, int color) {
+        return EspetroMutilWidgets.centeredText(x, y, width, value, color)
+            .setTextScale(TEXT_SCALE);
+    }
+
+    private static EspetroMutilWidgets.ActionButton compactButton(
+            int x, int y, int width, int height, String label, Runnable action) {
+        return EspetroMutilWidgets.button(x, y, width, height, label, action)
+            .setTextScale(TEXT_SCALE);
     }
 
     private void createSquad() {
@@ -313,15 +352,19 @@ public class SquadScreen extends MutilScreen {
 
             String drawn = value.isEmpty() ? placeholder : value;
             int color = value.isEmpty() ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT;
-            String trimmed = Minecraft.getInstance().font.plainSubstrByWidth(drawn, getWidth() - 8);
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(trimmed),
-                bx + 4, by + Math.max(1, (getHeight() - Minecraft.getInstance().font.lineHeight) / 2),
-                color, false);
+            int logicalTextWidth = Math.max(8, (int) ((getWidth() - 6) / TEXT_SCALE));
+            String trimmed = Minecraft.getInstance().font.plainSubstrByWidth(drawn, logicalTextWidth);
+            int textHeight = Math.max(1,
+                Math.round(Minecraft.getInstance().font.lineHeight * TEXT_SCALE));
+            EspetroMutilWidgets.drawScaledString(graphics, trimmed,
+                bx + 3, by + Math.max(1, (getHeight() - textHeight) / 2),
+                color, TEXT_SCALE);
 
             if (active && !value.isEmpty() && (System.currentTimeMillis() / 500) % 2 == 0) {
-                int textW = Minecraft.getInstance().font.width(trimmed);
-                int cursorX = Math.min(bx + getWidth() - 4, bx + 4 + textW + 1);
-                graphics.fill(cursorX, by + 3, cursorX + 1, by + getHeight() - 3, EspetroMutilWidgets.TEXT);
+                int textW = Math.round(Minecraft.getInstance().font.width(trimmed) * TEXT_SCALE);
+                int cursorX = Math.min(bx + getWidth() - 3, bx + 3 + textW + 1);
+                graphics.fill(cursorX, by + 2, cursorX + 1, by + getHeight() - 2,
+                    EspetroMutilWidgets.TEXT);
             }
         }
     }

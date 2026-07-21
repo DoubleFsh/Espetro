@@ -138,7 +138,7 @@ Map<String, FactionDataLoader.VehicleData> vehicles =
 
 ```java
 ClassEquipment.clearEquipment(player);
-ClassEquipment.equipPlayer(player, "PLA_MEDIUM_ASSAULT");
+ClassEquipment.equipPlayer(player, "pla_medium_brigade", "PLA_MEDIUM_ASSAULT", "default");
 ```
 
 装备字符串会拼接到 `/give` 或 `/item replace`。配置来源不可信时必须先校验物品 ID 与 SNBT，避免执行任意命令参数。

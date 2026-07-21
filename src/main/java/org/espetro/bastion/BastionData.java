@@ -28,6 +28,12 @@ public class BastionData {
     @Nullable
     private BlockPos shulkerPos; // 弹药补给潜影盒位置
     private boolean active;
+    private int constructionSupplies;
+    private int ammunitionSupplies;
+    private boolean habBuilt;
+    private boolean ammoCrateBuilt;
+    private long habAvailableAt;
+    private long habDisabledUntil;
 
     public BastionData(String team, String name, BlockPos position, ServerLevel level) {
         this(UUID.randomUUID(), team, name, position, level);
@@ -126,6 +132,70 @@ public class BastionData {
         this.active = active;
     }
 
+    public int getConstructionSupplies() {
+        return constructionSupplies;
+    }
+
+    public int getAmmunitionSupplies() {
+        return ammunitionSupplies;
+    }
+
+    public void addConstructionSupplies(int amount, int maximum) {
+        constructionSupplies = Math.max(0, Math.min(maximum, constructionSupplies + amount));
+    }
+
+    public void addAmmunitionSupplies(int amount, int maximum) {
+        ammunitionSupplies = Math.max(0, Math.min(maximum, ammunitionSupplies + amount));
+    }
+
+    public boolean consumeConstructionSupplies(int amount) {
+        if (amount < 0 || constructionSupplies < amount) {
+            return false;
+        }
+        constructionSupplies -= amount;
+        return true;
+    }
+
+    public boolean consumeAmmunitionSupplies(int amount) {
+        if (amount < 0 || ammunitionSupplies < amount) {
+            return false;
+        }
+        ammunitionSupplies -= amount;
+        return true;
+    }
+
+    public boolean isHabBuilt() {
+        return habBuilt;
+    }
+
+    public void setHabBuilt(boolean habBuilt) {
+        this.habBuilt = habBuilt;
+    }
+
+    public boolean isAmmoCrateBuilt() {
+        return ammoCrateBuilt;
+    }
+
+    public void setAmmoCrateBuilt(boolean ammoCrateBuilt) {
+        this.ammoCrateBuilt = ammoCrateBuilt;
+    }
+
+    public long getHabAvailableAt() {
+        return habAvailableAt;
+    }
+
+    public void setHabAvailableAt(long habAvailableAt) {
+        this.habAvailableAt = habAvailableAt;
+    }
+
+    public long getHabDisabledUntil() {
+        return habDisabledUntil;
+    }
+
+    public void setHabDisabledUntil(long habDisabledUntil) {
+        this.habDisabledUntil = habDisabledUntil;
+    }
+
     /**
      * 检查盔甲架是否还存在
      */
@@ -189,6 +259,12 @@ public class BastionData {
             tag.putInt("sz", shulkerPos.getZ());
         }
         tag.putBoolean("active", active);
+        tag.putInt("constructionSupplies", constructionSupplies);
+        tag.putInt("ammunitionSupplies", ammunitionSupplies);
+        tag.putBoolean("habBuilt", habBuilt);
+        tag.putBoolean("ammoCrateBuilt", ammoCrateBuilt);
+        tag.putLong("habAvailableAt", habAvailableAt);
+        tag.putLong("habDisabledUntil", habDisabledUntil);
         return tag;
     }
 
@@ -228,6 +304,13 @@ public class BastionData {
             data.setShulkerPos(new BlockPos(tag.getInt("sx"), tag.getInt("sy"), tag.getInt("sz")));
         }
         data.setActive(tag.getBoolean("active"));
+        data.constructionSupplies = Math.max(0, tag.getInt("constructionSupplies"));
+        data.ammunitionSupplies = Math.max(0, tag.getInt("ammunitionSupplies"));
+        // Old saves represented a complete spawn building and ammo crate.
+        data.habBuilt = !tag.contains("habBuilt") || tag.getBoolean("habBuilt");
+        data.ammoCrateBuilt = !tag.contains("ammoCrateBuilt") || tag.getBoolean("ammoCrateBuilt");
+        data.habAvailableAt = tag.getLong("habAvailableAt");
+        data.habDisabledUntil = tag.getLong("habDisabledUntil");
 
         return data;
     }

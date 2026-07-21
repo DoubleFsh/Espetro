@@ -38,6 +38,9 @@ public class ScrollableList extends GuiElement {
     }
 
     public void setOffset(double offset) {
+        if (dirty) {
+            recalculateBounds();
+        }
         scrollOffset = Mth.clamp(offset, 0, maxScroll);
     }
 

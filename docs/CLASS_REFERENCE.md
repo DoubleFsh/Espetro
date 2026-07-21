@@ -41,8 +41,8 @@
 | `GameStateManager` | 阶段状态机、玩家加入、部署和重置 |
 | `TeamManager` | 原版记分板 ATTACK/DEFEND 队伍 |
 | `ClassSelectManager` | 双方编制选择投票 |
-| `ClassCountManager` | 职业人数、玩家队伍/编制/职业状态 |
-| `ClassEquipment` | 清空、发放、自动穿戴职业装备和属性加成 |
+| `ClassCountManager` | 队伍级职业/装备变体人数，以及玩家队伍、编制、职业和变体状态 |
+| `ClassEquipment` | 清空、发放、自动穿戴职业装备变体和职业公共属性加成 |
 | `ClassType` | 旧式硬编码职业枚举，JSON 系统的兼容备用 |
 | `TroopCountManager` | 双方兵力、初始化、修改和死亡扣除 |
 | `VoteManager` | 指挥官候选、投票、结果和当前指挥官 |
@@ -119,10 +119,10 @@
 | --- | --- |
 | `NetworkManager` | 通道注册、发送辅助方法和状态广播 |
 | `TeamSelectPacket` | 客户端请求选队 |
-| `ClassSelectPacket` | 客户端请求选职业 |
+| `ClassSelectPacket` | 客户端请求选择职业及装备变体 |
 | `RequestClassSelectionPacket` | 请求职业列表 |
 | `OpenClassSelectionPacket` / `ClassSelectScreenPacket` | 打开职业页面 |
-| `ClassCountSyncPacket` | 同步职业人数 |
+| `ClassCountSyncPacket` | 同步职业与装备变体实时人数 |
 | `CastVotePacket` / `CommanderVotePacket` / `VoteDataPacket` | 指挥官投票 |
 | `FactionRevealPacket` / `OpenFactionScreenPacket` | 编制选择与揭示页面 |
 | `GamePhaseSyncPacket` / `GameStateResponsePacket` / `RequestGameStatePacket` | 阶段和玩家状态 |

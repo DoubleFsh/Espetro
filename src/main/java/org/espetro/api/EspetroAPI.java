@@ -1,10 +1,15 @@
 package org.espetro.api;
 
 import net.minecraft.server.level.ServerPlayer;
+import org.espetro.bastion.BastionData;
+import org.espetro.bastion.BastionManager;
 import org.espetro.Espetro;
 import org.espetro.team.CommanderSkillManager;
+import org.espetro.team.ClassCountManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.VoteManager;
+import org.espetro.team.TeamPackManager;
+import org.espetro.logistics.LogisticsConfig;
 
 import java.util.List;
 import java.util.Map;
@@ -21,6 +26,30 @@ public class EspetroAPI {
      */
     public static String getPlayerTeam(ServerPlayer player) {
         return Espetro.getPlayerTeam(player);
+    }
+
+    public static String getPlayerFaction(UUID playerId) {
+        return ClassCountManager.getInstance().getPlayerFaction(playerId);
+    }
+
+    public static String getPlayerClass(UUID playerId) {
+        return ClassCountManager.getInstance().getPlayerClass(playerId);
+    }
+
+    public static String getPlayerClassVariant(UUID playerId) {
+        return ClassCountManager.getInstance().getPlayerVariant(playerId);
+    }
+
+    public static Map<String, Integer> getClassCounts(String team, String factionId) {
+        return ClassCountManager.getInstance().getCountsForFaction(team, factionId);
+    }
+
+    public static Map<String, Map<String, Integer>> getClassVariantCounts(String team, String factionId) {
+        return ClassCountManager.getInstance().getVariantCountsForFaction(team, factionId);
+    }
+
+    public static boolean selectPlayerClass(ServerPlayer player, String classId, String variantId) {
+        return player != null && ClassCountManager.getInstance().selectClass(player, classId, variantId);
     }
 
     /**
@@ -133,6 +162,38 @@ public class EspetroAPI {
 
     public static boolean canUseCommanderSkill(ServerPlayer commander, String skillId) {
         return getCommanderSkillStatus(commander, skillId).canUse();
+    }
+
+    public static List<FobSnapshot> getFobs() {
+        return BastionManager.getInstance().getAllBastions().stream()
+            .filter(BastionData::isActive)
+            .map(data -> new FobSnapshot(
+                data.getBastionId(),
+                data.getTeam(),
+                data.getName(),
+                data.getLevel().dimension().location().toString(),
+                data.getPosition().getX(),
+                data.getPosition().getY(),
+                data.getPosition().getZ(),
+                data.getConstructionSupplies(),
+                data.getAmmunitionSupplies(),
+                data.isHabBuilt(),
+                data.isAmmoCrateBuilt(),
+                BastionManager.getInstance().isHabOperational(data),
+                LogisticsConfig.get().radioBuildRadius,
+                LogisticsConfig.get().radioExclusionRadius
+            ))
+            .toList();
+    }
+
+    public static List<TeamPackManager.RallySnapshot> getRallies() {
+        return TeamPackManager.getInstance().getRallySnapshots();
+    }
+
+    public record FobSnapshot(UUID id, String team, String name, String dimension,
+                              int x, int y, int z, int construction, int ammunition,
+                              boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
+                              double buildRadius, double exclusionRadius) {
     }
 
     private static String getPlayerTeamById(UUID playerId) {

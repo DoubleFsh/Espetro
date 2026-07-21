@@ -23,6 +23,7 @@ public class ClassCountSyncPacket {
 
     private String factionId;
     private Map<String, Integer> classCounts;
+    private Map<String, Map<String, Integer>> variantCounts;
     private boolean isError;
     private String errorMessage;
 
@@ -30,14 +31,22 @@ public class ClassCountSyncPacket {
     public ClassCountSyncPacket(String factionId) {
         this.factionId = factionId;
         this.classCounts = new HashMap<>();
+        this.variantCounts = new HashMap<>();
         this.isError = false;
         this.errorMessage = "";
     }
 
     // 服务器响应构造函数
     public ClassCountSyncPacket(Map<String, Integer> counts, String factionId) {
+        this(counts, new HashMap<>(), factionId);
+    }
+
+    public ClassCountSyncPacket(Map<String, Integer> counts,
+                                Map<String, Map<String, Integer>> variantCounts,
+                                String factionId) {
         this.factionId = factionId;
         this.classCounts = counts;
+        this.variantCounts = variantCounts;
         this.isError = false;
         this.errorMessage = "";
     }
@@ -46,6 +55,7 @@ public class ClassCountSyncPacket {
     public ClassCountSyncPacket(String message, boolean isError) {
         this.factionId = "";
         this.classCounts = new HashMap<>();
+        this.variantCounts = new HashMap<>();
         this.isError = true;
         this.errorMessage = message;
     }
@@ -67,7 +77,19 @@ public class ClassCountSyncPacket {
             counts.put(classId, count);
         }
 
-        return new ClassCountSyncPacket(counts, factionId);
+        Map<String, Map<String, Integer>> variantCounts = new HashMap<>();
+        int classVariantSize = buf.readInt();
+        for (int i = 0; i < classVariantSize; i++) {
+            String classId = buf.readUtf();
+            int variantSize = buf.readInt();
+            Map<String, Integer> perClass = new HashMap<>();
+            for (int j = 0; j < variantSize; j++) {
+                perClass.put(buf.readUtf(), buf.readInt());
+            }
+            variantCounts.put(classId, perClass);
+        }
+
+        return new ClassCountSyncPacket(counts, variantCounts, factionId);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -82,6 +104,15 @@ public class ClassCountSyncPacket {
                 buf.writeUtf(entry.getKey());
                 buf.writeInt(entry.getValue());
             }
+            buf.writeInt(variantCounts.size());
+            for (Map.Entry<String, Map<String, Integer>> classEntry : variantCounts.entrySet()) {
+                buf.writeUtf(classEntry.getKey());
+                buf.writeInt(classEntry.getValue().size());
+                for (Map.Entry<String, Integer> variantEntry : classEntry.getValue().entrySet()) {
+                    buf.writeUtf(variantEntry.getKey());
+                    buf.writeInt(variantEntry.getValue());
+                }
+            }
         }
     }
 
@@ -94,7 +125,9 @@ public class ClassCountSyncPacket {
                 ClassCountManager countManager = ClassCountManager.getInstance();
                 String team = countManager.getEffectivePlayerTeam(player.getUUID());
                 Map<String, Integer> counts = countManager.getCountsForFaction(team, factionId);
-                ClassCountSyncPacket response = new ClassCountSyncPacket(counts, factionId);
+                Map<String, Map<String, Integer>> variants =
+                    countManager.getVariantCountsForFaction(team, factionId);
+                ClassCountSyncPacket response = new ClassCountSyncPacket(counts, variants, factionId);
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);
             } else {
                 // 客户端处理：通过反射调用客户端handler（避免服务端类加载）
@@ -113,4 +146,5 @@ public class ClassCountSyncPacket {
     public boolean isError() { return isError; }
     public String getErrorMessage() { return errorMessage; }
     public Map<String, Integer> getClassCounts() { return classCounts; }
+    public Map<String, Map<String, Integer>> getVariantCounts() { return variantCounts; }
 }

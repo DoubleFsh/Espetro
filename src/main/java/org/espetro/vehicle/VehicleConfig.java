@@ -32,6 +32,7 @@ public class VehicleConfig {
         @Nullable
         public String displayName;
         public int troopValue;
+        public Set<String> entityTags = new LinkedHashSet<>();
         public DeploymentConfig deployment = new DeploymentConfig();
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
@@ -117,6 +118,13 @@ public class VehicleConfig {
         cfg.entityTypeStr = vd.entityTypeStr;
         cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
         cfg.troopValue = Math.max(0, vd.troopValue);
+        if (vd.entityTags != null) {
+            for (String tag : vd.entityTags) {
+                if (tag != null && !tag.isBlank()) {
+                    cfg.entityTags.add(tag);
+                }
+            }
+        }
         cfg.deployment = buildDeploymentConfig(vehicleType, vd);
         if (cfg.entityTypeStr == null || cfg.entityTypeStr.isBlank()) {
             Espetro.LOGGER.warn("载具 {} 未配置 entity_type；请在对应编制 JSON 的 vehicles 节中配置", vehicleType);

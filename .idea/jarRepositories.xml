@@ -41,5 +41,10 @@
       <option name="name" value="Architectury" />
       <option name="url" value="https://maven.architectury.dev/" />
     </remote-repository>
+    <remote-repository>
+      <option name="id" value="Sighs Releases" />
+      <option name="name" value="Sighs Releases" />
+      <option name="url" value="https://maven.sighs.cc/repository/maven-releases/" />
+    </remote-repository>
   </component>
 </project>

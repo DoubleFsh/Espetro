@@ -29,21 +29,29 @@ public class ClassSelectPacket {
 
     private final String teamOrFaction; // ATTACK/DEFEND 或 factionId
     private final String classId;
+    private final String variantId;
 
     public ClassSelectPacket(String teamOrFaction, String classId) {
+        this(teamOrFaction, classId, "");
+    }
+
+    public ClassSelectPacket(String teamOrFaction, String classId, String variantId) {
         this.teamOrFaction = teamOrFaction;
         this.classId = classId;
+        this.variantId = variantId != null ? variantId : "";
     }
 
     public static ClassSelectPacket read(FriendlyByteBuf buf) {
         String teamOrFaction = buf.readUtf();
         String classId = buf.readUtf();
-        return new ClassSelectPacket(teamOrFaction, classId);
+        String variantId = buf.readUtf();
+        return new ClassSelectPacket(teamOrFaction, classId, variantId);
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeUtf(teamOrFaction);
         buf.writeUtf(classId);
+        buf.writeUtf(variantId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -64,11 +72,8 @@ public class ClassSelectPacket {
             // 否则作为职业选择处理（在战斗/部署阶段）
             ClassCountManager countManager = ClassCountManager.getInstance();
 
-            // 检查是否选择了同一个职业
             String currentClass = countManager.getPlayerClass(player.getUUID());
-            if (classId.equals(currentClass)) {
-                return;
-            }
+            String currentVariant = countManager.getPlayerVariant(player.getUUID());
 
             // 检查是否在部署点或兵站周边6格范围内
             BlockPos playerPos = player.blockPosition();
@@ -121,15 +126,28 @@ public class ClassSelectPacket {
                 return;
             }
 
-            // 检查职业是否已满
-            if (!countManager.selectClass(player, classId)) {
-                ClassCountSyncPacket errorPacket = new ClassCountSyncPacket("§c该职业人数已满！请选择其他职业。", true);
+            ClassCountManager.SelectionResult selection =
+                countManager.selectClassVariant(player, classId, variantId);
+            if (selection != ClassCountManager.SelectionResult.SUCCESS) {
+                String message = switch (selection) {
+                    case CLASS_FULL -> "§c该职业人数已满！请选择其他职业。";
+                    case VARIANT_FULL -> "§c该装备变体人数已满！请选择其他变体。";
+                    case INVALID_VARIANT -> "§c无效的职业装备变体。";
+                    case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
+                    default -> "§c当前无法选择该职业装备变体。";
+                };
+                ClassCountSyncPacket errorPacket = new ClassCountSyncPacket(message, true);
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), errorPacket);
                 return;
             }
 
-            // 职业未满，给予装备
-            ClassEquipment.equipPlayer(player, teamOrFaction, classId);
+            boolean sameSelection = classId.equals(currentClass)
+                && countManager.getPlayerVariant(player.getUUID()).equals(currentVariant);
+            String actualFactionId = countManager.getPlayerFaction(player.getUUID());
+            String selectedVariantId = countManager.getPlayerVariant(player.getUUID());
+            if (!sameSelection) {
+                ClassEquipment.equipPlayer(player, actualFactionId, classId, selectedVariantId);
+            }
 
             // 如果是指挥官，给予兵站建筑指令和载具部署木棍（若背包中没有）
             if (VoteManager.getInstance().isCommander(player.getUUID())) {
@@ -148,6 +166,7 @@ public class ClassSelectPacket {
             String factionId = countManager.getPlayerFaction(player.getUUID());
             NetworkManager.broadcastClassCounts(team,
                 factionId != null ? factionId : teamOrFaction);
+            NetworkManager.syncSquadsToTeam(team);
         });
         ctx.get().setPacketHandled(true);
     }

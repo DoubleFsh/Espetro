@@ -25,6 +25,8 @@ import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GameStateManager;
 import org.espetro.team.VoteManager;
+import org.espetro.team.SquadManager;
+import org.espetro.logistics.LogisticsConfig;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -60,9 +62,10 @@ public class BastionBuildingWandItem extends FishingRodItem {
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
-        // 检查玩家是否是指挥官
-        if (!isCommander(serverPlayer)) {
-            serverPlayer.sendSystemMessage(Component.literal("§c只有指挥官才能使用此物品！"));
+        // Squad 中 Radio 由小队长部署；保留指挥官权限兼容旧流程。
+        if (!isCommander(serverPlayer)
+            && !SquadManager.getInstance().isSquadLeader(serverPlayer.getUUID())) {
+            serverPlayer.sendSystemMessage(Component.literal("§c只有小队长或指挥官才能部署 Radio！"));
             return InteractionResultHolder.fail(player.getItemInHand(hand));
         }
 
@@ -101,11 +104,23 @@ public class BastionBuildingWandItem extends FishingRodItem {
         }
         BlockPos targetPos = new BlockPos(lookPos.getX(), serverPlayer.blockPosition().getY(), lookPos.getZ());
 
+        ServerLevel serverLevel = serverPlayer.serverLevel();
+        LogisticsConfig.LogisticsSettings logistics = LogisticsConfig.get();
+        if (BastionManager.getInstance().findNearestBastion(
+            serverLevel, targetPos, null, logistics.radioExclusionRadius) != null) {
+            serverPlayer.sendSystemMessage(Component.literal(
+                "§c附近已有 Radio，排斥半径为 " + (int) logistics.radioExclusionRadius + " 格。"));
+            return InteractionResultHolder.fail(player.getItemInHand(hand));
+        }
+        if (logistics.requireTeammate && !hasNearbyTeammate(serverPlayer, team, logistics.radioTeammateRadius)) {
+            serverPlayer.sendSystemMessage(Component.literal(
+                "§c部署 Radio 需要 " + (int) logistics.radioTeammateRadius + " 格内至少一名队友。"));
+            return InteractionResultHolder.fail(player.getItemInHand(hand));
+        }
         // 生成默认名称
         String bastionName = generateBastionName(team);
 
         // 在服务端线程创建兵站
-        ServerLevel serverLevel = serverPlayer.server.overworld();
         BastionData bastion = BastionManager.getInstance().createBastion(
             serverLevel, targetPos, team, bastionName
         );
@@ -119,6 +134,8 @@ public class BastionBuildingWandItem extends FishingRodItem {
 
             // 设置建造冷却
             BastionManager.getInstance().setBastionCooldown(serverPlayer.getUUID());
+            org.espetro.tutorial.TutorialManager.getInstance().tryShow(
+                serverPlayer, org.espetro.tutorial.TutorialStep.BASTION);
 
             // 放置小房子
             buildBastionStructure(serverLevel, targetPos, team);
@@ -130,7 +147,8 @@ public class BastionBuildingWandItem extends FishingRodItem {
             serverLevel.playSound(null, targetPos, SoundEvents.EXPERIENCE_ORB_PICKUP,
                 SoundSource.PLAYERS, 1.0f, 1.0f);
 
-            serverPlayer.sendSystemMessage(Component.literal("§a兵站 §e" + bastionName + " §a已创建！位置: " + targetPos.getX() + ", " + targetPos.getY() + ", " + targetPos.getZ()));
+            serverPlayer.sendSystemMessage(Component.literal("§aRadio §e" + bastionName + " §a已部署！位置: " + targetPos.getX() + ", " + targetPos.getY() + ", " + targetPos.getZ()));
+            serverPlayer.sendSystemMessage(Component.literal("§7向 Radio 存入建材后，将依次建成 HAB 与弹药箱。"));
             serverPlayer.sendSystemMessage(Component.literal("§7兵站建造冷却: " + cooldownSeconds + "秒"));
             Espetro.broadcastToTeam(team, "§6[兵站] §a指挥官 §e" + serverPlayer.getName().getString() + " §a建造了兵站 §b" + bastionName);
         } else {
@@ -145,6 +163,20 @@ public class BastionBuildingWandItem extends FishingRodItem {
      */
     private boolean isCommander(ServerPlayer player) {
         return VoteManager.getInstance().isCommander(player.getUUID());
+    }
+
+    private boolean hasNearbyTeammate(ServerPlayer player, String team, double radius) {
+        double radiusSquared = radius * radius;
+        for (ServerPlayer other : player.serverLevel().players()) {
+            if (other == player || !other.isAlive() || other.isSpectator()) {
+                continue;
+            }
+            if (team.equals(Espetro.getPlayerTeam(other))
+                && other.distanceToSqr(player) <= radiusSquared) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private int countPlanks(ServerPlayer player) {
@@ -199,9 +231,13 @@ public class BastionBuildingWandItem extends FishingRodItem {
      * 生成兵站名称
      */
     private String generateBastionName(String team) {
-        List<BastionData> teamBastions = BastionManager.getInstance().getTeamBastions(team);
-        int number = teamBastions.size() + 1;
-        return team.equals("ATTACK") ? "进攻点-" + number : "防守点-" + number;
+        int number = 1;
+        for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
+            if (bastion.isActive() && team.equals(bastion.getTeam())) {
+                number++;
+            }
+        }
+        return team.equals("ATTACK") ? "进攻FOB-" + number : "防守FOB-" + number;
     }
 
     /**

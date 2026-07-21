@@ -4,12 +4,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.level.Level;
 import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GamePhase;
@@ -36,7 +38,13 @@ public class VehicleManager {
     // factionId -> (vehicleType -> spawnTimeMillis) 刷新冷却
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
 
-    private record ActiveVehicleData(String factionId, String vehicleType, String team, boolean initial) {}
+    private record ActiveVehicleData(String factionId, String vehicleType, String team, boolean initial,
+                                     ResourceKey<Level> dimension, BlockPos lastKnownPosition) {
+        ActiveVehicleData withLocation(Entity entity) {
+            return new ActiveVehicleData(factionId, vehicleType, team, initial,
+                entity.level().dimension(), entity.blockPosition().immutable());
+        }
+    }
 
     private VehicleManager() {
         INSTANCE = this;
@@ -140,8 +148,7 @@ public class VehicleManager {
         level.addFreshEntity(vehicleEntity);
 
         // 记录
-        UUID vehicleId = vehicleEntity.getUUID();
-        trackVehicle(vehicleId, factionId, vehicleType, team, false);
+        trackVehicle(vehicleEntity, factionId, vehicleType, team, false);
 
         // 设置冷却
         cooldowns.computeIfAbsent(factionId, k -> new HashMap<>()).put(vehicleType, System.currentTimeMillis());
@@ -194,8 +201,7 @@ public class VehicleManager {
             }
 
             level.addFreshEntity(vehicleEntity);
-            UUID vehicleId = vehicleEntity.getUUID();
-            trackVehicle(vehicleId, factionId, vehicleType, team, true);
+            trackVehicle(vehicleEntity, factionId, vehicleType, team, true);
             deployed++;
 
             Espetro.LOGGER.info("初始载具已预部署: {} / {} 队伍: {} 位置: {} ({}/{})",
@@ -247,10 +253,22 @@ public class VehicleManager {
         return null;
     }
 
-    private void trackVehicle(UUID vehicleId, String factionId, String vehicleType, String team, boolean initial) {
+    private void trackVehicle(Entity vehicle, String factionId, String vehicleType, String team, boolean initial) {
+        UUID vehicleId = vehicle.getUUID();
         getList(factionId, vehicleType).add(vehicleId);
         activeVehicleIds.add(vehicleId);
-        activeVehicleData.put(vehicleId, new ActiveVehicleData(factionId, vehicleType, team, initial));
+        activeVehicleData.put(vehicleId, new ActiveVehicleData(
+            factionId, vehicleType, team, initial,
+            vehicle.level().dimension(), vehicle.blockPosition().immutable()));
+    }
+
+    /** 在实体换维度或卸载进区块前保存最后坐标，停服时据此重新加载并清理。 */
+    public void updateVehicleLocation(Entity entity) {
+        if (entity == null) return;
+        ActiveVehicleData data = activeVehicleData.get(entity.getUUID());
+        if (data != null) {
+            activeVehicleData.put(entity.getUUID(), data.withLocation(entity));
+        }
     }
 
     private void applyVehicleTroopPenalty(ActiveVehicleData data) {
@@ -346,6 +364,16 @@ public class VehicleManager {
                 }
 
                 Entity entity = findEntity(server, id);
+                if (entity == null) {
+                    ActiveVehicleData data = activeVehicleData.get(id);
+                    if (data != null) {
+                        ServerLevel level = server.getLevel(data.dimension());
+                        if (level != null) {
+                            level.getChunk(data.lastKnownPosition());
+                            entity = level.getEntity(id);
+                        }
+                    }
+                }
                 if (entity != null && !entity.isRemoved()) {
                     entity.discard();
                     removedCount++;
@@ -374,22 +402,28 @@ public class VehicleManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        for (Map<String, List<UUID>> typeMap : activeVehicles.values()) {
-            for (List<UUID> list : typeMap.values()) {
-                list.removeIf(id -> {
-                    Entity entity = findEntity(server, id);
-                    if (entity == null) {
-                        activeVehicleIds.remove(id);
-                        activeVehicleData.remove(id);
-                        return true;
-                    }
-                    boolean removed = entity.isRemoved();
-                    if (removed) {
-                        activeVehicleIds.remove(id);
-                        activeVehicleData.remove(id);
-                    }
-                    return removed;
-                });
+        for (UUID id : new ArrayList<>(activeVehicleIds)) {
+            ActiveVehicleData data = activeVehicleData.get(id);
+            if (data == null) {
+                removeTrackedVehicle(id);
+                continue;
+            }
+
+            ServerLevel level = server.getLevel(data.dimension());
+            if (level == null || !level.hasChunkAt(data.lastKnownPosition())) {
+                // 未加载区块中的实体仍然有效，保留追踪直到区块重载或停服清理。
+                continue;
+            }
+
+            Entity entity = level.getEntity(id);
+            if (entity == null) {
+                // 区块/实体管理器切换期间也可能暂时查不到实体；离开世界事件负责真正移除追踪。
+                continue;
+            }
+            if (entity.isRemoved()) {
+                removeTrackedVehicle(id);
+            } else {
+                updateVehicleLocation(entity);
             }
         }
     }
@@ -466,6 +500,9 @@ public class VehicleManager {
         entity.addTag(VEHICLE_TAG);
         entity.addTag("espetro_" + vehicleType);
         entity.addTag("espetro_vehicle_type_" + vehicleType);
+        for (String tag : config.entityTags) {
+            entity.addTag(tag);
+        }
         return entity;
     }
 

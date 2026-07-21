@@ -8,7 +8,6 @@ import se.mickelus.mutil.gui.GuiElement;
 abstract class MutilScreen extends Screen {
 
     protected GuiElement root;
-    private ScreenFadeIn fadeIn;
 
     protected MutilScreen(Component title) {
         super(title);
@@ -18,7 +17,6 @@ abstract class MutilScreen extends Screen {
     protected void init() {
         super.init();
         rebuildMutilRoot();
-        fadeIn = new ScreenFadeIn();
     }
 
     protected final void rebuildMutilRoot() {
@@ -41,20 +39,7 @@ abstract class MutilScreen extends Screen {
         renderBeforeMutil(graphics, mouseX, mouseY, partialTick);
         if (root != null) {
             root.updateFocusState(0, 0, mouseX, mouseY);
-
-            // 渐入动画：应用全局 alpha 和 Y 偏移
-            float offsetY = 0;
-            if (fadeIn != null) {
-                offsetY = fadeIn.preRender(graphics);
-                ScreenFadeIn.translateY(graphics, offsetY);
-            }
-
             root.draw(graphics, 0, 0, this.width, this.height, mouseX, mouseY, partialTick);
-
-            if (fadeIn != null) {
-                graphics.pose().translate(0, -offsetY, 0);
-                fadeIn.postRender();
-            }
 
             var tooltip = root.getTooltipLines();
             if (tooltip != null && !tooltip.isEmpty()) {

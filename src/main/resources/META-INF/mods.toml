@@ -77,6 +77,20 @@ ordering = "NONE"
 side = "BOTH"# Here's another dependency
 
 [[dependencies."${mod_id}"]]
+modId = "oelib"
+mandatory = true
+versionRange = "[${oelib_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "auratip"
+mandatory = true
+versionRange = "[${auratip_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
 modId = "rhino"
 mandatory = true
 versionRange = "[${rhino_version},)"

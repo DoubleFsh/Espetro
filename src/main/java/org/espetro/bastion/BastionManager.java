@@ -17,6 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.ChunkPos;
 import org.espetro.Espetro;
+import org.espetro.logistics.LogisticsConfig;
 
 import javax.annotation.Nullable;
 import java.io.InputStream;
@@ -240,6 +241,61 @@ public class BastionManager {
      */
     public List<BastionData> getAllBastions() {
         return new ArrayList<>(bastions.values());
+    }
+
+    @Nullable
+    public BastionData findNearestBastion(ServerLevel level, BlockPos pos, @Nullable String team, double radius) {
+        BastionData nearest = null;
+        double bestDistance = radius * radius;
+        for (BastionData bastion : bastions.values()) {
+            if (!bastion.isActive() || bastion.getLevel() != level
+                || (team != null && !team.equals(bastion.getTeam()))) {
+                continue;
+            }
+            double distance = bastion.getPosition().distSqr(pos);
+            if (distance <= bestDistance) {
+                nearest = bastion;
+                bestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    public void advanceFobConstruction(BastionData bastion) {
+        LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
+        if (!bastion.isHabBuilt()
+            && bastion.consumeConstructionSupplies(config.habConstructionCost)) {
+            bastion.setHabBuilt(true);
+            bastion.setHabAvailableAt(System.currentTimeMillis()
+                + config.habActivationSeconds * 1000L);
+            Espetro.broadcastToTeam(bastion.getTeam(),
+                "§a[FOB] §f" + bastion.getName() + " §a的 HAB 已建成，正在启用。");
+        }
+        if (!bastion.isAmmoCrateBuilt()
+            && bastion.consumeConstructionSupplies(config.ammoCrateConstructionCost)) {
+            bastion.setAmmoCrateBuilt(true);
+            Espetro.broadcastToTeam(bastion.getTeam(),
+                "§b[FOB] §f" + bastion.getName() + " §b的弹药箱已建成。");
+        }
+    }
+
+    public boolean tryConsumeFobAmmunition(BastionData bastion, int amount) {
+        return bastion != null && bastion.isActive() && bastion.isAmmoCrateBuilt()
+            && bastion.consumeAmmunitionSupplies(Math.max(0, amount));
+    }
+
+    public String getFobStatus(BastionData bastion) {
+        if (!bastion.isHabBuilt()) {
+            return "HAB 待建造";
+        }
+        long now = System.currentTimeMillis();
+        if (bastion.getHabAvailableAt() > now) {
+            return "HAB 启用中 " + ((bastion.getHabAvailableAt() - now + 999L) / 1000L) + "s";
+        }
+        if (bastion.getHabDisabledUntil() > now) {
+            return "HAB 被压制 " + ((bastion.getHabDisabledUntil() - now + 999L) / 1000L) + "s";
+        }
+        return "HAB 可部署";
     }
 
     /**
@@ -571,7 +627,57 @@ public class BastionManager {
                 updateBastionArmorStandPosition(bastion, armorStandPos);
             }
         }
-        return getRecordedArmorStandPosition(bastion) != null;
+        return getRecordedArmorStandPosition(bastion) != null && isHabOperational(bastion);
+    }
+
+    public boolean isHabOperational(BastionData bastion) {
+        if (!bastion.isHabBuilt()) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (bastion.getHabAvailableAt() > now) {
+            return false;
+        }
+
+        float maximum = Math.max(1.0f, armorStandHealth);
+        float healthPercent = bastion.getCoreHealth() * 100.0f / maximum;
+        if (healthPercent <= LogisticsConfig.get().habDisableRadioHealth) {
+            bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+            return false;
+        }
+
+        if (isHabProxied(bastion)) {
+            bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+            return false;
+        }
+        return bastion.getHabDisabledUntil() <= now;
+    }
+
+    private boolean isHabProxied(BastionData bastion) {
+        ServerLevel level = bastion.getLevel();
+        if (level == null) {
+            return false;
+        }
+        BlockPos center = bastion.getPosition();
+        int[] radii = {20, 30, 40, 50, 60, 70, 80, 90};
+        for (int index = 0; index < radii.length; index++) {
+            int radius = radii[index];
+            int requiredEnemies = index + 2;
+            int enemies = 0;
+            for (ServerPlayer player : level.players()) {
+                if (!player.isAlive() || player.isSpectator()
+                    || Objects.equals(bastion.getTeam(), Espetro.getPlayerTeam(player))) {
+                    continue;
+                }
+                if (player.blockPosition().distSqr(center) <= radius * radius) {
+                    enemies++;
+                    if (enemies >= requiredEnemies) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {

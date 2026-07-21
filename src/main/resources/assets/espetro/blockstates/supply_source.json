@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "espetro:block/supply_source"
+    }
+  }
+}

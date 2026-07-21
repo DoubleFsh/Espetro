@@ -8,17 +8,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
@@ -36,6 +32,8 @@ import org.espetro.team.GameStateManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TeamPackManager;
+import org.espetro.logistics.LogisticsConfig;
+import org.espetro.logistics.SupplyManager;
 
 import javax.annotation.Nullable;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -98,6 +96,7 @@ public class BastionEventHandler {
 
         // 记录死亡状态
         BastionManager.getInstance().onPlayerDeath(player.server.overworld(), player.getUUID());
+        TeamPackManager.getInstance().onPlayerDeath(player.getUUID());
 
         Espetro.LOGGER.info("玩家 {} 死亡，进入兵站选择状态", player.getName().getString());
     }
@@ -145,9 +144,16 @@ public class BastionEventHandler {
 
         // 如果玩家在等待兵站选择状态
         if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
-            // 清除等待状态，让玩家正常游戏
-            BastionManager.getInstance().clearWaiting(player.getUUID());
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你之前的复活选择已重置。"));
+            // 重新登录不能绕过部署选择：继续保持统一等待状态。
+            applyWaitingDeployState(player);
+            player.server.execute(() -> {
+                if (BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+                    int remaining = GameStateManager.getInstance().getCurrentPhase() == GamePhase.DEPLOYING
+                        ? GameStateManager.getInstance().getDeployTimeRemainingSeconds()
+                        : -1;
+                    org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, remaining);
+                }
+            });
         }
     }
 
@@ -287,6 +293,39 @@ public class BastionEventHandler {
         }
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.level().isClientSide) {
+            return;
+        }
+        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion == null) {
+            return;
+        }
+        SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
+        if (result.success()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§a已存入 FOB §7| §6建材 +" + result.construction()
+                    + " §7| §b弹药 +" + result.ammunition()
+                    + " §7| 库存 §6" + bastion.getConstructionSupplies()
+                    + "§7/§b" + bastion.getAmmunitionSupplies()
+                    + " §7| " + BastionManager.getInstance().getFobStatus(bastion)));
+        } else {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                result.error() + " §7| §6" + bastion.getConstructionSupplies()
+                    + " 建材 §7| §b" + bastion.getAmmunitionSupplies()
+                    + " 弹药 §7| " + BastionManager.getInstance().getFobStatus(bastion)));
+        }
+    }
+
+    @SubscribeEvent
+    public static void onSupplySourceInteract(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)
+            || !(event.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        if (SupplyManager.getInstance().handleSourceInteraction(player, level, event.getPos())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+        }
     }
 
     /**
@@ -313,9 +352,26 @@ public class BastionEventHandler {
             return; // 静默，不给敌方提示
         }
 
+        if (player.isShiftKeyDown()) {
+            SupplyManager.DepositResult deposit = SupplyManager.getInstance().depositAll(player, bastion);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(deposit.success()
+                ? "§a已向 FOB 存入 §6" + deposit.construction() + " 建材 §a与 §b"
+                    + deposit.ammunition() + " 弹药。"
+                : deposit.error()));
+            event.setCanceled(true);
+            return;
+        }
+
+        if (!bastion.isAmmoCrateBuilt()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c该 FOB 尚未建成弹药箱，需要继续存入建材。"));
+            event.setCanceled(true);
+            return;
+        }
+
         // 获取玩家职业配置
-        String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
         String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
+        String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
         if (classId == null) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
             event.setCanceled(true);
@@ -327,8 +383,20 @@ public class BastionEventHandler {
         MinecraftServer server = player.getServer();
         if (server != null) loader.ensureLoaded(server.getResourceManager());
         FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
-        if (kit == null || kit.resupply == null || kit.resupply.items == null || kit.resupply.items.length == 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业没有配置弹药补给！"));
+        FactionDataLoader.ClassVariantData variant = kit != null ? kit.getVariant(variantId) : null;
+        FactionDataLoader.ResupplyData resupply = variant != null ? variant.resupply : null;
+        if (resupply == null || resupply.items == null || resupply.items.length == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业装备变体没有配置弹药补给！"));
+            event.setCanceled(true);
+            return;
+        }
+
+        int ammoCost = resupply.ammoCost != null
+            ? Math.max(0, resupply.ammoCost)
+            : LogisticsConfig.get().defaultResupplyAmmoCost;
+        if (bastion.getAmmunitionSupplies() <= 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§cFOB 弹药库存为 0，无法补给。"));
             event.setCanceled(true);
             return;
         }
@@ -346,7 +414,7 @@ public class BastionEventHandler {
         // 智能补给：检查背包已有数量，补充到上限
         int givenItems = 0;
         StringBuilder detail = new StringBuilder();
-        for (FactionDataLoader.ResupplyItem ri : kit.resupply.items) {
+        for (FactionDataLoader.ResupplyItem ri : resupply.items) {
             if (ri.id == null || ri.id.isBlank()) continue;
             ItemStack template = createResupplyStack(ri);
             if (template.isEmpty()) {
@@ -388,9 +456,19 @@ public class BastionEventHandler {
         }
 
         // 记录补给
+        int chargedAmmo = 0;
+        int availableAmmo = Math.min(ammoCost, bastion.getAmmunitionSupplies());
+        if (availableAmmo > 0
+            && BastionManager.getInstance().tryConsumeFobAmmunition(bastion, availableAmmo)) {
+            chargedAmmo = availableAmmo;
+        }
         BastionManager.getInstance().recordResupply(player.getUUID());
+        String chargeDetail = chargedAmmo == ammoCost
+            ? "消耗 §b" + chargedAmmo + " FOB 弹药"
+            : "FOB 弹药不足 §7(需要 §b" + ammoCost + "§7)，已扣除剩余 §b"
+                + chargedAmmo + " §7并归零";
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§a▸ 已补充: §f" + detail + "  §7| 冷却5分钟"));
+            "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 冷却5分钟"));
         event.setCanceled(true);
     }
 
@@ -442,7 +520,7 @@ public class BastionEventHandler {
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
         // 不做任何操作，等待状态保留给 onPlayerRespawn 处理
-        // 如果玩家在死亡画面断开连接，onPlayerLoggedIn 会清除状态
+        // 重新登录也不会清除等待状态，避免绕过部署点选择
     }
 
     /**
@@ -461,26 +539,6 @@ public class BastionEventHandler {
     }
 
     private static void applyWaitingDeployState(ServerPlayer player) {
-        if (!player.isSpectator()) {
-            player.setGameMode(GameType.SPECTATOR);
-        }
-
-        if (!player.hasEffect(MobEffects.BLINDNESS)) {
-            player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
-        }
-
-        BastionManager manager = BastionManager.getInstance();
-        Vec3 lockPos = manager.getPlayerLockPosition(player.getUUID());
-        if (lockPos == null) {
-            lockPos = player.position();
-            manager.lockPlayerPosition(player.getUUID(), lockPos);
-        }
-
-        if (lockPos != null) {
-            player.setDeltaMovement(0, 0, 0);
-            if (player.distanceToSqr(lockPos) > 0.01) {
-                player.teleportTo(lockPos.x, lockPos.y, lockPos.z);
-            }
-        }
+        GameStateManager.getInstance().applyDeploymentWaitingState(player);
     }
 }

@@ -25,7 +25,7 @@
     "regen_per_second": 2
   },
   "tutorial": {
-    "enabled": true,
+    "enabled": false,
     "show_on_join": true,
     "allow_skip": true
   }

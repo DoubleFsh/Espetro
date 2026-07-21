@@ -1,10 +1,6 @@
 package org.espetro.tutorial;
 
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.espetro.Espetro;
@@ -64,8 +60,6 @@ public final class TutorialManager {
         } else {
             enqueue(player, TutorialStep.WELCOME);
             enqueue(player, TutorialStep.TEAM_SELECT);
-            enqueue(player, TutorialStep.PHASE_OVERVIEW);
-            enqueue(player, TutorialStep.KEYS_KJY);
         }
 
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
@@ -97,16 +91,6 @@ public final class TutorialManager {
             }
             enqueueTeamSpecificForPhase(player, phase);
 
-            if (phase == GamePhase.BATTLE) {
-                enqueue(player, TutorialStep.TROOPS);
-                enqueue(player, TutorialStep.STAMINA);
-                enqueue(player, TutorialStep.NAMETAG);
-                if (VoteManager.getInstance().isCommander(player.getUUID())) {
-                    enqueue(player, TutorialStep.BASTION);
-                    enqueue(player, TutorialStep.VEHICLE);
-                    enqueue(player, TutorialStep.COMMANDER_SKILLS);
-                }
-            }
             flushDisplay(player);
         }
     }
@@ -123,13 +107,7 @@ public final class TutorialManager {
                 enqueue(player, TutorialStep.DEPLOY_DEFEND_BUILD);
                 enqueue(player, TutorialStep.OUTPOST);
             }
-            if (VoteManager.getInstance().isCommander(player.getUUID())) {
-                enqueue(player, TutorialStep.BASTION);
-                enqueue(player, TutorialStep.VEHICLE);
-                enqueue(player, TutorialStep.COMMANDER_SKILLS);
-            }
             enqueue(player, TutorialStep.SQUAD);
-            enqueue(player, TutorialStep.TEAM_PACK);
         }
     }
 
@@ -204,17 +182,12 @@ public final class TutorialManager {
                     session.shownSteps.add(step);
                 }
                 session.currentStep = null;
-                // 优先队列，再按枚举顺序找未展示步骤
+                // 教程只推进当前事件已经排入的步骤，避免一次操作弹出整套手册。
                 if (flushDisplay(player)) {
                     return;
                 }
-                TutorialStep next = findNextEligible(player, session, step);
-                if (next != null) {
-                    display(player, session, next);
-                } else {
-                    clearClient(player);
-                    player.sendSystemMessage(Component.translatable("tutorial.msg.complete"));
-                }
+                clearClient(player);
+                player.sendSystemMessage(Component.translatable("tutorial.msg.complete"));
             }
         }
     }
@@ -326,23 +299,6 @@ public final class TutorialManager {
             TutorialStep.totalCount(),
             GameConfig.isTutorialAllowSkip()
         ));
-        sendChatHint(player, step);
-    }
-
-    private TutorialStep findNextEligible(ServerPlayer player, Session session, TutorialStep from) {
-        TutorialStep[] all = TutorialStep.values();
-        int start = from == null ? 0 : from.ordinal() + 1;
-        for (int i = start; i < all.length; i++) {
-            TutorialStep candidate = all[i];
-            if (session.shownSteps.contains(candidate) || session.pending.contains(candidate)) {
-                continue;
-            }
-            if (!matchesFilter(player, candidate.getTeamFilter())) {
-                continue;
-            }
-            return candidate;
-        }
-        return null;
     }
 
     private boolean matchesFilter(ServerPlayer player, TutorialStep.TeamFilter filter) {
@@ -363,37 +319,6 @@ public final class TutorialManager {
             return "DEFEND".equals(team);
         }
         return true;
-    }
-
-    private void sendChatHint(ServerPlayer player, TutorialStep step) {
-        MutableComponent header = Component.literal("§6[Espetro 教程] §e")
-            .append(Component.translatable(step.titleKey()))
-            .append(Component.literal(" §7(" + step.ordinalIndex() + "/" + TutorialStep.totalCount() + ")"));
-        player.sendSystemMessage(header);
-
-        MutableComponent body = Component.literal("§7")
-            .append(Component.translatable(step.bodyKey()));
-        player.sendSystemMessage(body);
-
-        MutableComponent actions = Component.literal("§a");
-        actions.append(clickable("tutorial.btn.next", "/espetro tutorial next", "§a"));
-        actions.append(Component.literal(" §8| "));
-        actions.append(clickable("tutorial.btn.dismiss", "/espetro tutorial dismiss", "§e"));
-        if (GameConfig.isTutorialAllowSkip()) {
-            actions.append(Component.literal(" §8| "));
-            actions.append(clickable("tutorial.btn.skip", "/espetro tutorial skip", "§c"));
-        }
-        player.sendSystemMessage(actions);
-    }
-
-    private MutableComponent clickable(String langKey, String command, String colorCode) {
-        return Component.literal(colorCode + "[")
-            .append(Component.translatable(langKey))
-            .append(Component.literal("]"))
-            .withStyle(Style.EMPTY
-                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    Component.translatable(langKey))));
     }
 
     private static final class Session {

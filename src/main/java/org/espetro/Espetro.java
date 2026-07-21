@@ -38,6 +38,8 @@ import org.espetro.config.GameConfig;
 import org.espetro.stamina.StaminaManager;
 import org.espetro.team.TeamManager;
 import org.espetro.team.TeamPackManager;
+import org.espetro.logistics.LogisticsConfig;
+import org.espetro.logistics.SupplyManager;
 import org.espetro.team.ClassEquipment;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.FactionDataLoader;
@@ -73,9 +75,11 @@ public class Espetro {
     public static Object KEY_TEAM;   // K - 队伍选择
     public static Object KEY_CLASS;  // J - 职业选择
     public static Object KEY_SKILL;  // Y - 指挥官技能
+    public static Object KEY_RADIAL; // 长按战术交互轮盘
 
     public Espetro() {
         ensureKubeJSDefaultScriptsIfLoaded();
+        disableAuraTipDevelopmentLoginTips();
 
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -96,6 +100,15 @@ public class Espetro {
     private static void ensureKubeJSDefaultScriptsIfLoaded() {
         if (ModList.get().isLoaded("kubejs")) {
             EspetroKubeJSDefaultScripts.ensureDefaultScripts();
+        }
+    }
+
+    /** AuraTip's development bundle registers login demos; they are not player tutorials. */
+    private static void disableAuraTipDevelopmentLoginTips() {
+        int removed = cc.sighs.auratip.api.tip.TipRegistry.getTips("auratip_dev").size();
+        cc.sighs.auratip.api.tip.TipRegistry.clear("auratip_dev");
+        if (removed > 0) {
+            LOGGER.info("已禁用 AuraTip 的 {} 个开发示例提示（包括登录提示）", removed);
         }
     }
 
@@ -134,6 +147,7 @@ public class Espetro {
         // 4. 热重载兵站配置
         BastionManager.getInstance().reloadConfig();
         TeamPackManager.getInstance().reloadConfig();
+        LogisticsConfig.load(server);
 
         // 5. 热重载载具配置（依赖 faction 数据，放在最后）
         VehicleConfig.loadConfig(server);
@@ -225,6 +239,7 @@ public class Espetro {
         public static void commonSetup(FMLCommonSetupEvent event) {
             event.enqueueWork(() -> {
                 ensureKubeJSDefaultScriptsIfLoaded();
+                disableAuraTipDevelopmentLoginTips();
                 NetworkManager.registerNetwork();
                 // 初始化职业人数管理器
                 new ClassCountManager();
@@ -381,6 +396,7 @@ public class Espetro {
             // 重置游戏状态（含兵站清空）
             BastionManager.getInstance().reset();
             TeamPackManager.getInstance().reset();
+            SupplyManager.getInstance().reset();
             GameStateManager.getInstance().resetGame();
         }
 
@@ -388,13 +404,15 @@ public class Espetro {
         public static void onServerStopping(ServerStoppingEvent event) {
             clearAndSaveOnlinePlayerInventories(event.getServer());
 
-            // 停服保存前清理已加载区块中的兵站实体，但不强制加载未加载区块。
+            // 世界仍可访问时清理所有临时战局实体与方块。
+            int removedBarrierBlocks = GameStateManager.getInstance()
+                .cleanupTemporaryBarriers(event.getServer());
             BastionManager.getInstance().reset();
             TeamPackManager.getInstance().reset();
+            SupplyManager.getInstance().reset();
             int removedVehicles = VehicleManager.getInstance().removeAllDeployedVehicles(event.getServer());
-            if (removedVehicles > 0) {
-                LOGGER.info("停服时已删除 {} 辆已部署载具", removedVehicles);
-            }
+            LOGGER.info("停服战局清理完成: 已删除{}辆部署载具, 已恢复/删除{}个屏障方块",
+                removedVehicles, removedBarrierBlocks);
         }
 
         @SubscribeEvent
@@ -402,6 +420,7 @@ public class Espetro {
             // 服务器已停止后只清理内存状态，避免在世界卸载阶段访问区块或实体。
             BastionManager.getInstance().clearRuntimeState();
             TeamPackManager.getInstance().clearRuntimeState();
+            SupplyManager.getInstance().reset();
             VehicleManager.getInstance().clearRuntimeState();
             ServerRuntimeMaintenance.getInstance().reset();
             StaminaManager.clear();

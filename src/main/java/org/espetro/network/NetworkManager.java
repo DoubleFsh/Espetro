@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.1";
+    public static final String PROTOCOL_VERSION = "1.6";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -285,6 +285,13 @@ public class NetworkManager {
             TutorialActionPacket::read,
             TutorialActionPacket::handle
         );
+        NET.registerMessage(
+            nextId(),
+            RadialActionPacket.class,
+            RadialActionPacket::write,
+            RadialActionPacket::read,
+            RadialActionPacket::handle
+        );
     }
 
     /**
@@ -292,6 +299,10 @@ public class NetworkManager {
      */
     public static void sendClassSelect(String factionId, String classId) {
         NET.sendToServer(new ClassSelectPacket(factionId, classId));
+    }
+
+    public static void sendClassSelect(String factionId, String classId, String variantId) {
+        NET.sendToServer(new ClassSelectPacket(factionId, classId, variantId));
     }
 
     /**
@@ -324,7 +335,9 @@ public class NetworkManager {
 
         ClassCountManager countManager = ClassCountManager.getInstance();
         java.util.Map<String, Integer> counts = countManager.getCountsForFaction(team, factionId);
-        ClassCountSyncPacket packet = new ClassCountSyncPacket(counts, factionId);
+        java.util.Map<String, java.util.Map<String, Integer>> variants =
+            countManager.getVariantCountsForFaction(team, factionId);
+        ClassCountSyncPacket packet = new ClassCountSyncPacket(counts, variants, factionId);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (team.equals(countManager.getEffectivePlayerTeam(player.getUUID()))) {
                 NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
@@ -341,6 +354,10 @@ public class NetworkManager {
 
     public static void sendStaminaJump() {
         NET.sendToServer(new StaminaJumpPacket());
+    }
+
+    public static void sendRadialAction(RadialActionPacket.Action action) {
+        NET.sendToServer(new RadialActionPacket(action));
     }
 
     /**
@@ -412,8 +429,9 @@ public class NetworkManager {
         for (String id : pool) {
             FactionDataLoader.FactionData faction = loader.getFaction(id);
             String name = faction != null ? faction.name : id;
+            String selectionImage = faction != null ? faction.selectionImage : "";
             list.add(new ClassSelectScreenPacket.FactionInfo(
-                id, name, voteCounts.getOrDefault(id, 0)));
+                id, name, selectionImage, voteCounts.getOrDefault(id, 0)));
         }
         return list;
     }
@@ -725,9 +743,17 @@ public class NetworkManager {
         if (kits != null) {
             for (FactionDataLoader.ClassKitData kit : kits) {
                 int count = ClassCountManager.getInstance().getCount(team, kit.id);
+                java.util.List<UnifiedDeployScreenPacket.VariantInfo> variants = new java.util.ArrayList<>();
+                if (kit.variants != null) {
+                    for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                        variants.add(new UnifiedDeployScreenPacket.VariantInfo(
+                            variant.id, variant.name, variant.description, variant.maxPlayers,
+                            ClassCountManager.getInstance().getVariantCount(team, kit.id, variant.id)));
+                    }
+                }
                 classList.add(new UnifiedDeployScreenPacket.ClassInfo(
-                    kit.id, kit.name, kit.description, kit.role,
-                    kit.maxPlayers, count, kit.troopValue, kit.healthBonus, kit.speedBonus
+                    kit.id, kit.name, kit.description, kit.role, kit.icon,
+                    kit.maxPlayers, count, kit.troopValue, kit.healthBonus, kit.speedBonus, variants
                 ));
                 classCountMap.put(kit.id, count);
             }
@@ -750,7 +776,9 @@ public class NetworkManager {
             }
             bastionList.add(new UnifiedDeployScreenPacket.BastionItem(
                 bd.getBastionId(), bd.getName(),
-                armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ()
+                armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ(),
+                UnifiedDeployScreenPacket.BastionItem.TYPE_HAB,
+                "建材 " + bd.getConstructionSupplies() + " | 弹药 " + bd.getAmmunitionSupplies()
             ));
         }
         bastionList.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));
@@ -795,17 +823,8 @@ public class NetworkManager {
 
         org.espetro.tutorial.TutorialManager tutorial = org.espetro.tutorial.TutorialManager.getInstance();
         tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.UNIFIED_DEPLOY);
-        tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.CLASS_SELECT);
-        tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.SQUAD);
         if (bm.isWaitingForBastion(player.getUUID())) {
             tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.RESPAWN_FLOW);
-        }
-        if (isCmd) {
-            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.BASTION);
-            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.VEHICLE);
-        }
-        if ("DEFEND".equals(team) && org.espetro.team.OutpostManager.getInstance().isAvailable()) {
-            tutorial.tryShow(player, org.espetro.tutorial.TutorialStep.OUTPOST);
         }
     }
 

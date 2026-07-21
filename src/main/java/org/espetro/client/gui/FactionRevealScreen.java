@@ -6,6 +6,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.util.Objects;
+
 /**
  * 双方最终编制揭示界面。
  */
@@ -24,6 +26,7 @@ public class FactionRevealScreen extends MutilScreen {
     private final String attackFactionName;
     private final String defendFactionName;
     private int ticksRemaining;
+    private EspetroMutilWidgets.PhaseHeader phaseHeader;
 
     public FactionRevealScreen(String attackFactionName, String defendFactionName, int durationSeconds) {
         super(Component.literal("编制揭示"));
@@ -34,6 +37,12 @@ public class FactionRevealScreen extends MutilScreen {
 
     @Override
     protected void buildMutilRoot(GuiElement root) {
+        phaseHeader = EspetroMutilWidgets.addMutablePhaseHeader(root, this.width,
+            "\u00a76\u00a7l双方编制确认",
+            "\u00a7f双方最终编制已经确定",
+            "\u00a78" + getSecondsRemaining() + "秒后进入部署",
+            EspetroMutilWidgets.GOLD);
+        int headerH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
         boolean stacked = this.width < 430;
         int imgMax = stacked ? 82 : 118;
         int cardW = stacked ? Math.min(190, this.width - 28) : 178;
@@ -41,16 +50,14 @@ public class FactionRevealScreen extends MutilScreen {
         int contentW = stacked ? cardW : cardW * 2 + gap;
         int panelW = Math.min(this.width - 18, Math.max(contentW + 20, stacked ? 220 : 430));
         int cardH = imgMax + 22;
-        int panelH = stacked ? 52 + cardH * 2 + gap : 62 + cardH;
+        int panelH = stacked ? cardH * 2 + gap : cardH;
         int panelX = (this.width - panelW) / 2;
-        int panelY = Math.max(12, (this.height - panelH) / 2);
+        int panelY = headerH + Math.max(8, (this.height - headerH - panelH) / 2);
 
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 8, panelW,
-            "\u00a76\u00a7l双方编制确认", EspetroMutilWidgets.TEXT));
 
         int startX = panelX + (panelW - contentW) / 2;
-        int startY = panelY + 30;
+        int startY = panelY;
         if (stacked) {
             addFactionCard(root, startX, startY, cardW, imgMax,
                 ATTACK_TEXTURE, ATTACK_TEX_W, ATTACK_TEX_H, attackFactionName, EspetroMutilWidgets.ATTACK);
@@ -62,9 +69,6 @@ public class FactionRevealScreen extends MutilScreen {
             addFactionCard(root, startX + cardW + gap, startY, cardW, imgMax,
                 DEFEND_TEXTURE, DEFEND_TEX_W, DEFEND_TEX_H, defendFactionName, EspetroMutilWidgets.DEFEND);
         }
-
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + panelH - 12, panelW,
-            "\u00a78" + getSecondsRemaining() + "秒后进入部署", EspetroMutilWidgets.DIM));
     }
 
     private void addFactionCard(GuiElement root, int x, int y, int cardW, int imgMax,
@@ -92,6 +96,11 @@ public class FactionRevealScreen extends MutilScreen {
         return Math.max(0, (ticksRemaining + 19) / 20);
     }
 
+    public boolean matches(String attackName, String defendName) {
+        return Objects.equals(attackFactionName, normalizeName(attackName))
+            && Objects.equals(defendFactionName, normalizeName(defendName));
+    }
+
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, this.width, this.height, 0xD03A3A3A);
@@ -100,8 +109,8 @@ public class FactionRevealScreen extends MutilScreen {
     @Override
     public void tick() {
         ticksRemaining--;
-        if (ticksRemaining % 20 == 0 && this.root != null) {
-            rebuildMutilRoot();
+        if (ticksRemaining % 20 == 0 && phaseHeader != null) {
+            phaseHeader.setDetail("\u00a78" + getSecondsRemaining() + "秒后进入部署");
         }
         if (ticksRemaining <= 0 && Minecraft.getInstance().screen == this) {
             Minecraft.getInstance().setScreen(null);

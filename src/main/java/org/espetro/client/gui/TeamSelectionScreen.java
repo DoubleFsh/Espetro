@@ -30,26 +30,27 @@ public class TeamSelectionScreen extends MutilScreen {
 
     @Override
     protected void buildMutilRoot(GuiElement root) {
+        int headerH = EspetroMutilWidgets.addPhaseHeader(root, this.width,
+            "\u00a76\u00a7l队伍选择",
+            "\u00a7f请选择进攻方或防守方加入战斗",
+            "\u00a78选择后将进入编制投票阶段", EspetroMutilWidgets.GOLD);
+
         // 两个图片 + 间距 + 两侧留白
         int contentW = IMG_MAX * 2 + IMG_GAP;
         int panelW = Math.min(500, Math.max(contentW + 40, this.width - 36));
 
-        // 标题区 + 图片区 + 文字标签区
-        int panelH = 180;
+        // 图片区 + 文字标签区
+        int panelH = IMG_MAX + 26;
         int panelX = (this.width - panelW) / 2;
-        int panelY = Math.max(10, (this.height - panelH) / 2);
+        int panelY = headerH + Math.max(8, (this.height - headerH - panelH) / 2);
 
         // 面板背景（无边框）
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
 
-        // 标题
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 10, panelW,
-            "\u00a76\u00a7l选择你的阵营", EspetroMutilWidgets.TEXT));
-
         // 两张图片居中排列
         int totalImgW = IMG_MAX * 2 + IMG_GAP;
         int imgsStartX = panelX + (panelW - totalImgW) / 2;
-        int imgY = panelY + 32;
+        int imgY = panelY + 2;
 
         // 攻击方图片（左侧，等比例缩放）
         int attackImgX = imgsStartX;

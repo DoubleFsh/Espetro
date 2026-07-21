@@ -74,40 +74,74 @@ public class ClassEquipment {
         }
 
         FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
-        if (kit != null) {
-            equipFromKit(sp, kit);
-        } else {
+        if (kit == null) {
             Espetro.LOGGER.warn("未找到职业配置: {}", classId);
+            return;
         }
+        if (kit.variants == null || kit.variants.size() != 1) {
+            Espetro.LOGGER.warn("职业 {} 有多个装备变体，必须指定 variantId", classId);
+            return;
+        }
+        equipFromVariant(sp, kit, kit.variants.values().iterator().next());
     }
 
     /**
      * 根据阵营和职业给予玩家装备（通过 /give 指令）
      */
     public static void equipPlayer(Player player, String factionId, String classId) {
-        equipPlayer(player, classId);
+        if (!(player instanceof ServerPlayer sp)) return;
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) {
+            loader.ensureLoaded(server.getResourceManager());
+        }
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        if (kit == null || factionId == null || !factionId.equals(kit.factionId)
+            || kit.variants == null || kit.variants.size() != 1) {
+            Espetro.LOGGER.warn("未找到唯一职业装备变体: {} / {}", factionId, classId);
+            return;
+        }
+        equipFromVariant(sp, kit, kit.variants.values().iterator().next());
+    }
+
+    public static void equipPlayer(Player player, String factionId, String classId, String variantId) {
+        if (!(player instanceof ServerPlayer sp)) return;
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) {
+            loader.ensureLoaded(server.getResourceManager());
+        }
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        FactionDataLoader.ClassVariantData variant = kit != null ? kit.getVariant(variantId) : null;
+        if (kit == null || variant == null || factionId == null || !factionId.equals(kit.factionId)) {
+            Espetro.LOGGER.warn("未找到职业装备变体: {} / {} / {}", factionId, classId, variantId);
+            return;
+        }
+        equipFromVariant(sp, kit, variant);
     }
 
     /**
      * 从命令数组执行所有 /give 指令
      */
-    private static void equipFromKit(ServerPlayer player, FactionDataLoader.ClassKitData kit) {
+    private static void equipFromVariant(ServerPlayer player, FactionDataLoader.ClassKitData kit,
+                                         FactionDataLoader.ClassVariantData variant) {
         beginEquipmentMutation(player);
         try {
-            equipFromKitInternal(player, kit);
+            equipFromVariantInternal(player, kit, variant);
         } finally {
             endEquipmentMutation(player);
         }
     }
 
-    private static void equipFromKitInternal(ServerPlayer player, FactionDataLoader.ClassKitData kit) {
+    private static void equipFromVariantInternal(ServerPlayer player, FactionDataLoader.ClassKitData kit,
+                                                 FactionDataLoader.ClassVariantData variant) {
         // 先清空背包
         player.getInventory().clearContent();
 
-        boolean hasCommands = kit.commands != null && kit.commands.length > 0;
-        boolean hasConfiguredEquipment = hasConfiguredEquipment(kit);
+        boolean hasCommands = variant.commands != null && variant.commands.length > 0;
+        boolean hasConfiguredEquipment = hasConfiguredEquipment(variant);
         if (!hasCommands && !hasConfiguredEquipment) {
-            Espetro.LOGGER.warn("职业 {} 无 commands/equipment 配置", kit.id);
+            Espetro.LOGGER.warn("职业 {} 变体 {} 无 commands/equipment 配置", kit.id, variant.id);
             return;
         }
 
@@ -116,12 +150,12 @@ public class ClassEquipment {
 
         String playerName = player.getName().getString();
 
-        equipConfiguredEquipment(player, kit, server, playerName);
+        equipConfiguredEquipment(player, kit, variant, server, playerName);
         if (hasCommands) {
-            for (String args : kit.commands) {
+            for (String args : variant.commands) {
                 if (args == null || args.isBlank()) continue;
                 String itemArgs = normalizeItemArgs(args);
-                if (shouldAutoEquipWearables(kit) && handleWearableCommand(player, server, playerName, itemArgs)) {
+                if (shouldAutoEquipWearables(variant) && handleWearableCommand(player, server, playerName, itemArgs)) {
                     continue;
                 }
 
@@ -130,7 +164,7 @@ public class ClassEquipment {
             }
         }
 
-        if (shouldAutoEquipWearables(kit)) {
+        if (shouldAutoEquipWearables(variant)) {
             equipWearableItems(player);
         }
         applyBonus(player, kit);
@@ -154,10 +188,11 @@ public class ClassEquipment {
     private static void equipConfiguredEquipment(
         ServerPlayer player,
         FactionDataLoader.ClassKitData kit,
+        FactionDataLoader.ClassVariantData variant,
         MinecraftServer server,
         String playerName
     ) {
-        Map<String, String> equipment = collectConfiguredEquipment(kit);
+        Map<String, String> equipment = collectConfiguredEquipment(variant);
         if (equipment.isEmpty()) return;
 
         for (Map.Entry<String, String> entry : equipment.entrySet()) {
@@ -237,22 +272,22 @@ public class ClassEquipment {
         }
     }
 
-    private static boolean hasConfiguredEquipment(FactionDataLoader.ClassKitData kit) {
-        return kit.equipment != null && !kit.equipment.isEmpty()
-            || kit.wearableEquipment != null && !kit.wearableEquipment.isEmpty();
+    private static boolean hasConfiguredEquipment(FactionDataLoader.ClassVariantData variant) {
+        return variant.equipment != null && !variant.equipment.isEmpty()
+            || variant.wearableEquipment != null && !variant.wearableEquipment.isEmpty();
     }
 
-    private static boolean shouldAutoEquipWearables(FactionDataLoader.ClassKitData kit) {
-        return kit.autoEquipWearables == null || kit.autoEquipWearables;
+    private static boolean shouldAutoEquipWearables(FactionDataLoader.ClassVariantData variant) {
+        return variant.autoEquipWearables == null || variant.autoEquipWearables;
     }
 
-    private static Map<String, String> collectConfiguredEquipment(FactionDataLoader.ClassKitData kit) {
+    private static Map<String, String> collectConfiguredEquipment(FactionDataLoader.ClassVariantData variant) {
         Map<String, String> equipment = new LinkedHashMap<>();
-        if (kit.equipment != null) {
-            equipment.putAll(kit.equipment);
+        if (variant.equipment != null) {
+            equipment.putAll(variant.equipment);
         }
-        if (kit.wearableEquipment != null) {
-            equipment.putAll(kit.wearableEquipment);
+        if (variant.wearableEquipment != null) {
+            equipment.putAll(variant.wearableEquipment);
         }
         return equipment;
     }

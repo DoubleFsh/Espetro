@@ -95,6 +95,11 @@ public class BastionSelectionPacket {
             return false;
         }
 
+        if (!BastionManager.getInstance().isHabOperational(bastion)) {
+            player.sendSystemMessage(Component.literal("§c该 HAB 尚未激活或正被敌军压制，无法部署！"));
+            return false;
+        }
+
         // 检查是否在等待复活
         if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
             player.sendSystemMessage(Component.literal("§c你已经完成了复活选择！"));

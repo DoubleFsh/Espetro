@@ -181,12 +181,28 @@ public final class EspetroKubeJSBindings {
         return uuid == null ? null : classes().getPlayerClass(uuid);
     }
 
+    @Nullable
+    public static String getPlayerClassVariant(Object playerRef) {
+        UUID uuid = uuidOrNull(playerRef);
+        return uuid == null ? null : classes().getPlayerVariant(uuid);
+    }
+
     public static boolean selectPlayerClass(ServerPlayer player, String classId) {
         return classes().selectClass(player, classId);
     }
 
+    public static boolean selectPlayerClass(ServerPlayer player, String classId, String variantId) {
+        return classes().selectClass(player, classId, variantId);
+    }
+
     public static void equipPlayer(ServerPlayer player, String classId) {
         ClassEquipment.equipPlayer(player, classId);
+    }
+
+    public static void equipPlayer(ServerPlayer player, String classId, String variantId) {
+        if (player == null) return;
+        String factionId = classes().getPlayerFaction(player.getUUID());
+        ClassEquipment.equipPlayer(player, factionId, classId, variantId);
     }
 
     public static void clearEquipment(ServerPlayer player) {
@@ -214,6 +230,10 @@ public final class EspetroKubeJSBindings {
 
     public static Map<String, Integer> getClassCounts(String team, String factionId) {
         return classes().getCountsForFaction(team, factionId);
+    }
+
+    public static Map<String, Map<String, Integer>> getClassVariantCounts(String team, String factionId) {
+        return classes().getVariantCountsForFaction(team, factionId);
     }
 
     public static FactionDataLoader.FactionData getFaction(String factionId) {

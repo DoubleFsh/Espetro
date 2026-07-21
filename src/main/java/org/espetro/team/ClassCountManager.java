@@ -21,6 +21,8 @@ import java.util.UUID;
 public class ClassCountManager {
 
     private static final String SCOREBOARD_OBJECTIVE = "class_count";
+    // Scoreboard objective names are limited to 16 characters.
+    private static final String VARIANT_SCOREBOARD_OBJECTIVE = "class_variant";
     private static final String ATTACK_TEAM = "ATTACK";
     private static final String DEFEND_TEAM = "DEFEND";
     private static final String[] COUNT_TEAMS = {ATTACK_TEAM, DEFEND_TEAM};
@@ -28,6 +30,8 @@ public class ClassCountManager {
 
     // 玩家UUID -> 当前职业ID (内存缓存，用于快速查询)
     private final Map<UUID, String> playerClasses = new HashMap<>();
+    // 玩家UUID -> 当前职业装备变体ID
+    private final Map<UUID, String> playerVariants = new HashMap<>();
     // 玩家UUID -> 当前阵营ID
     private final Map<UUID, String> playerFactions = new HashMap<>();
     // 玩家UUID -> 原始队伍（ATTACK/DEFEND，不受编制选择影响）
@@ -51,6 +55,19 @@ public class ClassCountManager {
                 SCOREBOARD_OBJECTIVE,
                 ObjectiveCriteria.DUMMY,
                 Component.literal("职业人数"),
+                ObjectiveCriteria.RenderType.INTEGER
+            );
+        }
+        return objective;
+    }
+
+    private Objective getOrCreateVariantObjective(Scoreboard scoreboard) {
+        Objective objective = scoreboard.getObjective(VARIANT_SCOREBOARD_OBJECTIVE);
+        if (objective == null) {
+            objective = scoreboard.addObjective(
+                VARIANT_SCOREBOARD_OBJECTIVE,
+                ObjectiveCriteria.DUMMY,
+                Component.literal("职业变体人数"),
                 ObjectiveCriteria.RenderType.INTEGER
             );
         }
@@ -92,6 +109,20 @@ public class ClassCountManager {
         return getCount(ATTACK_TEAM, classId) + getCount(DEFEND_TEAM, classId);
     }
 
+    public int getVariantCount(String team, String classId, String variantId) {
+        Scoreboard scoreboard = getScoreboard();
+        if (scoreboard == null) return 0;
+        Objective objective = scoreboard.getObjective(VARIANT_SCOREBOARD_OBJECTIVE);
+        if (objective == null) return 0;
+        return scoreboard.getOrCreatePlayerScore(
+            getVariantScoreHolder(team, classId, variantId), objective).getScore();
+    }
+
+    public int getVariantCount(String classId, String variantId) {
+        return getVariantCount(ATTACK_TEAM, classId, variantId)
+            + getVariantCount(DEFEND_TEAM, classId, variantId);
+    }
+
     /**
      * 获取职业人数上限
      */
@@ -115,6 +146,12 @@ public class ClassCountManager {
         return isFull(ATTACK_TEAM, classId) || isFull(DEFEND_TEAM, classId);
     }
 
+    public boolean isVariantFull(String team, String classId, String variantId) {
+        FactionDataLoader.ClassVariantData variant =
+            FactionDataProvider.getOrCreateLoader().getClassVariant(classId, variantId);
+        return variant == null || getVariantCount(team, classId, variantId) >= variant.maxPlayers;
+    }
+
     /**
      * 增加职业分数
      */
@@ -129,39 +166,92 @@ public class ClassCountManager {
         scoreboard.getOrCreatePlayerScore(scoreHolder, objective).setScore(newScore);
     }
 
+    private void incrementVariantScore(String team, String classId, String variantId, int delta) {
+        Scoreboard scoreboard = getScoreboard();
+        if (scoreboard == null) return;
+        Objective objective = getOrCreateVariantObjective(scoreboard);
+        String scoreHolder = getVariantScoreHolder(team, classId, variantId);
+        int newScore = Math.max(0, getVariantCount(team, classId, variantId) + delta);
+        scoreboard.getOrCreatePlayerScore(scoreHolder, objective).setScore(newScore);
+    }
+
     /**
      * 玩家选择职业
      * 返回是否成功（职业未满）
      */
     public boolean selectClass(ServerPlayer player, String classId) {
+        FactionDataLoader.ClassKitData kit = FactionDataProvider.getOrCreateLoader().getClassKit(classId);
+        if (kit == null || kit.variants == null || kit.variants.size() != 1) {
+            return false;
+        }
+        return selectClass(player, classId, kit.variants.keySet().iterator().next());
+    }
+
+    public boolean selectClass(ServerPlayer player, String classId, String variantId) {
+        return selectClassVariant(player, classId, variantId) == SelectionResult.SUCCESS;
+    }
+
+    /** 服务端权威、原子地选择职业及装备变体。 */
+    public SelectionResult selectClassVariant(ServerPlayer player, String classId, String variantId) {
         UUID uuid = player.getUUID();
         String team = getEffectivePlayerTeam(uuid);
         if (team == null) {
             Espetro.LOGGER.warn("玩家 {} 无队伍记录，无法选择职业 {}", player.getName().getString(), classId);
-            return false;
+            return SelectionResult.NO_TEAM;
         }
+
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        if (kit == null || kit.factionId == null
+            || !kit.factionId.equals(playerFactions.get(uuid))) {
+            Espetro.LOGGER.warn("玩家 {} 尝试选择不属于当前编制的职业 {}",
+                player.getName().getString(), classId);
+            return SelectionResult.INVALID_CLASS;
+        }
+        FactionDataLoader.ClassVariantData variant = kit.getVariant(variantId);
+        if (variant == null) {
+            return SelectionResult.INVALID_VARIANT;
+        }
+        variantId = variant.id;
 
         String oldClassId = playerClasses.get(uuid);
+        String oldVariantId = playerVariants.get(uuid);
 
-        // 如果选择了同一个职业，不做任何操作
-        if (classId.equals(oldClassId)) {
-            return true;
+        // 完全相同的职业与变体不重复清空/发放装备。
+        if (classId.equals(oldClassId) && variantId.equals(oldVariantId)) {
+            return SelectionResult.SUCCESS;
         }
 
-        // 检查目标职业是否已满
-        if (isFull(team, classId)) {
+        if (!classId.equals(oldClassId) && isFull(team, classId)) {
             Espetro.LOGGER.info("{} 方职业 {} 已满，玩家 {} 无法选择", team, classId, player.getName().getString());
-            return false;
+            return SelectionResult.CLASS_FULL;
+        }
+        if (isVariantFull(team, classId, variantId)) {
+            Espetro.LOGGER.info("{} 方职业 {} 变体 {} 已满，玩家 {} 无法选择",
+                team, classId, variantId, player.getName().getString());
+            return SelectionResult.VARIANT_FULL;
         }
 
-        // 离开旧职业（从记分板减1）
-        if (oldClassId != null) {
+        if (oldClassId != null && oldVariantId == null) {
+            FactionDataLoader.ClassKitData oldKit = loader.getClassKit(oldClassId);
+            if (oldKit != null && oldKit.variants != null && oldKit.variants.size() == 1) {
+                oldVariantId = oldKit.variants.keySet().iterator().next();
+            }
+        }
+
+        if (oldClassId != null && !oldClassId.equals(classId)) {
             incrementScore(team, oldClassId, -1);
         }
+        if (oldClassId != null && oldVariantId != null) {
+            incrementVariantScore(team, oldClassId, oldVariantId, -1);
+        }
 
-        // 加入新职业（记分板加1）
-        incrementScore(team, classId, 1);
+        if (!classId.equals(oldClassId)) {
+            incrementScore(team, classId, 1);
+        }
+        incrementVariantScore(team, classId, variantId, 1);
         playerClasses.put(uuid, classId);
+        playerVariants.put(uuid, variantId);
         
         // 仅在玩家没有faction记录时才从职业ID提取阵营
         // 避免覆盖编制选择阶段已设置好的 faction（如 russia_army）
@@ -170,11 +260,21 @@ public class ClassCountManager {
             playerFactions.put(uuid, factionId);
         }
 
-        Espetro.LOGGER.debug("玩家 {} 选择 {} 方职业 {} ({}/{})",
-            player.getName().getString(), team, classId,
-            getCount(team, classId), getMaxCount(classId));
+        Espetro.LOGGER.debug("玩家 {} 选择 {} 方职业 {} / {} (职业 {}/{}, 变体 {}/{})",
+            player.getName().getString(), team, classId, variantId,
+            getCount(team, classId), getMaxCount(classId),
+            getVariantCount(team, classId, variantId), variant.maxPlayers);
 
-        return true;
+        return SelectionResult.SUCCESS;
+    }
+
+    public enum SelectionResult {
+        SUCCESS,
+        NO_TEAM,
+        INVALID_CLASS,
+        INVALID_VARIANT,
+        CLASS_FULL,
+        VARIANT_FULL
     }
 
     /**
@@ -184,8 +284,12 @@ public class ClassCountManager {
         UUID uuid = player.getUUID();
         String team = getEffectivePlayerTeam(uuid);
         String classId = playerClasses.remove(uuid);
+        String variantId = playerVariants.remove(uuid);
         if (team != null && classId != null) {
             incrementScore(team, classId, -1);
+            if (variantId != null) {
+                incrementVariantScore(team, classId, variantId, -1);
+            }
         }
         playerFactions.remove(uuid);
         playerTeams.remove(uuid);
@@ -265,11 +369,32 @@ public class ClassCountManager {
         return result;
     }
 
+    public Map<String, Map<String, Integer>> getVariantCountsForFaction(String team, String factionId) {
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        Map<String, Map<String, Integer>> result = new HashMap<>();
+        for (FactionDataLoader.ClassKitData kit : loader.getClassesForFaction(factionId)) {
+            Map<String, Integer> variants = new HashMap<>();
+            if (kit.variants != null) {
+                for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                    variants.put(variant.id, team == null
+                        ? getVariantCount(kit.id, variant.id)
+                        : getVariantCount(team, kit.id, variant.id));
+                }
+            }
+            result.put(kit.id, variants);
+        }
+        return result;
+    }
+
     /**
      * 获取玩家的当前职业
      */
     public String getPlayerClass(UUID uuid) {
         return playerClasses.get(uuid);
+    }
+
+    public String getPlayerVariant(UUID uuid) {
+        return playerVariants.get(uuid);
     }
 
     /**
@@ -308,6 +433,7 @@ public class ClassCountManager {
         if (scoreboard == null) return;
 
         Objective objective = getOrCreateObjective(scoreboard);
+        Objective variantObjective = getOrCreateVariantObjective(scoreboard);
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
 
         for (FactionDataLoader.FactionData faction : loader.getFactionArray()) {
@@ -318,6 +444,14 @@ public class ClassCountManager {
                     }
                     // 清理旧版本无队伍维度的计数，避免调试/旧调用看到残留。
                     scoreboard.getOrCreatePlayerScore(getLegacyScoreHolder(kit.id), objective).setScore(0);
+                    if (kit.variants != null) {
+                        for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                            for (String team : COUNT_TEAMS) {
+                                scoreboard.getOrCreatePlayerScore(
+                                    getVariantScoreHolder(team, kit.id, variant.id), variantObjective).setScore(0);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -329,6 +463,7 @@ public class ClassCountManager {
     public void resetAll() {
         // 清空所有玩家职业和阵营记录
         playerClasses.clear();
+        playerVariants.clear();
         playerFactions.clear();
         playerTeams.clear();
 
@@ -337,7 +472,8 @@ public class ClassCountManager {
         if (scoreboard == null) return;
 
         Objective objective = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
-        if (objective == null) return;
+        Objective variantObjective = scoreboard.getObjective(VARIANT_SCOREBOARD_OBJECTIVE);
+        if (objective == null && variantObjective == null) return;
 
         // 获取所有分数持有者并设置为0
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
@@ -346,14 +482,24 @@ public class ClassCountManager {
                 for (FactionDataLoader.ClassKitData kit : loader.getClassesForFaction(faction.id)) {
                     for (String team : COUNT_TEAMS) {
                         String scoreHolder = getScoreHolder(team, kit.id);
-                        if (scoreboard.hasPlayerScore(scoreHolder, objective)) {
+                        if (objective != null && scoreboard.hasPlayerScore(scoreHolder, objective)) {
                             scoreboard.getOrCreatePlayerScore(scoreHolder, objective).setScore(0);
                         }
                     }
 
                     String legacyScoreHolder = getLegacyScoreHolder(kit.id);
-                    if (scoreboard.hasPlayerScore(legacyScoreHolder, objective)) {
+                    if (objective != null && scoreboard.hasPlayerScore(legacyScoreHolder, objective)) {
                         scoreboard.getOrCreatePlayerScore(legacyScoreHolder, objective).setScore(0);
+                    }
+                    if (variantObjective != null && kit.variants != null) {
+                        for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                            for (String team : COUNT_TEAMS) {
+                                String holder = getVariantScoreHolder(team, kit.id, variant.id);
+                                if (scoreboard.hasPlayerScore(holder, variantObjective)) {
+                                    scoreboard.getOrCreatePlayerScore(holder, variantObjective).setScore(0);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -366,6 +512,10 @@ public class ClassCountManager {
 
     private String getLegacyScoreHolder(String classId) {
         return "class_" + classId;
+    }
+
+    private String getVariantScoreHolder(String team, String classId, String variantId) {
+        return "variant_" + normalizeTeam(team) + "_" + classId + "_" + variantId;
     }
 
     private String normalizeTeam(String team) {

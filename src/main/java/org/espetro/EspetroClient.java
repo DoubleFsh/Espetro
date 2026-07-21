@@ -8,7 +8,6 @@ package org.espetro;
  * （注解扫描会触发服务端类加载导致 DEDICATED_SERVER 错误）
  */
 public class EspetroClient {
-
     /**
      * 客户端初始化 —— 由 Espetro 主类通过 DistExecutor 调用，仅在 CLIENT 侧执行
      */
@@ -32,10 +31,8 @@ public class EspetroClient {
             .addListener(EspetroClient::onRenderNameTag);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onLivingJump);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS
-            .addListener(EspetroClient::onScreenRender);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS
-            .addListener(EspetroClient::onScreenMouseClick);
+
+        org.espetro.client.gui.AuraTipRadialController.initialize();
     }
 
     // ==================== 事件处理方法 ====================
@@ -47,18 +44,29 @@ public class EspetroClient {
             "key.espetro.class", 74, "key.categories.espetro");
         net.minecraft.client.KeyMapping keySkill = new net.minecraft.client.KeyMapping(
             "key.espetro.skill", 89, "key.categories.espetro");
+        net.minecraft.client.KeyMapping keyRadial = new net.minecraft.client.KeyMapping(
+            "key.espetro.radial", org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT, "key.categories.espetro");
         event.register(keyTeam);
         event.register(keyClass);
         event.register(keySkill);
+        event.register(keyRadial);
         Espetro.KEY_TEAM = keyTeam;
         Espetro.KEY_CLASS = keyClass;
         Espetro.KEY_SKILL = keySkill;
+        Espetro.KEY_RADIAL = keyRadial;
     }
 
     private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc == null || mc.player == null) return;
+        if (mc == null) return;
+
+        net.minecraft.client.KeyMapping radialKey =
+            Espetro.KEY_RADIAL instanceof net.minecraft.client.KeyMapping key ? key : null;
+        org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
+        org.espetro.client.gui.TutorialOverlay.tick();
+
+        if (mc.player == null) return;
 
         // 客户端立即抑制耗尽后的奔跑，服务端仍会执行权威校验。
         if (org.espetro.client.gui.StaminaOverlay.isExhausted()) {
@@ -98,24 +106,7 @@ public class EspetroClient {
             if (mc.screen == null) {
                 org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
                 org.espetro.client.gui.StaminaOverlay.render(event.getGuiGraphics(), mc);
-                org.espetro.client.gui.TutorialOverlay.render(event.getGuiGraphics(), mc);
             }
-        }
-    }
-
-    private static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc != null && org.espetro.client.gui.TutorialOverlay.isVisible()) {
-            org.espetro.client.gui.TutorialOverlay.render(event.getGuiGraphics(), mc);
-        }
-    }
-
-    private static void onScreenMouseClick(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
-        if (event.getButton() != 0) {
-            return;
-        }
-        if (org.espetro.client.gui.TutorialOverlay.handleClick(event.getMouseX(), event.getMouseY())) {
-            event.setCanceled(true);
         }
     }
 

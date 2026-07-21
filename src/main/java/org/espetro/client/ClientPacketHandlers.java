@@ -18,7 +18,9 @@ public class ClientPacketHandlers {
         if (mc.player != null) {
             org.espetro.client.gui.ClientGameState.setPlayerTeam(null);
             org.espetro.client.gui.ClientGameState.setPlayerFactionId(null);
-            mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
+            if (!(mc.screen instanceof org.espetro.client.gui.TeamSelectionScreen)) {
+                mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
+            }
         }
     }
 
@@ -77,10 +79,18 @@ public class ClientPacketHandlers {
 
     public static void handleCommanderVote(CommanderVotePacket packet) {
         org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
-        org.espetro.client.gui.CommanderVoteScreen.open(
-            packet.getTeam(), packet.getPlayers(), packet.getTimeRemaining(),
-            packet.getOpponentTeamName(), packet.getOpponentFaction(),
-            packet.getOpponentTimeRemaining());
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.screen instanceof org.espetro.client.gui.CommanderVoteScreen screen
+            && screen.isForTeam(packet.getTeam())) {
+            screen.updatePhaseData(packet.getPlayers(), packet.getTimeRemaining(),
+                packet.getOpponentTeamName(), packet.getOpponentFaction(),
+                packet.getOpponentTimeRemaining());
+        } else {
+            org.espetro.client.gui.CommanderVoteScreen.open(
+                packet.getTeam(), packet.getPlayers(), packet.getTimeRemaining(),
+                packet.getOpponentTeamName(), packet.getOpponentFaction(),
+                packet.getOpponentTimeRemaining());
+        }
     }
 
     // ==================== VoteDataPacket ====================
@@ -95,11 +105,14 @@ public class ClientPacketHandlers {
     public static void handleFactionReveal(FactionRevealPacket packet) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player != null) {
-            mc.setScreen(new org.espetro.client.gui.FactionRevealScreen(
-                packet.getAttackFactionName(),
-                packet.getDefendFactionName(),
-                packet.getDurationSeconds()
-            ));
+            if (!(mc.screen instanceof org.espetro.client.gui.FactionRevealScreen screen)
+                || !screen.matches(packet.getAttackFactionName(), packet.getDefendFactionName())) {
+                mc.setScreen(new org.espetro.client.gui.FactionRevealScreen(
+                    packet.getAttackFactionName(),
+                    packet.getDefendFactionName(),
+                    packet.getDurationSeconds()
+                ));
+            }
         }
     }
 
@@ -132,9 +145,9 @@ public class ClientPacketHandlers {
         }
 
         if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
-            screen.updateClassCounts(packet.getClassCounts());
+            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
         } else if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
-            screen.updateClassCounts(packet.getClassCounts());
+            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
         }
     }
 
@@ -190,13 +203,17 @@ public class ClientPacketHandlers {
 
         if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
             // 已在统一界面中，只更新数据
-            screen.updateClassCounts(packet.getClassCounts());
+            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
             screen.updateTimeRemaining(packet.getDeployTimeRemaining());
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
             screen.updateDeploymentState(
                 packet.isWaitingForDeploySelection(),
                 packet.getOutpostRedeployCooldownRemaining());
             // 载具部署已分离到 VehicleDeployScreen，通过"载具部署指令"物品单独打开
+        } else if (mc.screen instanceof org.espetro.client.gui.SquadScreen screen) {
+            // 班组管理是部署界面的子界面。部署阶段会持续发送该包，
+            // 此处只同步实时状态，不能把玩家强制切回部署界面。
+            screen.updateFromDeployPacket(packet);
         } else {
             mc.setScreen(new org.espetro.client.gui.UnifiedDeployScreen(packet));
         }
@@ -262,7 +279,9 @@ public class ClientPacketHandlers {
         // K键请求的响应：如果在允许打开阵营选择的阶段且未选择队伍，打开阵营选择
         if (org.espetro.client.gui.ClientGameState.canOpenTeamSelection()) {
             if (myTeam == null || myTeam.isEmpty()) {
-                mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
+                if (!(mc.screen instanceof org.espetro.client.gui.TeamSelectionScreen)) {
+                    mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
+                }
             }
         }
     }

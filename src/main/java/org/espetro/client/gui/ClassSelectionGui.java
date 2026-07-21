@@ -45,4 +45,8 @@ public class ClassSelectionGui {
         // 发送网络包到服务器
         NetworkManager.sendClassSelect(factionId, classId);
     }
+
+    public static void selectClass(String factionId, String classId, String variantId) {
+        NetworkManager.sendClassSelect(factionId, classId, variantId);
+    }
 }

@@ -2,5 +2,13 @@
     "pack": {
         "description": "espetro resources",
         "pack_format": 15
+    },
+    "filter": {
+        "block": [
+            {
+                "namespace": "auratip",
+                "path": "tips/dev_first_join.json"
+            }
+        ]
     }
 }

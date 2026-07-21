@@ -35,7 +35,7 @@ minecraft {
     // When true, this property will have all Eclipse/IntelliJ IDEA run configurations run the "prepareX" task for the given run configuration before launching the game.
     // In most cases, it is not necessary to enable.
     // enableEclipsePrepareRuns = true
-    // enableIdeaPrepareRuns = true
+    enableIdeaPrepareRuns = true
 
     // This property allows configuring Gradle's ProcessResources task(s) to run on IDE output locations before launching the game.
     // It is REQUIRED to be set to true for this template to function.
@@ -110,7 +110,7 @@ sourceSets.main.resources.exclude 'data/hcrpoints/**'
 
 repositories {
     flatDir {
-        dirs '../ds/build/libs'
+        dirs '../../../IdeaProjects/espetro-HCR/build/libs'
     }
     maven {
         name = 'LatvianMods'
@@ -127,6 +127,14 @@ repositories {
             includeGroup 'dev.architectury'
         }
     }
+    maven {
+        name = 'Sighs Releases'
+        url = 'https://maven.sighs.cc/repository/maven-releases/'
+        content {
+            includeGroup 'cc.sighs.auratip'
+            includeGroup 'cc.sighs.oelib'
+        }
+    }
     repositories {
         maven {
             url "https://cursemaven.com"
@@ -140,6 +148,8 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     implementation fg.deobf("curse.maven:mutil-351914:7772906")
+    implementation fg.deobf("cc.sighs.oelib:OELib-forge-1.20.1:${oelib_version}")
+    implementation fg.deobf("cc.sighs.auratip:auratip-forge-1.20.1:${auratip_version}")
 
     implementation fg.deobf("dev.latvian.mods:rhino-forge:${rhino_version}")
     implementation fg.deobf("dev.architectury:architectury-forge:${architectury_version}")
@@ -147,7 +157,7 @@ dependencies {
 
     // ESPoints depends on Espetro, so Espetro integrates through reflection and
     // only adds the sibling project's jar to local development runs.
-    def localEspointsJar = file("../ds/build/libs/espoints-${espoints_version}.jar")
+    def localEspointsJar = file("../../../IdeaProjects/espetro-HCR/build/libs/espoints-${espoints_version}.jar")
     if (localEspointsJar.exists()) {
         runtimeOnly fg.deobf("local:espoints:${espoints_version}")
     }
@@ -160,7 +170,8 @@ tasks.named('processResources', ProcessResources).configure {
                              mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
                              mod_authors         : mod_authors, mod_description: mod_description,
                              espoints_version    : espoints_version, rhino_version: rhino_version,
-                             architectury_version: architectury_version, kubejs_version: kubejs_version,]
+                             architectury_version: architectury_version, kubejs_version: kubejs_version,
+                             auratip_version     : auratip_version, oelib_version: oelib_version,]
 
     inputs.properties replaceProperties
 

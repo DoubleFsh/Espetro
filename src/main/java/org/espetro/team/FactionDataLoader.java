@@ -88,38 +88,20 @@ public class FactionDataLoader {
                 FactionJsonData data = GSON.fromJson(rawJson, FactionJsonData.class);
                 if (data != null) {
                     String factionId = id.getPath().replace(".json", "").replace("factions/", "");
-                    
-                    // 处理阵营数据
-                    if (data.faction != null) {
-                        FactionData faction = data.faction;
-                        faction.id = factionId;
-                        this.factions.put(factionId, faction);
+
+                    // 必须先校验整份文件；任一职业变体无效时，编制头、职业和载具都不提交。
+                    if (!prepareAndValidateFaction(id, factionId, data)) {
+                        continue;
                     }
-                    
-                    // 处理职业数据（逐个解析，单个职业失败不影响其他职业和阵营头）
+
+                    this.factions.put(factionId, data.faction);
                     if (data.classes != null) {
                         for (Map.Entry<String, ClassKitData> classEntry : data.classes.entrySet()) {
-                            String classId = classEntry.getKey();
-                            ClassKitData kit = classEntry.getValue();
-                            kit.id = classId;
-                            kit.factionId = factionId;
-                            
-                            // 确保默认值生效（Gson不会使用类字段默认值）
-                            if (kit.maxPlayers == 0) kit.maxPlayers = 5;
-                            if (kit.troopValue == 0) kit.troopValue = 1;
-                            
-                            this.classKits.put(classId, kit);
+                            this.classKits.put(classEntry.getKey(), classEntry.getValue());
                         }
                     }
-                    
-                    // 处理编制自定义载具配置
                     if (data.vehicles != null) {
-                        Map<String, VehicleData> vMap = new LinkedHashMap<>();
-                        for (Map.Entry<String, VehicleData> vEntry : data.vehicles.entrySet()) {
-                            VehicleData vd = vEntry.getValue();
-                            vMap.put(vEntry.getKey(), vd);
-                        }
-                        this.factionVehicles.put(factionId, vMap);
+                        this.factionVehicles.put(factionId, new LinkedHashMap<>(data.vehicles));
                     }
                     Espetro.LOGGER.info("加载阵营数据: {} ({})", id, 
                         data.faction != null ? data.faction.name : "无faction节点");
@@ -140,6 +122,93 @@ public class FactionDataLoader {
         rebuildLookupCaches();
         this.loaded = true;
         Espetro.LOGGER.info("已加载 {} 个阵营, {} 个职业配置", this.factions.size(), this.classKits.size());
+    }
+
+    private boolean prepareAndValidateFaction(ResourceLocation resourceId, String factionId, FactionJsonData data) {
+        if (data.faction == null) {
+            warnRejected(resourceId, "缺少 faction 节点");
+            return false;
+        }
+        if (data.faction.factionId == null || data.faction.factionId.isBlank()) {
+            warnRejected(resourceId, "faction.faction_id 缺失或为空");
+            return false;
+        }
+        data.faction.id = factionId;
+
+        if (data.classes == null) {
+            return true;
+        }
+
+        for (Map.Entry<String, ClassKitData> classEntry : data.classes.entrySet()) {
+            String classId = classEntry.getKey();
+            ClassKitData kit = classEntry.getValue();
+            if (classId == null || classId.isBlank() || kit == null) {
+                warnRejected(resourceId, "存在空职业 ID 或空职业配置");
+                return false;
+            }
+
+            kit.id = classId;
+            kit.factionId = factionId;
+            if (kit.troopValue == 0) kit.troopValue = 1;
+            if (kit.maxPlayers < 1) {
+                warnRejected(resourceId, "职业 " + classId + " 的 maxPlayers 必须大于 0");
+                return false;
+            }
+
+            if (kit.variants == null) {
+                kit.variants = new LinkedHashMap<>();
+                ClassVariantData fallback = ClassVariantData.fromLegacy(kit);
+                fallback.id = "default";
+                fallback.classId = classId;
+                fallback.factionId = factionId;
+                kit.variants.put(fallback.id, fallback);
+                kit.legacyImplicitVariant = true;
+                continue;
+            }
+            if (kit.variants.isEmpty()) {
+                warnRejected(resourceId, "职业 " + classId + " 的 variants 不可为空；"
+                    + "旧格式兼容需要完全省略 variants 字段");
+                return false;
+            }
+
+            if (kit.hasLegacyLoadoutFields()) {
+                Espetro.LOGGER.warn("编制 {} 的职业 {} 已配置 variants；职业级 commands/equipment/resupply 将被忽略",
+                    resourceId, classId);
+            }
+
+            long variantLimitSum = 0L;
+            for (Map.Entry<String, ClassVariantData> variantEntry : kit.variants.entrySet()) {
+                String variantId = variantEntry.getKey();
+                ClassVariantData variant = variantEntry.getValue();
+                if (variantId == null || variantId.isBlank() || variant == null) {
+                    warnRejected(resourceId, "职业 " + classId + " 存在空变体 ID 或空变体配置");
+                    return false;
+                }
+                if (variant.maxPlayers < 1) {
+                    warnRejected(resourceId, "职业 " + classId + " 的变体 " + variantId
+                        + " maxPlayers 必须大于 0");
+                    return false;
+                }
+                variant.id = variantId;
+                variant.classId = classId;
+                variant.factionId = factionId;
+                if (variant.name == null || variant.name.isBlank()) {
+                    variant.name = variantId;
+                }
+                variantLimitSum += variant.maxPlayers;
+            }
+
+            if (variantLimitSum != kit.maxPlayers) {
+                warnRejected(resourceId, "职业 " + classId + " 的变体上限总和 " + variantLimitSum
+                    + " 不等于职业上限 " + kit.maxPlayers);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void warnRejected(ResourceLocation resourceId, String reason) {
+        Espetro.LOGGER.warn("[编制拒载] {}: {}。该编制不会载入", resourceId, reason);
     }
 
     public void ensureLoaded(ResourceManager resourceManager) {
@@ -182,6 +251,11 @@ public class FactionDataLoader {
 
     public ClassKitData getClassKit(String classId) {
         return classKits.get(classId);
+    }
+
+    public ClassVariantData getClassVariant(String classId, String variantId) {
+        ClassKitData kit = getClassKit(classId);
+        return kit != null ? kit.getVariant(variantId) : null;
     }
 
     public ClassKitData[] getClassesForFaction(String factionId) {
@@ -258,6 +332,12 @@ public class FactionDataLoader {
         public String name;
         public String description;
         public String icon;
+        /** 编制投票卡片使用的完整 Minecraft 纹理资源位置。 */
+        @SerializedName(value = "selection_image", alternate = {"selectionImage"})
+        public String selectionImage;
+        /** 编制所属真实阵营 ID；无需注册，使用精确字符串比较。 */
+        @SerializedName("faction_id")
+        public String factionId;
         public String team;
         public String color = "FFFFFF";
     }
@@ -272,6 +352,8 @@ public class FactionDataLoader {
         public String name;
         public String description;
         public String role;
+        /** 职业选择界面使用的图标资源短名（assets/espetro/textures/gui/roles）。 */
+        public String icon;
 
         /**
          * 装备分发命令数组 —— 每个元素是 /give 命令的参数部分（不含 /give 和玩家名）
@@ -319,10 +401,64 @@ public class FactionDataLoader {
         /** 弹药补给配置（可选） */
         public ResupplyData resupply;
 
+        /** 装备变体 ID -> 完整装备配置，按 JSON 顺序显示。 */
+        public Map<String, ClassVariantData> variants;
+
+        /** 旧格式在加载时合成的 default 变体。 */
+        public transient boolean legacyImplicitVariant;
+
         public int maxPlayers = 5;
         public int healthBonus = 0;
         public float speedBonus = 0f;
         public int troopValue = 1;
+
+        public ClassVariantData getVariant(String variantId) {
+            if (variants == null || variants.isEmpty()) return null;
+            if (variantId == null || variantId.isBlank()) {
+                return variants.size() == 1 ? variants.values().iterator().next() : null;
+            }
+            return variants.get(variantId);
+        }
+
+        public boolean hasLegacyLoadoutFields() {
+            return commands != null && commands.length > 0
+                || equipment != null && !equipment.isEmpty()
+                || wearableEquipment != null && !wearableEquipment.isEmpty()
+                || autoEquipWearables != null
+                || resupply != null;
+        }
+    }
+
+    /** 同一职业下的一套完整装备变体。 */
+    public static class ClassVariantData {
+        public transient String id;
+        public transient String classId;
+        public transient String factionId;
+
+        public String name;
+        public String description;
+        public int maxPlayers;
+        public String[] commands;
+        @SerializedName(value = "equipment", alternate = {"equipment_slots", "equipmentSlots"})
+        public Map<String, String> equipment;
+        @SerializedName(value = "wearable_equipment", alternate = {"wearableEquipment"})
+        public Map<String, String> wearableEquipment;
+        @SerializedName(value = "auto_equip_wearables", alternate = {"autoEquipWearables"})
+        public Boolean autoEquipWearables;
+        public ResupplyData resupply;
+
+        private static ClassVariantData fromLegacy(ClassKitData kit) {
+            ClassVariantData variant = new ClassVariantData();
+            variant.name = "默认装备";
+            variant.description = kit.description;
+            variant.maxPlayers = kit.maxPlayers;
+            variant.commands = kit.commands;
+            variant.equipment = kit.equipment;
+            variant.wearableEquipment = kit.wearableEquipment;
+            variant.autoEquipWearables = kit.autoEquipWearables;
+            variant.resupply = kit.resupply;
+            return variant;
+        }
     }
 
     /**
@@ -331,6 +467,9 @@ public class FactionDataLoader {
     public static class ResupplyData {
         /** 补给物品列表 */
         public ResupplyItem[] items;
+        /** 从 FOB 共享弹药库存扣除的点数；未配置时使用 logistics.json 默认值。 */
+        @SerializedName(value = "ammo_cost", alternate = {"ammoCost"})
+        public Integer ammoCost;
     }
 
     /**
@@ -371,6 +510,9 @@ public class FactionDataLoader {
         /** 载具死亡/被摧毁时扣除的兵力值。 */
         @SerializedName(value = "troop_value", alternate = {"troopValue"})
         public int troopValue = 0;
+        /** 生成实体时附加的通用 scoreboard tags。 */
+        @SerializedName(value = "entity_tags", alternate = {"entityTags"})
+        public String[] entityTags;
         /** 单类载具的固定部署坐标配置。 */
         public VehicleDeploymentData deployment;
     }

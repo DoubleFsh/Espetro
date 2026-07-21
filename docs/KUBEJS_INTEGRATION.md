@@ -46,6 +46,13 @@ const TacticalMarkerType = Java.loadClass('com.example.espoints.tactical.Tactica
 | --- | --- |
 | `Espetro.getPlayer(playerRef)` | 将玩家对象、名称或 UUID 转成在线 `ServerPlayer`。 |
 | `Espetro.getPlayerTeam(playerRef)` | 返回 `ATTACK`、`DEFEND` 或 `null`。 |
+| `Espetro.getPlayerFaction(playerRef)` | 返回玩家当前编制 ID。 |
+| `Espetro.getPlayerClass(playerRef)` | 返回玩家当前职业 ID。 |
+| `Espetro.getPlayerClassVariant(playerRef)` | 返回玩家当前装备变体 ID。 |
+| `Espetro.getClassCounts(team, factionId)` | 返回指定队伍、编制下的职业实时人数。 |
+| `Espetro.getClassVariantCounts(team, factionId)` | 返回职业 ID → 变体 ID → 实时人数。 |
+| `Espetro.selectPlayerClass(player, classId, variantId)` | 原子占用职业及变体名额；返回是否成功。 |
+| `Espetro.equipPlayer(player, classId, variantId)` | 按玩家当前编制发放指定变体装备。 |
 | `Espetro.getPlayerSquadId(playerRef)` | 返回小队 ID，未加入时为 `-1`。 |
 | `Espetro.getSquads(team)` | 返回指定阵营的小队快照。 |
 | `Espetro.isCommander(playerRef)` / `isSquadLeader(playerRef)` | 查询指挥官/队长状态。 |

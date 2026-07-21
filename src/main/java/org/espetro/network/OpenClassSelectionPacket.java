@@ -39,9 +39,16 @@ public class OpenClassSelectionPacket {
         FactionDataLoader.ClassKitData[] kits = loader.getClassesForFaction(factionId);
         this.classes = new ArrayList<>(kits.length);
         for (FactionDataLoader.ClassKitData kit : kits) {
+            List<VariantInfo> variants = new ArrayList<>();
+            if (kit.variants != null) {
+                for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                    variants.add(new VariantInfo(variant.id, variant.name,
+                        variant.description, variant.maxPlayers));
+                }
+            }
             this.classes.add(new ClassInfo(
-                kit.id, kit.name, kit.description, kit.role,
-                kit.maxPlayers, kit.troopValue, kit.healthBonus, kit.speedBonus
+                kit.id, kit.name, kit.description, kit.role, kit.icon,
+                kit.maxPlayers, kit.troopValue, kit.healthBonus, kit.speedBonus, variants
             ));
         }
     }
@@ -56,15 +63,23 @@ public class OpenClassSelectionPacket {
         int count = buf.readVarInt();
         List<ClassInfo> classes = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
+            String classId = buf.readUtf();
+            String name = buf.readUtf();
+            String description = buf.readUtf();
+            String role = buf.readUtf();
+            String icon = buf.readUtf();
+            int maxPlayers = buf.readVarInt();
+            int troopValue = buf.readVarInt();
+            int healthBonus = buf.readVarInt();
+            float speedBonus = buf.readFloat();
+            int variantCount = buf.readVarInt();
+            List<VariantInfo> variants = new ArrayList<>(variantCount);
+            for (int variantIndex = 0; variantIndex < variantCount; variantIndex++) {
+                variants.add(new VariantInfo(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt()));
+            }
             classes.add(new ClassInfo(
-                buf.readUtf(),      // classId
-                buf.readUtf(),      // name
-                buf.readUtf(),      // description
-                buf.readUtf(),      // role
-                buf.readVarInt(),   // maxPlayers
-                buf.readVarInt(),   // troopValue
-                buf.readVarInt(),   // healthBonus
-                buf.readFloat()     // speedBonus
+                classId, name, description, role, icon, maxPlayers,
+                troopValue, healthBonus, speedBonus, variants
             ));
         }
         return new OpenClassSelectionPacket(factionId, factionName, factionDescription, factionIcon, classes);
@@ -91,10 +106,18 @@ public class OpenClassSelectionPacket {
             buf.writeUtf(ci.name);
             buf.writeUtf(ci.description);
             buf.writeUtf(ci.role);
+            buf.writeUtf(ci.icon == null ? "" : ci.icon);
             buf.writeVarInt(ci.maxPlayers);
             buf.writeVarInt(ci.troopValue);
             buf.writeVarInt(ci.healthBonus);
             buf.writeFloat(ci.speedBonus);
+            buf.writeVarInt(ci.variants.size());
+            for (VariantInfo variant : ci.variants) {
+                buf.writeUtf(variant.variantId);
+                buf.writeUtf(variant.name != null ? variant.name : variant.variantId);
+                buf.writeUtf(variant.description != null ? variant.description : "");
+                buf.writeVarInt(variant.maxPlayers);
+            }
         }
     }
 
@@ -126,21 +149,40 @@ public class OpenClassSelectionPacket {
         public final String name;
         public final String description;
         public final String role;
+        public final String icon;
         public final int maxPlayers;
         public final int troopValue;
         public final int healthBonus;
         public final float speedBonus;
+        public final List<VariantInfo> variants;
 
-        public ClassInfo(String classId, String name, String description, String role,
-                         int maxPlayers, int troopValue, int healthBonus, float speedBonus) {
+        public ClassInfo(String classId, String name, String description, String role, String icon,
+                         int maxPlayers, int troopValue, int healthBonus, float speedBonus,
+                         List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
             this.description = description;
             this.role = role;
+            this.icon = icon;
             this.maxPlayers = maxPlayers;
             this.troopValue = troopValue;
             this.healthBonus = healthBonus;
             this.speedBonus = speedBonus;
+            this.variants = variants != null ? variants : new ArrayList<>();
+        }
+    }
+
+    public static class VariantInfo {
+        public final String variantId;
+        public final String name;
+        public final String description;
+        public final int maxPlayers;
+
+        public VariantInfo(String variantId, String name, String description, int maxPlayers) {
+            this.variantId = variantId;
+            this.name = name;
+            this.description = description;
+            this.maxPlayers = maxPlayers;
         }
     }
 }
