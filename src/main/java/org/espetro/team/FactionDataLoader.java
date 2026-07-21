@@ -154,6 +154,20 @@ public class FactionDataLoader {
                 warnRejected(resourceId, "职业 " + classId + " 的 maxPlayers 必须大于 0");
                 return false;
             }
+            // team_count：maxPlayers 为每小队上限；max_per_squad 无意义。
+            if (kit.teamCount) {
+                if (kit.maxPerSquad > 0) {
+                    Espetro.LOGGER.warn("编制 {} 的职业 {} 已启用 team_count，忽略 max_per_squad={}",
+                        resourceId, classId, kit.maxPerSquad);
+                    kit.maxPerSquad = 0;
+                }
+            } else if (kit.maxPerSquad > 0 && kit.maxPerSquad > kit.maxPlayers) {
+                warnRejected(resourceId, "职业 " + classId + " 的 max_per_squad ("
+                    + kit.maxPerSquad + ") 必须 ≤ maxPlayers (" + kit.maxPlayers + ")");
+                return false;
+            } else if (kit.maxPerSquad < 0) {
+                kit.maxPerSquad = 0;
+            }
 
             if (kit.variants == null) {
                 kit.variants = new LinkedHashMap<>();
@@ -198,9 +212,9 @@ public class FactionDataLoader {
                 variantLimitSum += variant.maxPlayers;
             }
 
-            if (variantLimitSum != kit.maxPlayers) {
-                warnRejected(resourceId, "职业 " + classId + " 的变体上限总和 " + variantLimitSum
-                    + " 不等于职业上限 " + kit.maxPlayers);
+            if (kit.strictCount && variantLimitSum != kit.maxPlayers) {
+                warnRejected(resourceId, "职业 " + classId + " (strict_count=true) 的变体上限总和 "
+                    + variantLimitSum + " 不等于职业上限 " + kit.maxPlayers);
                 return false;
             }
         }
@@ -406,6 +420,28 @@ public class FactionDataLoader {
 
         /** 旧格式在加载时合成的 default 变体。 */
         public transient boolean legacyImplicitVariant;
+
+        /**
+         * 变体计数模式。true 时每个变体独立统计人数并校验上限总和；
+         * false 时变体仅代表不同配装，不拥有独立人数名额。
+         * 缺失时默认 true，确保旧数据包兼容。
+         */
+        @SerializedName(value = "strict_count", alternate = {"strictCount"})
+        public boolean strictCount = true;
+
+        /**
+         * true：职业人数在班组小队内统计；未入小队不可选；maxPlayers 为每小队上限。
+         * false/缺省：maxPlayers 为编制/队伍总上限；可用 max_per_squad 限制每小队。
+         */
+        @SerializedName(value = "team_count", alternate = {"teamCount"})
+        public boolean teamCount = false;
+
+        /**
+         * 仅 team_count=false 时生效：每个班组小队内该职业上限；0 表示不限制每小队。
+         * 必须满足 0 或 1..maxPlayers。
+         */
+        @SerializedName(value = "max_per_squad", alternate = {"maxPerSquad"})
+        public int maxPerSquad = 0;
 
         public int maxPlayers = 5;
         public int healthBonus = 0;

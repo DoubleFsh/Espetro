@@ -660,6 +660,8 @@ public class GameStateManager {
         waitingForTeam.add(player.getUUID());
         applyWaitingState(player);
         NetworkManager.sendOpenFactionScreen(player);
+        // 入服时主动推送指挥官技能数据，确保客户端轮盘可立即显示技能入口
+        NetworkManager.sendCommanderSkillSync(player);
 
         player.sendSystemMessage(Component.literal("§6========================================"));
         player.sendSystemMessage(Component.literal("§e请选择你的阵营！按 §aK键 §e打开阵营选择界面"));

@@ -113,7 +113,8 @@ public class BastionSelectionPacket {
             return false;
         }
 
-        // 传送 — 不清除等待让重试，clearWaiting 在 teleport 成功后调用
+        // 改选 HAB：取消未完成的 Rally 波次队列，避免冷却结束后误拉回队包。
+        TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
         BastionManager.getInstance().clearWaiting(player.getUUID());
 
         player.teleportTo(bastion.getLevel(),

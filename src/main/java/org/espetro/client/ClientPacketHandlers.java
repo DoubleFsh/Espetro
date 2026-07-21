@@ -202,14 +202,15 @@ public class ClientPacketHandlers {
             packet.getCommanderNames(), packet.getTeammateNameTagDistance());
 
         if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
-            // 已在统一界面中，只更新数据
-            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
+            // 已在统一界面中，只更新数据（避免 setScreen 整页重开）。
+            // 顺序：可能触发 rebuild 的 bastions/squads 在前；classes 只刷按钮。
             screen.updateTimeRemaining(packet.getDeployTimeRemaining());
-            screen.updateSquads(packet.getSquads(), packet.getMySquadId());
             screen.updateDeploymentState(
                 packet.isWaitingForDeploySelection(),
                 packet.getOutpostRedeployCooldownRemaining());
-            // 载具部署已分离到 VehicleDeployScreen，通过"载具部署指令"物品单独打开
+            screen.updateBastions(packet.getBastions());
+            screen.updateSquads(packet.getSquads(), packet.getMySquadId());
+            screen.updateClasses(packet.getClasses(), packet.getClassCounts(), packet.getVariantCounts());
         } else if (mc.screen instanceof org.espetro.client.gui.SquadScreen screen) {
             // 班组管理是部署界面的子界面。部署阶段会持续发送该包，
             // 此处只同步实时状态，不能把玩家强制切回部署界面。
@@ -292,11 +293,13 @@ public class ClientPacketHandlers {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null) return;
 
+        // 更新轮盘技能缓存（技能已迁移到 Alt 轮盘）
+        org.espetro.client.gui.AuraTipRadialController.updateSkills(
+            packet.isCommander(), packet.getCooldowns(), packet.getSkills());
+
+        // 如果 CommanderSkillScreen 恰好已打开，同步更新数据
         if (mc.screen instanceof org.espetro.client.gui.CommanderSkillScreen screen) {
             screen.updateData(packet.isCommander(), packet.getCooldowns(), packet.getSkills());
-        } else {
-            org.espetro.client.gui.CommanderSkillScreen.open(
-                packet.isCommander(), packet.getCooldowns(), packet.getSkills());
         }
     }
 

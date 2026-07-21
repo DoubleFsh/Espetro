@@ -243,14 +243,26 @@ public class UnifiedDeployScreenPacket {
         public final String role;
         public final String icon;
         public final int maxPlayers;
+        public final boolean strictCount;
         public final int currentCount;
         public final int troopValue;
         public final int healthBonus;
         public final float speedBonus;
+        public final boolean teamCount;
+        public final int maxPerSquad;
+        public final int squadCurrentCount;
         public final List<VariantInfo> variants;
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
-                         int maxPlayers, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         List<VariantInfo> variants) {
+            this(classId, name, description, role, icon, maxPlayers, strictCount, currentCount,
+                troopValue, healthBonus, speedBonus, false, 0, 0, variants);
+        }
+
+        public ClassInfo(String classId, String name, String description, String role, String icon,
+                         int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         boolean teamCount, int maxPerSquad, int squadCurrentCount,
                          List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
@@ -258,10 +270,14 @@ public class UnifiedDeployScreenPacket {
             this.role = role;
             this.icon = icon;
             this.maxPlayers = maxPlayers;
+            this.strictCount = strictCount;
             this.currentCount = currentCount;
             this.troopValue = troopValue;
             this.healthBonus = healthBonus;
             this.speedBonus = speedBonus;
+            this.teamCount = teamCount;
+            this.maxPerSquad = Math.max(0, maxPerSquad);
+            this.squadCurrentCount = Math.max(0, squadCurrentCount);
             this.variants = variants != null ? variants : new ArrayList<>();
         }
 
@@ -272,10 +288,14 @@ public class UnifiedDeployScreenPacket {
             this.role = buf.readUtf();
             this.icon = buf.readUtf();
             this.maxPlayers = buf.readVarInt();
+            this.strictCount = buf.readBoolean();
             this.currentCount = buf.readVarInt();
             this.troopValue = buf.readVarInt();
             this.healthBonus = buf.readVarInt();
             this.speedBonus = buf.readFloat();
+            this.teamCount = buf.readBoolean();
+            this.maxPerSquad = Math.max(0, buf.readVarInt());
+            this.squadCurrentCount = Math.max(0, buf.readVarInt());
             int variantCount = buf.readVarInt();
             this.variants = new ArrayList<>(variantCount);
             for (int i = 0; i < variantCount; i++) {
@@ -290,10 +310,14 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(role);
             buf.writeUtf(icon == null ? "" : icon);
             buf.writeVarInt(maxPlayers);
+            buf.writeBoolean(strictCount);
             buf.writeVarInt(currentCount);
             buf.writeVarInt(troopValue);
             buf.writeVarInt(healthBonus);
             buf.writeFloat(speedBonus);
+            buf.writeBoolean(teamCount);
+            buf.writeVarInt(maxPerSquad);
+            buf.writeVarInt(squadCurrentCount);
             buf.writeVarInt(variants.size());
             for (VariantInfo variant : variants) variant.write(buf);
         }
@@ -338,18 +362,34 @@ public class UnifiedDeployScreenPacket {
         public final String pos;
         public final String type;
         public final String status;
+        /** 个人波次/冷却就绪时刻（epoch ms）；0 表示无倒计时。 */
+        public final long nextWaveAtEpochMs;
+        /** 个人冷却总时长（秒），用于 GUI 显示 n/m；0 表示未知。 */
+        public final int waveSeconds;
 
         public BastionItem(java.util.UUID id, String name, String pos) {
             this(id, name, pos,
-                id.getMostSignificantBits() == 0L ? TYPE_OUTPOST : TYPE_HAB, "");
+                id.getMostSignificantBits() == 0L ? TYPE_OUTPOST : TYPE_HAB, "", 0L, 0);
         }
 
         public BastionItem(java.util.UUID id, String name, String pos, String type, String status) {
+            this(id, name, pos, type, status, 0L, 0);
+        }
+
+        public BastionItem(java.util.UUID id, String name, String pos, String type, String status,
+                           long nextWaveAtEpochMs) {
+            this(id, name, pos, type, status, nextWaveAtEpochMs, 0);
+        }
+
+        public BastionItem(java.util.UUID id, String name, String pos, String type, String status,
+                           long nextWaveAtEpochMs, int waveSeconds) {
             this.id = id;
             this.name = name;
             this.pos = pos;
             this.type = type == null ? TYPE_HAB : type;
             this.status = status == null ? "" : status;
+            this.nextWaveAtEpochMs = Math.max(0L, nextWaveAtEpochMs);
+            this.waveSeconds = Math.max(0, waveSeconds);
         }
 
         public BastionItem(FriendlyByteBuf buf) {
@@ -358,6 +398,8 @@ public class UnifiedDeployScreenPacket {
             this.pos = buf.readUtf();
             this.type = buf.readUtf();
             this.status = buf.readUtf();
+            this.nextWaveAtEpochMs = Math.max(0L, buf.readLong());
+            this.waveSeconds = Math.max(0, buf.readVarInt());
         }
 
         public void write(FriendlyByteBuf buf) {
@@ -366,6 +408,8 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(pos);
             buf.writeUtf(type);
             buf.writeUtf(status);
+            buf.writeLong(nextWaveAtEpochMs);
+            buf.writeVarInt(waveSeconds);
         }
 
         /**

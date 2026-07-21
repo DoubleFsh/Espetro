@@ -84,6 +84,12 @@ public class UnifiedDeployScreen extends Screen {
     private final Map<EspButton, String> deployButtonPositions = new HashMap<>();
     private final Map<EspButton, String> deployButtonCommands = new HashMap<>();
     private final Map<EspButton, String> deployButtonBaseLabels = new HashMap<>();
+    /** Rally 行：按钮 → 个人就绪 epoch ms；非 Rally 为 0。 */
+    private final Map<EspButton, Long> deployButtonNextWaveAt = new HashMap<>();
+    /** 构建部署行时使用的名称片段（不含动态 [波次 Xs]）。 */
+    private final Map<EspButton, String> deployButtonNameCores = new HashMap<>();
+    /** Rally 行：冷却总秒数 m（用于 n/m 显示）。 */
+    private final Map<EspButton, Integer> deployButtonWaveSeconds = new HashMap<>();
     private EspButton outpostRedeployButton;
     private EspButton confirmDeployButton;
     private PlainText statusText;
@@ -119,12 +125,12 @@ public class UnifiedDeployScreen extends Screen {
         this.factionName = data.getFactionName();
         this.factionDescription = data.getFactionDescription();
         this.factionIcon = data.getFactionIcon();
-        this.classes = data.getClasses();
+        this.classes = new ArrayList<>(data.getClasses());
         this.classCounts = new HashMap<>(data.getClassCounts());
         replaceVariantCounts(data.getVariantCounts());
         this.hasDeployPoint = data.hasDeployPoint();
         this.deployPointPos = data.getDeployPointPos();
-        this.bastions = data.getBastions();
+        this.bastions = new ArrayList<>(data.getBastions());
         this.isCommander = data.isCommander();
         this.squads = new ArrayList<>(data.getSquads());
         this.mySquadId = data.getMySquadId();
@@ -133,6 +139,80 @@ public class UnifiedDeployScreen extends Screen {
         this.waitingForDeploySelection = data.isWaitingForDeploySelection();
         this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
             + data.getOutpostRedeployCooldownRemaining() * 1000L;
+    }
+
+    /**
+     * 同步部署点列表。结构不变时只更新 Rally 个人冷却时间戳并改 label，避免 rebuild 高度闪烁。
+     */
+    public void updateBastions(List<UnifiedDeployScreenPacket.BastionItem> nextBastions) {
+        List<UnifiedDeployScreenPacket.BastionItem> next = nextBastions == null
+            ? List.of() : nextBastions;
+        boolean structureChanged = bastions.size() != next.size();
+        if (!structureChanged) {
+            for (int i = 0; i < bastions.size(); i++) {
+                UnifiedDeployScreenPacket.BastionItem a = bastions.get(i);
+                UnifiedDeployScreenPacket.BastionItem b = next.get(i);
+                if (!Objects.equals(a.id, b.id)
+                    || !Objects.equals(a.type, b.type)
+                    || !Objects.equals(a.name, b.name)
+                    || !Objects.equals(a.pos, b.pos)) {
+                    structureChanged = true;
+                    break;
+                }
+            }
+        }
+        bastions.clear();
+        bastions.addAll(next);
+        if (structureChanged) {
+            if (root != null) {
+                rebuildGuiPreservingDeployAndSquadScroll();
+            }
+            return;
+        }
+        // 结构相同：只刷新 Rally 时间戳与 label。
+        Map<java.util.UUID, Long> waveById = new HashMap<>();
+        Map<java.util.UUID, Integer> totalById = new HashMap<>();
+        for (UnifiedDeployScreenPacket.BastionItem item : bastions) {
+            waveById.put(item.id, item.nextWaveAtEpochMs);
+            totalById.put(item.id, item.waveSeconds);
+        }
+        for (EspButton button : deployButtons) {
+            String command = deployButtonCommands.get(button);
+            if (command == null || !command.startsWith("bastion select ")) {
+                continue;
+            }
+            String idText = command.substring("bastion select ".length()).trim();
+            try {
+                java.util.UUID id = java.util.UUID.fromString(idText);
+                Long wave = waveById.get(id);
+                if (wave != null) {
+                    if (wave > 0L) {
+                        deployButtonNextWaveAt.put(button, wave);
+                    } else {
+                        deployButtonNextWaveAt.remove(button);
+                    }
+                }
+                Integer total = totalById.get(id);
+                if (total != null && total > 0) {
+                    deployButtonWaveSeconds.put(button, total);
+                }
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        refreshRallyWaveLabels();
+        refreshConfirmDeployButton();
+    }
+
+    private void rebuildGuiPreservingDeployAndSquadScroll() {
+        double squadOffset = squadScrollList != null ? squadScrollList.getOffset() : 0;
+        double deployOffset = deployScrollList != null ? deployScrollList.getOffset() : 0;
+        rebuildGui();
+        if (squadScrollList != null) {
+            squadScrollList.setOffset(squadOffset);
+        }
+        if (deployScrollList != null) {
+            deployScrollList.setOffset(deployOffset);
+        }
     }
 
     public void updateClassCounts(Map<String, Integer> counts) {
@@ -157,6 +237,21 @@ public class UnifiedDeployScreen extends Screen {
         }
     }
 
+    /**
+     * 同步职业元数据与对玩家有效的人数（含 team_count / max_per_squad / 小队当前人数）。
+     * 不 rebuild 整页，只刷新按钮 label/enabled。
+     */
+    public void updateClasses(List<UnifiedDeployScreenPacket.ClassInfo> nextClasses,
+                              Map<String, Integer> counts,
+                              Map<String, Map<String, Integer>> updatedVariantCounts) {
+        if (nextClasses != null) {
+            this.classes.clear();
+            this.classes.addAll(nextClasses);
+        }
+        updateClassCounts(counts, updatedVariantCounts);
+        refreshClassButtons();
+    }
+
     public void updateTimeRemaining(int seconds) {
         this.deployTimeRemaining = seconds;
         if (deployTitleText != null) {
@@ -177,9 +272,13 @@ public class UnifiedDeployScreen extends Screen {
     public void updateSquads(List<UnifiedDeployScreenPacket.SquadInfo> updatedSquads, int updatedMySquadId) {
         List<UnifiedDeployScreenPacket.SquadInfo> nextSquads = updatedSquads == null
             ? List.of() : updatedSquads;
+        // 完全一致：无需任何更新。
         if (this.mySquadId == updatedMySquadId && this.squads.equals(nextSquads)) {
             return;
         }
+        // 仅成员职业名等展示态变化：更新内存，不 rebuild 整页（避免选职时高度闪烁）。
+        boolean structureChanged = this.mySquadId != updatedMySquadId
+            || !squadListStructureEquals(this.squads, nextSquads);
         this.squads.clear();
         this.squads.addAll(nextSquads);
         Set<Integer> availableSquadIds = new HashSet<>();
@@ -188,9 +287,79 @@ public class UnifiedDeployScreen extends Screen {
         }
         expandedSquadIds.retainAll(availableSquadIds);
         this.mySquadId = updatedMySquadId;
-        if (root != null) {
+        if (root == null) {
+            return;
+        }
+        if (structureChanged) {
             rebuildGuiPreservingSquadScroll();
         }
+        // 结构未变时只刷职业按钮（小队作用域人数/禁用态）；结构变时 rebuild 已重建职业区。
+        refreshClassButtons();
+    }
+
+    /**
+     * 小队列表结构是否相同（忽略成员 className，避免选职导致整页 rebuild 闪烁）。
+     * 比较：小队 id/名/队长/人数上限/锁定，以及成员 playerName + leader/commander 顺序。
+     */
+    private static boolean squadListStructureEquals(
+            List<UnifiedDeployScreenPacket.SquadInfo> a,
+            List<UnifiedDeployScreenPacket.SquadInfo> b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null || a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (!squadStructureEquals(a.get(i), b.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean squadStructureEquals(
+            UnifiedDeployScreenPacket.SquadInfo a,
+            UnifiedDeployScreenPacket.SquadInfo b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.id != b.id
+            || a.memberCount != b.memberCount
+            || a.maxMembers != b.maxMembers
+            || a.isLocked != b.isLocked
+            || !Objects.equals(a.name, b.name)
+            || !Objects.equals(a.leaderName, b.leaderName)) {
+            return false;
+        }
+        List<UnifiedDeployScreenPacket.SquadMemberInfo> am = a.members;
+        List<UnifiedDeployScreenPacket.SquadMemberInfo> bm = b.members;
+        if (am == bm) {
+            return true;
+        }
+        if (am == null || bm == null || am.size() != bm.size()) {
+            return false;
+        }
+        for (int i = 0; i < am.size(); i++) {
+            UnifiedDeployScreenPacket.SquadMemberInfo x = am.get(i);
+            UnifiedDeployScreenPacket.SquadMemberInfo y = bm.get(i);
+            if (x == y) {
+                continue;
+            }
+            if (x == null || y == null) {
+                return false;
+            }
+            // 故意忽略 className：队友换职业不应触发整页重建。
+            if (x.leader != y.leader
+                || x.commander != y.commander
+                || !Objects.equals(x.playerName, y.playerName)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ==================== 自定义按钮 ====================
@@ -599,10 +768,11 @@ public class UnifiedDeployScreen extends Screen {
 
         for (int i = 0; i < classes.size(); i++) {
             var cls = classes.get(i);
-            int count = classCounts.getOrDefault(cls.classId, 0);
-            boolean full = count >= cls.maxPlayers;
-            String countColor = full ? "\u00a7c" : "\u00a7a";
+            int count = classCounts.getOrDefault(cls.classId, cls.currentCount);
+            boolean disabled = isClassButtonDisabled(cls);
+            boolean emphasizeRed = isClassEmphasizeRed(cls, disabled);
             String label = "\u00a7f" + cls.name;
+            String right = buildClassCountRightLabel(cls, emphasizeRed || disabled);
 
             int col = i % cols;
             int row = i / cols;
@@ -614,10 +784,10 @@ public class UnifiedDeployScreen extends Screen {
             btn.setIcon(RoleIconResources.resolve(cls.icon),
                 RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
             btn.setIconSize(CLASS_ICON_SIZE);
-            btn.setRightLabel(countColor + "[" + count + "/" + cls.maxPlayers + "]");
+            btn.setRightLabel(right);
             btn.setCenteredText(false);
-            btn.setEnabled(!full);
-            if (full) { btn.hoverColor = 0xD0403050; btn.normalColor = 0xB0252035; }
+            btn.setEnabled(!disabled);
+            if (disabled) { btn.hoverColor = 0xD0403050; btn.normalColor = 0xB0252035; }
             classScrollList.addChild(btn);
             classButtons.add(btn);
         }
@@ -648,6 +818,9 @@ public class UnifiedDeployScreen extends Screen {
         deployButtonPositions.clear();
         deployButtonCommands.clear();
         deployButtonBaseLabels.clear();
+        deployButtonNextWaveAt.clear();
+        deployButtonNameCores.clear();
+        deployButtonWaveSeconds.clear();
         int btnW = areaW - SCROLLBAR_RESERVED_W - 4;
         int btnSpacing = 1;
         int row = 0;
@@ -662,7 +835,7 @@ public class UnifiedDeployScreen extends Screen {
                 () -> selectDeploymentPoint(deployPointPos, deployCommand)
             );
             btn.setEnabled(waitingForDeploySelection);
-            registerDeployButton(btn, deployPointPos, deployCommand, deployLabel);
+            registerDeployButton(btn, deployPointPos, deployCommand, deployLabel, 0L, deployLabel, 0);
             row++;
         }
 
@@ -679,13 +852,17 @@ public class UnifiedDeployScreen extends Screen {
                     () -> selectDeploymentPoint(b.pos, deployCmd)
                 );
                 selectButton.setEnabled(waitingForDeploySelection);
-                registerDeployButton(selectButton, b.pos, deployCmd, deployLabel);
+                registerDeployButton(selectButton, b.pos, deployCmd, deployLabel, 0L, deployLabel, 0);
             } else {
                 String cmd = "bastion select " + bid;
                 String markerColor = b.isRally() ? "\u00a7a" : "\u00a79";
                 String marker = b.isRally() ? "\u2691 " : "\u25a0 ";
-                String deployLabel = markerColor + marker + b.name
-                    + (b.status.isBlank() ? "" : " \u00a77[" + b.status + "]");
+                String nameCore = markerColor + marker + b.name;
+                long waveAt = b.isRally() ? b.nextWaveAtEpochMs : 0L;
+                String statusPart = b.isRally()
+                    ? formatWaveStatus(waveAt, b.waveSeconds)
+                    : (b.status.isBlank() ? "" : " \u00a77[" + b.status + "]");
+                String deployLabel = nameCore + statusPart;
                 EspButton btn = new EspButton(
                     2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                     deployLabel,
@@ -694,7 +871,7 @@ public class UnifiedDeployScreen extends Screen {
                 btn.setIcon(b.isRally() ? RALLY_ICON : HAB_ICON,
                     b.isRally() ? 256 : 128, 128);
                 btn.setEnabled(waitingForDeploySelection);
-                registerDeployButton(btn, b.pos, cmd, deployLabel);
+                registerDeployButton(btn, b.pos, cmd, deployLabel, waveAt, nameCore, b.waveSeconds);
             }
             row++;
         }
@@ -708,13 +885,66 @@ public class UnifiedDeployScreen extends Screen {
         root.addChild(confirmDeployButton);
     }
 
-    private void registerDeployButton(EspButton button, String positionText, String command, String baseLabel) {
+    private void registerDeployButton(EspButton button, String positionText, String command,
+                                      String baseLabel, long nextWaveAtEpochMs, String nameCore,
+                                      int waveSeconds) {
         deployScrollList.addChild(button);
         deployButtons.add(button);
         deployButtonPositions.put(button, positionText);
         deployButtonCommands.put(button, command);
         deployButtonBaseLabels.put(button, baseLabel);
-        button.setLabel(buildDeployButtonLabel(baseLabel, positionText, command));
+        deployButtonNameCores.put(button, nameCore);
+        if (nextWaveAtEpochMs > 0L) {
+            deployButtonNextWaveAt.put(button, nextWaveAtEpochMs);
+        } else {
+            deployButtonNextWaveAt.remove(button);
+        }
+        if (waveSeconds > 0) {
+            deployButtonWaveSeconds.put(button, waveSeconds);
+        } else {
+            deployButtonWaveSeconds.remove(button);
+        }
+        button.setLabel(buildDeployButtonLabel(
+            buildLiveDeployBaseLabel(button, baseLabel), positionText, command));
+    }
+
+    private String formatWaveStatus(long nextWaveAtEpochMs, int waveSeconds) {
+        if (nextWaveAtEpochMs <= 0L) {
+            return "";
+        }
+        long remaining = Math.max(0L,
+            (nextWaveAtEpochMs - System.currentTimeMillis() + 999L) / 1000L);
+        if (remaining <= 0L) {
+            return " " + "\u00a7" + "7[就绪]";
+        }
+        int total = waveSeconds > 0 ? waveSeconds : (int) remaining;
+        return " " + "\u00a7" + "7[冷却 " + remaining + "/" + total + "s]";
+    }
+
+    private String buildLiveDeployBaseLabel(EspButton button, String fallbackBase) {
+        Long waveAt = deployButtonNextWaveAt.get(button);
+        String nameCore = deployButtonNameCores.get(button);
+        if (waveAt == null || waveAt <= 0L || nameCore == null) {
+            return fallbackBase;
+        }
+        int total = deployButtonWaveSeconds.getOrDefault(button, 0);
+        return nameCore + formatWaveStatus(waveAt, total);
+    }
+
+    private void refreshRallyWaveLabels() {
+        for (EspButton button : deployButtons) {
+            Long waveAt = deployButtonNextWaveAt.get(button);
+            if (waveAt == null || waveAt <= 0L) {
+                continue;
+            }
+            String base = buildLiveDeployBaseLabel(button, deployButtonBaseLabels.get(button));
+            button.setLabel(buildDeployButtonLabel(
+                base,
+                deployButtonPositions.get(button),
+                deployButtonCommands.get(button)));
+            // 同步 baseLabels，避免选中刷新时退回旧秒数。
+            deployButtonBaseLabels.put(button, base);
+        }
     }
 
     private int getRedeployCooldownRemaining() {
@@ -731,16 +961,14 @@ public class UnifiedDeployScreen extends Screen {
         pendingDeployCommand = command;
         updateSelectedDeploymentPoint(positionText);
         refreshDeployButtonLabels();
-        if (confirmDeployButton != null) {
-            confirmDeployButton.setLabel("\u00a7a部署");
-            confirmDeployButton.setEnabled(true);
-        }
+        refreshConfirmDeployButton();
     }
 
     private void confirmDeploymentPoint() {
         if (!waitingForDeploySelection || pendingDeployCommand == null) {
             return;
         }
+        // 冷却中的 Rally 仍可确认排队，但确认按钮保持冷却文案。
         double[] coordinates = parseDeploymentCoordinates(pendingDeployPosition);
         if (coordinates != null) {
             HcrTacticalMapBridge.setSelectedDeploymentPoint(coordinates[0], coordinates[1]);
@@ -751,10 +979,65 @@ public class UnifiedDeployScreen extends Screen {
         var player = Minecraft.getInstance().player;
         if (player != null) {
             player.connection.sendCommand(pendingDeployCommand);
-            waitingForDeploySelection = false;
-            clearPendingDeploySelection();
-            refreshDeployButtonStates();
+            boolean rallyQueued = isPendingRallyOnCooldown();
+            if (!rallyQueued) {
+                waitingForDeploySelection = false;
+                clearPendingDeploySelection();
+                refreshDeployButtonStates();
+            } else {
+                // 仍在等待自动部署，只刷新确认按钮文案。
+                refreshConfirmDeployButton();
+            }
         }
+    }
+
+    private EspButton findDeployButton(String positionText, String command) {
+        for (EspButton button : deployButtons) {
+            if (Objects.equals(deployButtonPositions.get(button), positionText)
+                && Objects.equals(deployButtonCommands.get(button), command)) {
+                return button;
+            }
+        }
+        return null;
+    }
+
+    private boolean isPendingRallyOnCooldown() {
+        if (pendingDeployCommand == null || !pendingDeployCommand.startsWith("bastion select ")) {
+            return false;
+        }
+        EspButton button = findDeployButton(pendingDeployPosition, pendingDeployCommand);
+        if (button == null) {
+            return false;
+        }
+        Long waveAt = deployButtonNextWaveAt.get(button);
+        if (waveAt == null || waveAt <= 0L) {
+            return false;
+        }
+        return waveAt > System.currentTimeMillis();
+    }
+
+    private void refreshConfirmDeployButton() {
+        if (confirmDeployButton == null) {
+            return;
+        }
+        if (!waitingForDeploySelection || pendingDeployCommand == null) {
+            confirmDeployButton.setLabel("\u00a77选择部署点");
+            confirmDeployButton.setEnabled(false);
+            return;
+        }
+        EspButton button = findDeployButton(pendingDeployPosition, pendingDeployCommand);
+        Long waveAt = button == null ? null : deployButtonNextWaveAt.get(button);
+        int total = button == null ? 0 : deployButtonWaveSeconds.getOrDefault(button, 0);
+        if (waveAt != null && waveAt > System.currentTimeMillis()) {
+            long remaining = Math.max(1L, (waveAt - System.currentTimeMillis() + 999L) / 1000L);
+            int m = total > 0 ? total : (int) remaining;
+            confirmDeployButton.setLabel(
+                "\u00a7e当前队包部署冷却时间[" + remaining + "/" + m + "]");
+            confirmDeployButton.setEnabled(true);
+            return;
+        }
+        confirmDeployButton.setLabel("\u00a7a部署");
+        confirmDeployButton.setEnabled(true);
     }
 
     private void updateSelectedDeploymentPoint(String positionText) {
@@ -812,6 +1095,9 @@ public class UnifiedDeployScreen extends Screen {
             outpostRedeployButton.setEnabled(
                 !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
         }
+        // 仅更新 Rally 个人冷却文案，不 rebuildGui，避免高度闪烁。
+        refreshRallyWaveLabels();
+        refreshConfirmDeployButton();
     }
 
     @Override
@@ -892,8 +1178,13 @@ public class UnifiedDeployScreen extends Screen {
             if (baseLabel == null) {
                 continue;
             }
+            String liveBase = buildLiveDeployBaseLabel(button, baseLabel);
+            // 保持 base 与当前波次一致，避免选中态刷新时退回旧秒数。
+            if (deployButtonNextWaveAt.containsKey(button)) {
+                deployButtonBaseLabels.put(button, liveBase);
+            }
             button.setLabel(buildDeployButtonLabel(
-                baseLabel,
+                liveBase,
                 deployButtonPositions.get(button),
                 deployButtonCommands.get(button)
             ));
@@ -963,9 +1254,23 @@ public class UnifiedDeployScreen extends Screen {
                 if (!bonuses.isEmpty()) {
                     lines.add(bonuses);
                 }
-                int c = classCounts.getOrDefault(cls.classId, 0);
-                lines.add((c >= cls.maxPlayers ? "\u00a7c" : "\u00a7a")
-                    + c + "/" + cls.maxPlayers + " \u00a77\u00b7兵力" + cls.troopValue);
+                int c = classCounts.getOrDefault(cls.classId, cls.currentCount);
+                if (!inSquad()) {
+                    if (cls.teamCount) {
+                        lines.add("\u00a7c需先加入班组小队");
+                    } else {
+                        lines.add((c >= cls.maxPlayers ? "\u00a7c" : "\u00a7a")
+                            + c + "/" + cls.maxPlayers
+                            + " \u00a77\u00b7兵力" + cls.troopValue);
+                    }
+                    lines.add("\u00a77入队后可选职业");
+                } else {
+                    int squadCur = Math.max(0, cls.squadCurrentCount);
+                    int squadCap = getSquadDisplayCap(cls);
+                    lines.add((squadCur >= squadCap ? "\u00a7c" : "\u00a7a")
+                        + squadCur + "/" + squadCap
+                        + " \u00a77\u00b7兵力" + cls.troopValue);
+                }
 
                 int lineH = Math.max(6,
                     Math.round(this.font.lineHeight * TOOLTIP_TEXT_SCALE) + 1);
@@ -1025,14 +1330,22 @@ public class UnifiedDeployScreen extends Screen {
             int count = variantCounts
                 .getOrDefault(cls.classId, Collections.emptyMap())
                 .getOrDefault(variant.variantId, variant.currentCount);
-            boolean full = count >= variant.maxPlayers;
+            // 父职业名额已满时，所有变体均不可新选；strict 时再叠加变体自身上限。
+            boolean parentFull = isClassButtonDisabled(cls);
+            boolean full = parentFull || (cls.strictCount && count >= variant.maxPlayers);
             boolean hovered = inside(mouseX, mouseY, rowX, rowY, rowW, VARIANT_ROW_H - 1);
             int fill = full ? 0xD02B2025 : hovered ? 0xE0435145 : 0xD01B1E20;
             graphics.fill(rowX, rowY, rowX + rowW, rowY + VARIANT_ROW_H - 1, fill);
             graphics.renderOutline(rowX, rowY, rowW, VARIANT_ROW_H - 1,
                 hovered && !full ? 0xFFB7C9B8 : 0x8059605E);
 
-            String countText = (full ? "§c" : "§a") + "[" + count + "/" + variant.maxPlayers + "]";
+            String countText;
+            if (cls.strictCount) {
+                countText = (full ? "§c" : "§a") + "[" + count + "/" + variant.maxPlayers + "]";
+            } else {
+                // 非严格模式：仅显示当前选择人数，不显示变体上限
+                countText = "§a" + count + "人";
+            }
             graphics.drawString(this.font, Component.literal((full ? "§8" : "§f") + variant.name),
                 rowX + 5, rowY + 4, BTN_TEXT, false);
             int countW = this.font.width(EspetroMutilWidgets.stripFormatting(countText));
@@ -1127,25 +1440,108 @@ public class UnifiedDeployScreen extends Screen {
 
     // ==================== 业务逻辑 ====================
 
+
+    /** 是否已加入班组（mySquadId 有效）。 */
+    private boolean inSquad() {
+        return mySquadId >= 0;
+    }
+
+    /**
+     * 职业按钮右侧人数文案（只显示一组 [当前/上限]）。
+     * 未入队：team_count 不显示；其它显示 [编制当前/编制总上限]。
+     * 已入队：显示 [本小队当前/本小队上限]
+     *   （team_count → maxPlayers；否则 max_per_squad>0 → max_per_squad；无则回退 maxPlayers）。
+     */
+    private String buildClassCountRightLabel(UnifiedDeployScreenPacket.ClassInfo cls,
+                                            boolean disabled) {
+        String color = disabled ? "§c" : "§a";
+        if (!inSquad()) {
+            if (cls.teamCount) {
+                return "";
+            }
+            int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
+            return color + "[" + teamCount + "/" + cls.maxPlayers + "]";
+        }
+        int squadCur = Math.max(0, cls.squadCurrentCount);
+        int squadCap = getSquadDisplayCap(cls);
+        return color + "[" + squadCur + "/" + squadCap + "]";
+    }
+
+    /** 本小队该职业显示用上限。 */
+    private int getSquadDisplayCap(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (cls.teamCount) {
+            return Math.max(1, cls.maxPlayers);
+        }
+        if (cls.maxPerSquad > 0) {
+            return cls.maxPerSquad;
+        }
+        return Math.max(1, cls.maxPlayers);
+    }
+
+    /**
+     * 未入队全部禁用；入队后 team_count 看小队满，非 team_count 看编制总限 + max_per_squad。
+     */
+    private boolean isClassButtonDisabled(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (!inSquad()) {
+            return true;
+        }
+        int squadCur = Math.max(0, cls.squadCurrentCount);
+        if (cls.teamCount) {
+            return squadCur >= cls.maxPlayers;
+        }
+        int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
+        if (teamCount >= cls.maxPlayers) {
+            return true;
+        }
+        return cls.maxPerSquad > 0 && squadCur >= cls.maxPerSquad;
+    }
+
+    private boolean isClassEmphasizeRed(UnifiedDeployScreenPacket.ClassInfo cls, boolean disabled) {
+        if (!disabled) {
+            return false;
+        }
+        if (!inSquad() && cls.teamCount) {
+            return true;
+        }
+        if (!inSquad()) {
+            int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
+            return teamCount >= cls.maxPlayers;
+        }
+        int squadCur = Math.max(0, cls.squadCurrentCount);
+        if (cls.teamCount) {
+            return squadCur >= cls.maxPlayers;
+        }
+        int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
+        if (teamCount >= cls.maxPlayers) {
+            return true;
+        }
+        return cls.maxPerSquad > 0 && squadCur >= cls.maxPerSquad;
+    }
+
     private void refreshClassButtons() {
         for (int i = 0; i < classButtons.size() && i < classes.size(); i++) {
             var cls = classes.get(i);
-            int count = classCounts.getOrDefault(cls.classId, 0);
-            boolean full = count >= cls.maxPlayers;
-            String color = full ? "\u00a7c" : "\u00a7a";
-            classButtons.get(i).setLabel("\u00a7f" + cls.name);
-            classButtons.get(i).setRightLabel(color + "[" + count + "/" + cls.maxPlayers + "]");
-            classButtons.get(i).setEnabled(!full);
-            if (full) { classButtons.get(i).normalColor = 0xB0252035; classButtons.get(i).hoverColor = 0xD0403050; }
-            else { classButtons.get(i).normalColor = BTN_BG_NORMAL; classButtons.get(i).hoverColor = BTN_BG_HOVER; }
+            boolean disabled = isClassButtonDisabled(cls);
+            boolean emphasizeRed = isClassEmphasizeRed(cls, disabled);
+            classButtons.get(i).setLabel("§f" + cls.name);
+            classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed || disabled));
+            classButtons.get(i).setEnabled(!disabled);
+            if (disabled) {
+                classButtons.get(i).normalColor = 0xB0252035;
+                classButtons.get(i).hoverColor = 0xD0403050;
+            } else {
+                classButtons.get(i).normalColor = BTN_BG_NORMAL;
+                classButtons.get(i).hoverColor = BTN_BG_HOVER;
+            }
         }
     }
 
     private void selectClass(int index) {
         if (index >= 0 && index < classes.size()) {
             var cls = classes.get(index);
-            int count = classCounts.getOrDefault(cls.classId, 0);
-            if (count >= cls.maxPlayers) return;
+            if (isClassButtonDisabled(cls)) {
+                return;
+            }
             if (cls.variants.size() == 1) {
                 ClassSelectionGui.selectClass(factionId, cls.classId, cls.variants.get(0).variantId);
             } else if (cls.variants.size() > 1) {
@@ -1191,7 +1587,8 @@ public class UnifiedDeployScreen extends Screen {
                 UnifiedDeployScreenPacket.VariantInfo variant = cls.variants.get(variantIndex);
                 int count = variantCounts.getOrDefault(cls.classId, Collections.emptyMap())
                     .getOrDefault(variant.variantId, variant.currentCount);
-                if (count < variant.maxPlayers) {
+                // 非严格模式下不检查变体独立人数上限
+                if (!cls.strictCount || count < variant.maxPlayers) {
                     ClassSelectionGui.selectClass(factionId, cls.classId, variant.variantId);
                     closeVariantPopup();
                 }

@@ -75,11 +75,7 @@ public record RadialActionPacket(Action action) {
     }
 
     private static void deployRally(ServerPlayer player) {
-        int slot = findRallyItem(player);
-        if (slot < 0) {
-            player.sendSystemMessage(Component.literal("§c背包中没有 Rally 部署包。"));
-            return;
-        }
+        // 仅 Alt 轮盘 + 小队长权限；不检查/消耗背包 Rally 物品。
         HitResult hit = player.pick(8.0, 0.0f, false);
         BlockPos pos = hit instanceof BlockHitResult blockHit
             ? blockHit.getBlockPos().relative(blockHit.getDirection())
@@ -89,24 +85,18 @@ public record RadialActionPacket(Action action) {
             player.sendSystemMessage(Component.literal("§c目标位置无法部署 Rally。"));
             return;
         }
+        // 先做条件检查再放方块，避免无效放置。
+        String precheck = TeamPackManager.getInstance().canPlaceTeamPack(player, player.serverLevel(), pos);
+        if (precheck != null) {
+            player.sendSystemMessage(Component.literal(precheck));
+            return;
+        }
         player.serverLevel().setBlock(pos, Blocks.BEACON.defaultBlockState(), 3);
         String error = TeamPackManager.getInstance().placeTeamPack(player, player.serverLevel(), pos);
         if (error != null) {
             player.serverLevel().setBlock(pos, previous, 3);
             player.sendSystemMessage(Component.literal(error));
-            return;
         }
-        player.getInventory().getItem(slot).shrink(1);
-        player.getInventory().setChanged();
-    }
-
-    private static int findRallyItem(ServerPlayer player) {
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            if (TeamPackManager.getInstance().isTeamPackItem(player.getInventory().getItem(slot))) {
-                return slot;
-            }
-        }
-        return -1;
     }
 
     private static void deposit(ServerPlayer player) {

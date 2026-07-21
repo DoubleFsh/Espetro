@@ -49,9 +49,12 @@ public class TeamPackManager {
     private final Set<UUID> pendingItemSyncs = new HashSet<>();
     private final Map<UUID, PendingRallyRespawn> pendingRespawns = new HashMap<>();
     private final Map<UUID, Long> playerDeathTimes = new HashMap<>();
+    /** 玩家个人 Rally 就绪时刻（epoch ms）；冷却中不因死亡重置。 */
+    private final Map<UUID, Long> personalRallyReadyAt = new HashMap<>();
     private int cooldownSeconds = 120;
     private int durability = 1;
     private float breakSpeedMultiplier = 8.0f;
+    private int teammateCount = 1;
     private double teammateRadius = 8.0;
     private double enemyPlacementRadius = 50.0;
     private double enemyBurnRadius = 30.0;
@@ -79,6 +82,7 @@ public class TeamPackManager {
         cooldownSeconds = 120;
         durability = 1;
         breakSpeedMultiplier = 8.0f;
+        teammateCount = 1;
         teammateRadius = 8.0;
         enemyPlacementRadius = 50.0;
         enemyBurnRadius = 30.0;
@@ -118,6 +122,9 @@ public class TeamPackManager {
                 if (teamPack.has("break_speed_multiplier")) {
                     breakSpeedMultiplier = Math.max(1.0f, teamPack.get("break_speed_multiplier").getAsFloat());
                 }
+                if (teamPack.has("teammate_count")) {
+                    teammateCount = Math.max(0, teamPack.get("teammate_count").getAsInt());
+                }
                 if (teamPack.has("teammate_radius")) {
                     teammateRadius = Math.max(0.0, teamPack.get("teammate_radius").getAsDouble());
                 }
@@ -135,8 +142,9 @@ public class TeamPackManager {
                 }
             }
 
-            Espetro.LOGGER.info("Rally配置已加载: 冷却{}秒, 波次{}秒, 最短等待{}秒, 烧毁半径{}",
-                cooldownSeconds, waveSeconds, minimumRespawnSeconds, enemyBurnRadius);
+            Espetro.LOGGER.info("Rally配置已加载: 冷却{}秒, 附近队员{}人/{}格, 波次{}秒, 最短等待{}秒, 烧毁半径{}",
+                cooldownSeconds, teammateCount, teammateRadius, waveSeconds,
+                minimumRespawnSeconds, enemyBurnRadius);
         } catch (Exception e) {
             Espetro.LOGGER.error("加载队包配置失败: {}", e.getMessage());
         }
@@ -184,8 +192,193 @@ public class TeamPackManager {
     }
 
     public void onPlayerDeath(UUID playerId) {
+        // 仅记录死亡时刻供最短等待；不重置个人 Rally 冷却（冷却中/已就绪均保持）。
         playerDeathTimes.put(playerId, System.currentTimeMillis());
         pendingRespawns.remove(playerId);
+    }
+
+
+    private long computeAlignedReadyAt(UUID playerId, TeamPackData teamPack, long now) {
+        // 首次进入个人冷却：死亡最短等待 + 固定 wave_seconds（不再对齐共享时钟余量）。
+        long deathAt = playerDeathTimes.getOrDefault(playerId, now);
+        long earliest = deathAt + minimumRespawnSeconds * 1000L;
+        long ready = now + waveSeconds * 1000L;
+        return Math.max(ready, earliest);
+    }
+
+    /**
+     * 取消该玩家尚未完成的 Rally 波次复活队列。
+     * 在改选 HAB / 原部署点 / 前哨并成功部署后必须调用，避免冷却结束后误拉回 Rally。
+     * 不清除 personalRallyReadyAt（个人冷却继续走）。
+     */
+    public void cancelPendingRespawn(UUID playerId) {
+        if (playerId == null) {
+            return;
+        }
+        pendingRespawns.remove(playerId);
+    }
+
+    /**
+     * 该玩家对指定 Rally 的个人就绪 epoch ms。
+     */
+    public long getPersonalRallyReadyAt(UUID playerId, TeamPackData teamPack) {
+        Long existing = personalRallyReadyAt.get(playerId);
+        if (existing != null) {
+            // 冷却中或已就绪均保持，不因阵亡重开计数。
+            return existing;
+        }
+        long now = System.currentTimeMillis();
+        long ready = computeAlignedReadyAt(playerId, teamPack, now);
+        personalRallyReadyAt.put(playerId, ready);
+        return ready;
+    }
+
+    public int getWaveSeconds() {
+        return waveSeconds;
+    }
+
+
+    public List<UnifiedDeployScreenPacket.BastionItem> getDeployItemsForPlayer(ServerPlayer player) {
+        List<UnifiedDeployScreenPacket.BastionItem> result = new ArrayList<>();
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) {
+            return result;
+        }
+
+        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+        if (squadId == SquadManager.NO_SQUAD) {
+            return result;
+        }
+
+        UUID teamPackId = squadTeamPacks.get(squadKey(team, squadId));
+        if (teamPackId == null) {
+            return result;
+        }
+
+        TeamPackData teamPack = getTeamPack(teamPackId);
+        if (teamPack == null || !Objects.equals(teamPack.team, team)) {
+            return result;
+        }
+
+        long now = System.currentTimeMillis();
+        long personalReadyAt = getPersonalRallyReadyAt(player.getUUID(), teamPack);
+        PendingRallyRespawn pending = pendingRespawns.get(player.getUUID());
+        if (pending != null && Objects.equals(pending.teamPackId(), teamPack.teamPackId)) {
+            personalReadyAt = pending.spawnAt();
+        }
+        long remainingSeconds = Math.max(0L, (personalReadyAt - now + 999L) / 1000L);
+        String status = remainingSeconds <= 0
+            ? "就绪"
+            : "冷却 " + remainingSeconds + "/" + waveSeconds + "s";
+
+        BlockPos spawnPos = teamPack.getSpawnPos();
+        result.add(new UnifiedDeployScreenPacket.BastionItem(
+            teamPack.teamPackId,
+            "Rally " + squadId,
+            spawnPos.getX() + ", " + spawnPos.getY() + ", " + spawnPos.getZ(),
+            UnifiedDeployScreenPacket.BastionItem.TYPE_RALLY,
+            status,
+            personalReadyAt,
+            waveSeconds
+        ));
+        return result;
+    }
+
+    public boolean respawnAtTeamPack(ServerPlayer player, UUID teamPackId) {
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) {
+            return false;
+        }
+
+        TeamPackData teamPack = getTeamPack(teamPackId);
+        if (teamPack == null || !team.equals(teamPack.team)) {
+            player.sendSystemMessage(Component.literal("§c无效的队伍集结点！"));
+            return false;
+        }
+
+        if (GameStateManager.getInstance().getCurrentPhase() != GamePhase.BATTLE
+            && GameStateManager.getInstance().getCurrentPhase() != GamePhase.DEPLOYING) {
+            player.sendSystemMessage(Component.literal("§c只能在战斗或部署阶段复活！"));
+            return false;
+        }
+
+        if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+            player.sendSystemMessage(Component.literal("§c你已经完成了复活选择！"));
+            return false;
+        }
+
+        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+        if (squadId == SquadManager.NO_SQUAD || squadId != teamPack.squadId) {
+            player.sendSystemMessage(Component.literal("§c该队伍集结点不属于你当前的小队！"));
+            return false;
+        }
+
+        if (isTeamPackMissing(teamPack)) {
+            destroyTeamPack(teamPack, null, false, false);
+            player.sendSystemMessage(Component.literal("§c该队伍集结点已失效！"));
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        long readyAt = getPersonalRallyReadyAt(player.getUUID(), teamPack);
+        if (readyAt <= now) {
+            // 冷却已好：立即部署，并为下一次使用开启新的个人冷却。
+            pendingRespawns.remove(player.getUUID());
+            spawnAtRally(player, teamPack);
+            scheduleNextPersonalCooldown(player.getUUID(), teamPack);
+            return true;
+        }
+
+        pendingRespawns.put(player.getUUID(), new PendingRallyRespawn(teamPackId, readyAt));
+        long remaining = Math.max(1L, (readyAt - now + 999L) / 1000L);
+        player.sendSystemMessage(Component.literal(
+            "§d已选择 Rally，冷却中 §f" + remaining + "/" + waveSeconds + " 秒§d。就绪后将自动部署。"));
+        return true;
+    }
+
+    private void scheduleNextPersonalCooldown(UUID playerId, TeamPackData teamPack) {
+        // 固定个人冷却：部署完成后一律 wave_seconds，不跟共享 nextWaveAt 余量对齐。
+        long now = System.currentTimeMillis();
+        personalRallyReadyAt.put(playerId, now + waveSeconds * 1000L);
+        playerDeathTimes.remove(playerId);
+    }
+
+    private void processPendingRespawns(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        for (TeamPackData teamPack : teamPacks.values()) {
+            while (teamPack.nextWaveAt <= now) {
+                teamPack.nextWaveAt += waveSeconds * 1000L;
+            }
+        }
+        if (pendingRespawns.isEmpty()) {
+            return;
+        }
+        Iterator<Map.Entry<UUID, PendingRallyRespawn>> iterator = pendingRespawns.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, PendingRallyRespawn> entry = iterator.next();
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            TeamPackData teamPack = getTeamPack(entry.getValue().teamPackId());
+            if (player == null) {
+                iterator.remove();
+                continue;
+            }
+            if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+                iterator.remove();
+                continue;
+            }
+            if (teamPack == null || isTeamPackMissing(teamPack)) {
+                iterator.remove();
+                player.sendSystemMessage(Component.literal("§c所选 Rally 已失效，请重新选择部署点。"));
+                org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
+                continue;
+            }
+            if (now < entry.getValue().spawnAt()) {
+                continue;
+            }
+            spawnAtRally(player, teamPack);
+            scheduleNextPersonalCooldown(player.getUUID(), teamPack);
+            iterator.remove();
+        }
     }
 
     public boolean isTeamPackItem(ItemStack stack) {
@@ -196,49 +389,17 @@ public class TeamPackManager {
     }
 
     public void syncTeamPackItem(ServerPlayer player) {
-        boolean isLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
-        if (!isLeader) {
-            removeTeamPackItems(player);
-            return;
-        }
-        String team = Espetro.getPlayerTeam(player);
-        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
-        applyInheritedLeaderCooldown(player.getUUID(), team, squadId);
-        giveTeamPackItemIfNeeded(player);
+        // 不再发放 Rally 部署包；仅清理历史遗留物品。部署只走 Alt 轮盘 + 小队长。
+        applyInheritedLeaderCooldown(
+            player.getUUID(),
+            Espetro.getPlayerTeam(player),
+            SquadManager.getInstance().getPlayerSquadId(player.getUUID()));
+        removeTeamPackItems(player);
     }
 
     public void giveTeamPackItemIfNeeded(ServerPlayer player) {
-        if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
-            removeTeamPackItems(player);
-            return;
-        }
-
-        String team = Espetro.getPlayerTeam(player);
-        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
-        SquadKey key = squadKey(team, squadId);
-        if (key != null && squadTeamPacks.containsKey(key)) {
-            removeTeamPackItems(player);
-            return;
-        }
-
-        for (ItemStack stack : player.getInventory().items) {
-            if (isTeamPackItem(stack)) {
-                return;
-            }
-        }
-        if (isTeamPackItem(player.getInventory().offhand.get(0))) {
-            return;
-        }
-
-        ItemStack teamPack = new ItemStack(Items.BEACON);
-        CompoundTag tag = teamPack.getOrCreateTag();
-        tag.putBoolean(TEAM_PACK_ITEM_TAG, true);
-        teamPack.setHoverName(Component.literal("§dRally 部署包"));
-        player.getInventory().add(teamPack);
-        player.getInventory().setChanged();
-        player.inventoryMenu.broadcastChanges();
-        player.containerMenu.broadcastChanges();
-        player.sendSystemMessage(Component.literal("§d你获得了 §fRally 部署包§d！与一名队员协同放置信标即可部署。"));
+        // 兼容旧调用：不再给予物品，只移除。
+        removeTeamPackItems(player);
     }
 
     public void removeTeamPackItems(ServerPlayer player) {
@@ -280,8 +441,12 @@ public class TeamPackManager {
         }
     }
 
+    /**
+     * 仅检查能否在 pos 部署 Rally（不修改世界）。
+     * 条件：战斗阶段 + 小队队长 + 小队放置冷却 + 附近队员 + 附近无敌人。
+     */
     @Nullable
-    public String placeTeamPack(ServerPlayer player, ServerLevel level, BlockPos pos) {
+    public String canPlaceTeamPack(ServerPlayer player, ServerLevel level, BlockPos pos) {
         if (GameStateManager.getInstance().getCurrentPhase() != GamePhase.BATTLE) {
             return "§c只能在战斗阶段部署队包！";
         }
@@ -303,18 +468,45 @@ public class TeamPackManager {
         if (squadKey == null) {
             return "§c无法确定你的小队！";
         }
-        if (squadTeamPacks.containsKey(squadKey)) {
-            return "§c你的小队已经部署了一个队包，不能重复放置！";
-        }
         int cooldownRemaining = getSquadCooldownRemaining(team, squadId);
         if (cooldownRemaining > 0) {
             return "§c队包冷却中！请等待 " + cooldownRemaining + " 秒后再试。";
         }
-        if (!hasNearbySquadMember(player, team, squadId, teammateRadius)) {
-            return "§c部署 Rally 需要 " + (int) teammateRadius + " 格内至少一名同小队队员！";
+        int nearbySquadMembers = countNearbySquadMembers(
+            player, team, squadId, pos, teammateRadius);
+        if (nearbySquadMembers < teammateCount) {
+            return "§c部署 Rally 需要放置点 " + formatRadius(teammateRadius)
+                + " 格内至少 " + teammateCount + " 名同小队队员！当前仅 "
+                + nearbySquadMembers + " 名。";
         }
         if (hasEnemyNear(level, pos, team, enemyPlacementRadius)) {
             return "§c附近 " + (int) enemyPlacementRadius + " 格内有敌人，无法部署 Rally！";
+        }
+        return null;
+    }
+
+    @Nullable
+    public String placeTeamPack(ServerPlayer player, ServerLevel level, BlockPos pos) {
+        String error = canPlaceTeamPack(player, level, pos);
+        if (error != null) {
+            return error;
+        }
+
+        String team = Espetro.getPlayerTeam(player);
+        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+        SquadKey squadKey = squadKey(team, squadId);
+        if (squadKey == null) {
+            return "§c无法确定你的小队！";
+        }
+
+        // 如果小队已有队包，销毁旧队包后再放置新的
+        UUID existingId = squadTeamPacks.get(squadKey);
+        if (existingId != null) {
+            TeamPackData existing = teamPacks.get(existingId);
+            if (existing != null && existing.active) {
+                destroyTeamPack(existing, null, true, false);
+                broadcastToSquad(team, squadId, "§e[队包] 旧队包已被替换。");
+            }
         }
 
         TeamPackData teamPack = new TeamPackData(UUID.randomUUID(), team, squadId, pos, level, durability);
@@ -327,9 +519,10 @@ public class TeamPackManager {
         org.espetro.tutorial.TutorialManager.getInstance().tryShow(
             player, org.espetro.tutorial.TutorialStep.TEAM_PACK);
 
-        player.sendSystemMessage(Component.literal("§aRally 已部署！小队员将按 " + waveSeconds + " 秒波次复活。"));
+        player.sendSystemMessage(Component.literal(
+            "§aRally 已部署！小队员个人复活冷却 " + waveSeconds + " 秒。"));
         if (cooldownSeconds > 0) {
-            player.sendSystemMessage(Component.literal("§7队包部署冷却: " + cooldownSeconds + "秒"));
+            player.sendSystemMessage(Component.literal("§7队包放置冷却: " + cooldownSeconds + "秒"));
         }
         broadcastToSquad(team, squadId, "§d[队包] §f" + player.getName().getString() + " §d部署了队伍集结点。");
         return null;
@@ -417,122 +610,10 @@ public class TeamPackManager {
                                 int x, int y, int z, long nextWaveSeconds) {
     }
 
-    public List<UnifiedDeployScreenPacket.BastionItem> getDeployItemsForPlayer(ServerPlayer player) {
-        List<UnifiedDeployScreenPacket.BastionItem> result = new ArrayList<>();
-        String team = Espetro.getPlayerTeam(player);
-        if (team == null) {
-            return result;
-        }
-
-        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
-        if (squadId == SquadManager.NO_SQUAD) {
-            return result;
-        }
-
-        UUID teamPackId = squadTeamPacks.get(squadKey(team, squadId));
-        if (teamPackId == null) {
-            return result;
-        }
-
-        TeamPackData teamPack = getTeamPack(teamPackId);
-        if (teamPack == null || !Objects.equals(teamPack.team, team)) {
-            return result;
-        }
-
-        BlockPos spawnPos = teamPack.getSpawnPos();
-        result.add(new UnifiedDeployScreenPacket.BastionItem(
-            teamPack.teamPackId,
-            "Rally " + squadId,
-            spawnPos.getX() + ", " + spawnPos.getY() + ", " + spawnPos.getZ(),
-            UnifiedDeployScreenPacket.BastionItem.TYPE_RALLY,
-            "波次 " + Math.max(1L,
-                (teamPack.nextWaveAt - System.currentTimeMillis() + 999L) / 1000L) + "s"
-        ));
-        return result;
-    }
-
-    public boolean respawnAtTeamPack(ServerPlayer player, UUID teamPackId) {
-        String team = Espetro.getPlayerTeam(player);
-        if (team == null) {
-            return false;
-        }
-
-        TeamPackData teamPack = getTeamPack(teamPackId);
-        if (teamPack == null || !team.equals(teamPack.team)) {
-            player.sendSystemMessage(Component.literal("§c无效的队伍集结点！"));
-            return false;
-        }
-
-        if (GameStateManager.getInstance().getCurrentPhase() != GamePhase.BATTLE
-            && GameStateManager.getInstance().getCurrentPhase() != GamePhase.DEPLOYING) {
-            player.sendSystemMessage(Component.literal("§c只能在战斗或部署阶段复活！"));
-            return false;
-        }
-
-        if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
-            player.sendSystemMessage(Component.literal("§c你已经完成了复活选择！"));
-            return false;
-        }
-
-        int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
-        if (squadId == SquadManager.NO_SQUAD || squadId != teamPack.squadId) {
-            player.sendSystemMessage(Component.literal("§c该队伍集结点不属于你当前的小队！"));
-            return false;
-        }
-
-        if (isTeamPackMissing(teamPack)) {
-            destroyTeamPack(teamPack, null, false, false);
-            player.sendSystemMessage(Component.literal("§c该队伍集结点已失效！"));
-            return false;
-        }
-
-        long now = System.currentTimeMillis();
-        long deathAt = playerDeathTimes.getOrDefault(player.getUUID(), now);
-        long earliest = deathAt + minimumRespawnSeconds * 1000L;
-        long waveAt = teamPack.nextWaveAt;
-        while (waveAt < earliest) {
-            waveAt += waveSeconds * 1000L;
-        }
-        pendingRespawns.put(player.getUUID(), new PendingRallyRespawn(teamPackId, waveAt));
-        player.sendSystemMessage(Component.literal(
-            "§d已选择 Rally，等待下一波次 §f" + Math.max(1L, (waveAt - now + 999L) / 1000L) + " 秒§d。"));
-        return true;
-    }
-
-    private void processPendingRespawns(MinecraftServer server) {
-        if (pendingRespawns.isEmpty()) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        Iterator<Map.Entry<UUID, PendingRallyRespawn>> iterator = pendingRespawns.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, PendingRallyRespawn> entry = iterator.next();
-            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-            TeamPackData teamPack = getTeamPack(entry.getValue().teamPackId);
-            if (player == null) {
-                iterator.remove();
-                continue;
-            }
-            if (teamPack == null || isTeamPackMissing(teamPack)) {
-                iterator.remove();
-                player.sendSystemMessage(Component.literal("§c所选 Rally 已失效，请重新选择部署点。"));
-                org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
-                continue;
-            }
-            if (now < entry.getValue().spawnAt) {
-                continue;
-            }
-            spawnAtRally(player, teamPack);
-            iterator.remove();
-            playerDeathTimes.remove(player.getUUID());
-        }
-        for (TeamPackData teamPack : teamPacks.values()) {
-            while (teamPack.nextWaveAt <= now) {
-                teamPack.nextWaveAt += waveSeconds * 1000L;
-            }
-        }
-    }
-
+    /**
+     * 取消该玩家尚未完成的 Rally 波次复活队列。
+     * 在改选 HAB / 原部署点 / 前哨并成功部署后必须调用，避免冷却结束后误拉回 Rally。
+     */
     private void spawnAtRally(ServerPlayer player, TeamPackData teamPack) {
         BastionManager.getInstance().clearWaiting(player.getUUID());
         BlockPos spawnPos = teamPack.getSpawnPos();
@@ -550,7 +631,10 @@ public class TeamPackManager {
             127,
             false, false, false
         ));
-        player.sendSystemMessage(Component.literal("§a已随 Rally 波次复活！"));
+        player.sendSystemMessage(Component.literal("§a已随 Rally 部署复活！"));
+        // 战局中加入：真正落地后补职业选择；并同步部署界面。
+        org.espetro.team.GameStateManager.getInstance().onMidGameDeployComplete(player);
+        org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
     }
 
     private void burnEnemyProxiedRallies() {
@@ -564,17 +648,25 @@ public class TeamPackManager {
         }
     }
 
-    private boolean hasNearbySquadMember(ServerPlayer leader, String team, int squadId, double radius) {
+    private int countNearbySquadMembers(ServerPlayer leader, String team, int squadId,
+                                        BlockPos center, double radius) {
         double radiusSquared = radius * radius;
+        int count = 0;
         for (ServerPlayer player : leader.serverLevel().players()) {
             if (player == leader || !player.isAlive() || player.isSpectator()) continue;
             if (team.equals(Espetro.getPlayerTeam(player))
                 && SquadManager.getInstance().getPlayerSquadId(player.getUUID()) == squadId
-                && player.distanceToSqr(leader) <= radiusSquared) {
-                return true;
+                && player.blockPosition().distSqr(center) <= radiusSquared) {
+                count++;
             }
         }
-        return false;
+        return count;
+    }
+
+    private static String formatRadius(double radius) {
+        return radius == Math.rint(radius)
+            ? Integer.toString((int) radius)
+            : Double.toString(radius);
     }
 
     private boolean hasEnemyNear(ServerLevel level, BlockPos pos, String team, double radius) {
@@ -682,6 +774,7 @@ public class TeamPackManager {
         pendingItemSyncs.clear();
         pendingRespawns.clear();
         playerDeathTimes.clear();
+        personalRallyReadyAt.clear();
         tickCounter = 0L;
     }
 

@@ -3,6 +3,7 @@
     "cooldown_seconds": 120,
     "durability": 1,
     "break_speed_multiplier": 8.0,
+    "teammate_count": 0,
     "teammate_radius": 8.0,
     "enemy_placement_radius": 50.0,
     "enemy_burn_radius": 30.0,

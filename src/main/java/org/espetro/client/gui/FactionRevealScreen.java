@@ -18,10 +18,11 @@ public class FactionRevealScreen extends MutilScreen {
     private static final ResourceLocation DEFEND_TEXTURE =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/defend_faction.png");
 
-    private static final int ATTACK_TEX_W = 105;
-    private static final int ATTACK_TEX_H = 81;
-    private static final int DEFEND_TEX_W = 102;
-    private static final int DEFEND_TEX_H = 79;
+    // 贴图已整理为 128x128 RGBA（透明区为白+透明，避免线性采样时黑边）。
+    private static final int ATTACK_TEX_W = 128;
+    private static final int ATTACK_TEX_H = 128;
+    private static final int DEFEND_TEX_W = 128;
+    private static final int DEFEND_TEX_H = 128;
 
     private final String attackFactionName;
     private final String defendFactionName;
@@ -108,6 +109,7 @@ public class FactionRevealScreen extends MutilScreen {
 
     @Override
     public void tick() {
+        super.tick();
         ticksRemaining--;
         if (ticksRemaining % 20 == 0 && phaseHeader != null) {
             phaseHeader.setDetail("\u00a78" + getSecondsRemaining() + "秒后进入部署");

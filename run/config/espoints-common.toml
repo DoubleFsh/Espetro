@@ -1,4 +1,11 @@
 
+["Operation Settings"]
+	#当一方兵力低于此百分比时播放背水一战背景音乐（0-100，设置为0则不播放）
+	#Range: 0.0 ~ 100.0
+	lowReinforcementThreshold = 10.0
+	#兼容旧配置：HCRpoints 现在固定启用行动攻防机制
+	enableOperationMode = true
+
 ["HUD Settings"]
 	#启用HUD显示
 	enableHUD = true
@@ -43,11 +50,4 @@
 	#友军击杀扣除的点数
 	#Range: 1 ~ 10000
 	friendlyFirePenalty = 200
-
-["Operation Settings"]
-	#兼容旧配置：HCRpoints 现在固定启用行动攻防机制
-	enableOperationMode = true
-	#当一方兵力低于此百分比时播放背水一战背景音乐（0-100，设置为0则不播放）
-	#Range: 0.0 ~ 100.0
-	lowReinforcementThreshold = 10.0
 

@@ -86,11 +86,14 @@
   },
   "classes": {
     "US_AIRBORNE_CREW": {
+      "strict_count": true,
       "name": "载具组员",
       "icon": "crewman",
       "description": "空降载具驾驶员与炮手",
       "role": "载具操作",
       "maxPlayers": 8,
+      "team_count": false,
+      "max_per_squad": 2,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -126,11 +129,14 @@
       }
     },
     "US_AIRBORNE_ANTITANK": {
+      "strict_count": true,
       "name": "反坦克兵",
       "icon": "light_at",
       "description": "空降反装甲作战",
       "role": "反装甲",
       "maxPlayers": 3,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -171,11 +177,14 @@
       }
     },
     "US_AIRBORNE_MARKSMAN": {
+      "strict_count": true,
       "name": "精确射手",
       "icon": "marksman",
       "description": "空降远程精确打击",
       "role": "精确射击",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -210,11 +219,14 @@
       }
     },
     "US_AIRBORNE_SQUADMG": {
+      "strict_count": true,
       "name": "班组机枪",
       "icon": "automatic_rifleman",
       "description": "空降班组压制火力",
       "role": "火力压制",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -250,11 +262,14 @@
       }
     },
     "US_AIRBORNE_ASSAULT": {
+      "strict_count": true,
       "name": "自动步枪",
       "icon": "rifleman",
       "description": "空降标准突击步兵",
       "role": "突击",
       "maxPlayers": 10,
+      "team_count": false,
+      "max_per_squad": 4,
       "troopValue": 1,
       "variants": {
         "default": {

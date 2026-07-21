@@ -5,6 +5,7 @@ public final class CommanderSkillBuilder {
     private String displayName;
     private String description = "";
     private String stats = "";
+    private String icon = "";
     private String trigger = "activate";
     private int cooldownSeconds = 60;
     private boolean enabled = true;
@@ -30,6 +31,15 @@ public final class CommanderSkillBuilder {
 
     public CommanderSkillBuilder stats(String value) {
         this.stats = value == null ? "" : value;
+        return this;
+    }
+
+    /**
+     * 设置技能图标的资源位置，如 "espetro:textures/gui/commander_skills/drone_detection.png"。
+     * 资源包可覆盖同路径。
+     */
+    public CommanderSkillBuilder icon(String value) {
+        this.icon = value == null ? "" : value.trim();
         return this;
     }
 
@@ -75,6 +85,7 @@ public final class CommanderSkillBuilder {
             displayName,
             description,
             stats,
+            icon,
             trigger,
             cooldownSeconds,
             enabled

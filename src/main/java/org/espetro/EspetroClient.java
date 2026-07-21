@@ -42,17 +42,13 @@ public class EspetroClient {
             "key.espetro.team", 75, "key.categories.espetro");
         net.minecraft.client.KeyMapping keyClass = new net.minecraft.client.KeyMapping(
             "key.espetro.class", 74, "key.categories.espetro");
-        net.minecraft.client.KeyMapping keySkill = new net.minecraft.client.KeyMapping(
-            "key.espetro.skill", 89, "key.categories.espetro");
         net.minecraft.client.KeyMapping keyRadial = new net.minecraft.client.KeyMapping(
             "key.espetro.radial", org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT, "key.categories.espetro");
         event.register(keyTeam);
         event.register(keyClass);
-        event.register(keySkill);
         event.register(keyRadial);
         Espetro.KEY_TEAM = keyTeam;
         Espetro.KEY_CLASS = keyClass;
-        Espetro.KEY_SKILL = keySkill;
         Espetro.KEY_RADIAL = keyRadial;
     }
 
@@ -90,12 +86,6 @@ public class EspetroClient {
                     String factionId = org.espetro.client.gui.ClientGameState.getPlayerFactionId();
                     org.espetro.network.NetworkManager.requestClassSelection(factionId);
                 }
-            }
-        }
-        // Y键 - 指挥官技能面板 (在部署/战斗阶段允许)
-        if (Espetro.KEY_SKILL != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_SKILL).consumeClick()) {
-            if (org.espetro.client.gui.ClientGameState.canOpenCommanderSkill()) {
-                org.espetro.network.NetworkManager.requestCommanderSkillSync();
             }
         }
     }

@@ -86,7 +86,12 @@ public class SquadManager {
             return ActionResult.failure(team, "目标小队人数已满。");
         }
 
+        int previousSquadId = getPlayerSquadId(player.getUUID());
         removePlayerFromCurrentSquad(player.getUUID());
+        if (previousSquadId != NO_SQUAD) {
+            // 切换小队：先按离队规则处理 team_count 职业。
+            ClassCountManager.getInstance().onPlayerLeftSquad(player);
+        }
         squad.members.add(player.getUUID());
         playerSquads.put(player.getUUID(), squad.id);
 
@@ -97,6 +102,7 @@ public class SquadManager {
         String team = Espetro.getPlayerTeam(player);
         String affectedTeam = removePlayerFromCurrentSquad(player.getUUID());
         if (affectedTeam != null) {
+            ClassCountManager.getInstance().onPlayerLeftSquad(player);
             return ActionResult.success(affectedTeam, "已退出小队。");
         }
         return ActionResult.failure(team, "你当前不在小队中。");
@@ -117,10 +123,25 @@ public class SquadManager {
             return ActionResult.failure(team, "只有队长可以删除小队。");
         }
 
-        for (UUID memberUuid : new ArrayList<>(squad.members)) {
+        List<UUID> formerMembers = new ArrayList<>(squad.members);
+        for (UUID memberUuid : formerMembers) {
             playerSquads.remove(memberUuid);
         }
         squads.remove(squad.id);
+
+        // 删除小队等同于所有成员离队：小队限定职业需清除。
+        MinecraftServer server = Espetro.getServer();
+        ClassCountManager countManager = ClassCountManager.getInstance();
+        for (UUID memberUuid : formerMembers) {
+            if (server != null) {
+                ServerPlayer member = server.getPlayerList().getPlayer(memberUuid);
+                if (member != null) {
+                    countManager.onPlayerLeftSquad(member);
+                    continue;
+                }
+            }
+            countManager.onPlayerLeftSquadOffline(memberUuid);
+        }
 
         return ActionResult.success(team, "已删除小队 " + squad.name + "。");
     }
@@ -131,6 +152,17 @@ public class SquadManager {
     public String removePlayer(UUID uuid) {
         String affectedTeam = removePlayerFromCurrentSquad(uuid);
         playerSquads.remove(uuid);
+        MinecraftServer server = Espetro.getServer();
+        if (server != null) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player != null) {
+                ClassCountManager.getInstance().onPlayerLeftSquad(player);
+            } else {
+                ClassCountManager.getInstance().onPlayerLeftSquadOffline(uuid);
+            }
+        } else {
+            ClassCountManager.getInstance().onPlayerLeftSquadOffline(uuid);
+        }
         return affectedTeam;
     }
 
@@ -142,6 +174,17 @@ public class SquadManager {
 
     public int getPlayerSquadId(UUID uuid) {
         return playerSquads.getOrDefault(uuid, NO_SQUAD);
+    }
+
+    /**
+     * 返回指定队伍下某小队的成员 UUID 列表（拷贝）；小队不存在时返回空列表。
+     */
+    public List<UUID> getSquadMemberUuids(String team, int squadId) {
+        Squad squad = getSquad(team, squadId);
+        if (squad == null) {
+            return List.of();
+        }
+        return new ArrayList<>(squad.members);
     }
 
     public boolean isSquadLeader(UUID uuid) {

@@ -20,9 +20,9 @@ public class TeamSelectionScreen extends MutilScreen {
     private static final int IMG_MAX = 128;
     // 图片间距
     private static final int IMG_GAP = 48;
-    // 纹理原始尺寸
-    private static final int ATK_TEX_W = 105, ATK_TEX_H = 81;
-    private static final int DEF_TEX_W = 102, DEF_TEX_H = 79;
+    // 纹理原始尺寸（128x128 含透明留白，避免边缘黑边）
+    private static final int ATK_TEX_W = 128, ATK_TEX_H = 128;
+    private static final int DEF_TEX_W = 128, DEF_TEX_H = 128;
 
     public TeamSelectionScreen() {
         super(Component.literal("选择队伍"));

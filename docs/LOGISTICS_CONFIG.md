@@ -26,8 +26,23 @@
     "deposit_radius": 8.0,
     "radio_build_radius": 150.0,
     "radio_exclusion_radius": 400.0,
+    "radio_teammate_count": 1,
     "radio_teammate_radius": 30.0,
     "require_teammate": true,
+    "radio": {
+      "allowed_phases": ["BATTLE"],
+      "require_commander": false,
+      "allow_squad_leader": true,
+      "cooldown_seconds": -1,
+      "required_planks": -1,
+      "creative_bypasses_planks": true,
+      "max_active_per_team": -1,
+      "build_radius": 150.0,
+      "require_target_block": false,
+      "exclusion_radius": 400.0,
+      "teammate_count": 1,
+      "teammate_radius": 30.0
+    },
     "hab_construction_cost": 500,
     "ammo_crate_construction_cost": 100,
     "default_resupply_ammo_cost": 50,
@@ -41,6 +56,33 @@
 
 `hab_disable_radio_health` 是 Radio 最大生命值的百分比。`sources` 按顺序匹配，命中第一个
 来源后停止。来源中的非空条件必须全部满足。
+
+平铺字段 `radio_*` / `require_teammate` 仍受支持，并会同步进嵌套 `radio`（或由嵌套写回）。
+推荐在数据包中直接配置 `logistics.radio`。
+
+### Radio 建立条件（`logistics.radio`）
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `allowed_phases` | `["BATTLE"]` | 允许部署的 `GamePhase` 名（大写） |
+| `require_commander` | false | `true` 时必须是指挥官 |
+| `allow_squad_leader` | true | 是否允许小队长；默认与「指挥或小队长」等价 |
+| `cooldown_seconds` | -1 | 玩家建造冷却；`-1` 回退 `bastion.json` 的 `cooldown_seconds` |
+| `required_planks` | -1 | **所需补给建材点数**；`-1` 回退 bastion；`0` 不消耗。只认 Espetro 补给站发放、带 `EspetroSupplyType=construction` 的物品点数，**不是**任意原版木板 |
+| `creative_bypasses_planks` | true | 创造模式是否免建材点数 |
+| `max_active_per_team` | -1 | 每队活跃 Radio 上限；`-1` 使用代码默认 4 |
+| `build_radius` | 150.0 | API/`FobSnapshot` 用半径；**不**限制 wand 视线放置距离 |
+| `require_target_block` | false | `true` 时必须看中实心方块，不允许回退到脚下 |
+| `exclusion_radius` | 400.0 | 与其它活跃 Radio 的最小间距 |
+| `teammate_count` | 1 | 放置者之外所需附近同阵营队友；`0` 关闭 |
+| `teammate_radius` | 30.0 | 队友检测半径 |
+
+`radio_teammate_count` 是放置者之外所需的附近同阵营队友人数，设为 `0` 可关闭人数要求；
+`radio_teammate_radius` 是以 Radio 实际放置点为中心的检测半径。只统计同维度、存活且非
+旁观模式的玩家。旧字段 `require_teammate: false` 仍受支持，并等价于把人数设为 `0`。
+
+部署 Radio 时若 `required_planks`（生效值）> 0，玩家须从补给站领取足够建材点数；
+与存入 FOB 的 construction 点数同一体系。
 
 ## 原生补给方块
 

@@ -111,11 +111,14 @@
   },
   "classes": {
     "PLA_MEDIUM_COMMANDER": {
+      "strict_count": true,
       "name": "队长",
       "icon": "leader",
       "description": "班组指挥核心，全班战力核心",
       "role": "指挥",
       "maxPlayers": 1,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 3,
       "variants": {
         "default": {
@@ -151,11 +154,14 @@
       }
     },
     "PLA_MEDIUM_MARKSMAN": {
+      "strict_count": true,
       "name": "精确射手",
       "icon": "marksman",
       "description": "远距离精确打击",
       "role": "精确射击",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -191,11 +197,14 @@
       }
     },
     "PLA_MEDIUM_SQUAD_MG": {
+      "strict_count": true,
       "name": "班组机枪",
       "icon": "automatic_rifleman",
       "description": "班用机枪手，近距离火力压制",
       "role": "火力支援",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -230,11 +239,14 @@
       }
     },
     "PLA_MEDIUM_HEAVY_MG": {
+      "strict_count": true,
       "name": "重机枪手",
       "icon": "machine_gunner",
       "description": "重型火力输出，持续压制",
       "role": "重火力",
       "maxPlayers": 1,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 3,
       "variants": {
         "default": {
@@ -269,11 +281,14 @@
       }
     },
     "PLA_MEDIUM_ASSAULT": {
+      "strict_count": true,
       "name": "自动步枪",
       "icon": "rifleman",
       "description": "标准突击配置，配备自动步枪",
       "role": "突击",
       "maxPlayers": 10,
+      "team_count": false,
+      "max_per_squad": 4,
       "troopValue": 1,
       "variants": {
         "default": {
@@ -303,11 +318,14 @@
       }
     },
     "PLA_MEDIUM_GRENADIER": {
+      "strict_count": true,
       "name": "榴弹兵",
       "icon": "grenadier",
       "description": "掷弹筒手，曲射火力支援",
       "role": "曲射火力",
       "maxPlayers": 1,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -348,11 +366,14 @@
       }
     },
     "PLA_MEDIUM_ANTITANK": {
+      "strict_count": true,
       "name": "反坦克兵",
       "icon": "light_at",
       "description": "反装甲作战，配备火箭筒",
       "role": "反装甲",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -393,11 +414,14 @@
       }
     },
     "PLA_MEDIUM_CREW": {
+      "strict_count": true,
       "name": "载具组员",
       "icon": "crewman",
       "description": "装甲载具驾驶员与炮手",
       "role": "载具操作",
       "maxPlayers": 6,
+      "team_count": false,
+      "max_per_squad": 2,
       "troopValue": 2,
       "variants": {
         "default": {

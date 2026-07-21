@@ -1,6 +1,5 @@
 package org.espetro.client.gui;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -108,9 +107,11 @@ final class EspetroMutilWidgets {
      */
     static PhaseHeader addMutablePhaseHeader(GuiElement root, int screenWidth, String title,
                                              String status, String detail, int accentColor) {
-        root.addChild(rect(0, 0, screenWidth, PHASE_HEADER_HEIGHT, 0xEC15181A));
+        // 阶段标题栏在所有 MUtil 界面中共用。使用不透明底色，避免它在
+        // 外部 HUD 或着色器修改混合状态时产生帧间闪烁。
+        root.addChild(rect(0, 0, screenWidth, PHASE_HEADER_HEIGHT, 0xFF15181A));
         root.addChild(rect(0, 0, 3, PHASE_HEADER_HEIGHT, accentColor));
-        root.addChild(rect(0, PHASE_HEADER_HEIGHT - 1, screenWidth, 1, 0x705B6260));
+        root.addChild(rect(0, PHASE_HEADER_HEIGHT - 1, screenWidth, 1, 0xFF5B6260));
         Text titleText = centeredText(6, 4, Math.max(1, screenWidth - 12),
             title == null ? "" : title, TEXT);
         Text statusText = centeredText(6, 16, Math.max(1, screenWidth - 12),
@@ -446,12 +447,10 @@ final class EspetroMutilWidgets {
                          int mouseX, int mouseY, float partialTick) {
             if (!isVisible()) return;
 
-            RenderSystem.enableBlend();
-            RenderSystem.setShaderColor(1f, 1f, 1f, alpha);
+            graphics.setColor(1f, 1f, 1f, alpha);
             graphics.blit(texture, x + getX(), y + getY(), 0, 0, getWidth(), getHeight(),
                 getWidth(), getHeight());
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            RenderSystem.disableBlend();
+            graphics.setColor(1f, 1f, 1f, 1f);
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
     }
@@ -518,13 +517,10 @@ final class EspetroMutilWidgets {
                 graphics.renderOutline(drawX - 1, drawY - 1, drawW + 2, drawH + 2, outlineColor);
             }
 
-            // 渲染图片（等比例缩放）
-            RenderSystem.enableBlend();
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            // blit(x, y, z, uOffset, vOffset, uWidth, vHeight, textureWidth, textureHeight)
-            graphics.blit(texture, drawX, drawY, 0, 0, drawW, drawH, drawW, drawH);
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            RenderSystem.disableBlend();
+            // 目标区域与源纹理尺寸必须分别传入。将 drawW/drawH 当成
+            // 纹理尺寸会让透明边缘越界重复采样，尤其会污染非方形 PNG。
+            graphics.blit(texture, drawX, drawY, drawW, drawH,
+                0f, 0f, texW, texH, texW, texH);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }

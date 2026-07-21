@@ -133,9 +133,14 @@ public class ClassCountManager {
     }
 
     /**
-     * 检查职业是否已满
+     * 检查职业是否已满（仅非 team_count 职业的队伍总限）。
+     * team_count 职业请用小队扫描，不应调用本方法做满员判断。
      */
     public boolean isFull(String team, String classId) {
+        FactionDataLoader.ClassKitData kit = FactionDataProvider.getOrCreateLoader().getClassKit(classId);
+        if (kit != null && kit.teamCount) {
+            return false;
+        }
         return getCount(team, classId) >= getMaxCount(classId);
     }
 
@@ -147,8 +152,13 @@ public class ClassCountManager {
     }
 
     public boolean isVariantFull(String team, String classId, String variantId) {
-        FactionDataLoader.ClassVariantData variant =
-            FactionDataProvider.getOrCreateLoader().getClassVariant(classId, variantId);
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        if (kit != null && !kit.strictCount) {
+            // 非严格模式下变体不拥有独立人数名额，永不视为满员
+            return false;
+        }
+        FactionDataLoader.ClassVariantData variant = loader.getClassVariant(classId, variantId);
         return variant == null || getVariantCount(team, classId, variantId) >= variant.maxPlayers;
     }
 
@@ -222,14 +232,47 @@ public class ClassCountManager {
             return SelectionResult.SUCCESS;
         }
 
-        if (!classId.equals(oldClassId) && isFull(team, classId)) {
-            Espetro.LOGGER.info("{} 方职业 {} 已满，玩家 {} 无法选择", team, classId, player.getName().getString());
-            return SelectionResult.CLASS_FULL;
+        int squadId = SquadManager.getInstance().getPlayerSquadId(uuid);
+
+        // 所有职业均须先加入班组小队后再选择。
+        if (squadId == SquadManager.NO_SQUAD) {
+            return SelectionResult.REQUIRES_SQUAD;
         }
-        if (isVariantFull(team, classId, variantId)) {
-            Espetro.LOGGER.info("{} 方职业 {} 变体 {} 已满，玩家 {} 无法选择",
-                team, classId, variantId, player.getName().getString());
-            return SelectionResult.VARIANT_FULL;
+
+        // 同职业换变体时，玩家仍占父职业 1 个名额，不重复检查职业满员；
+        // 换到其它职业时，目标职业人数按当前（不含自己）计算。
+        boolean changingClass = !classId.equals(oldClassId);
+        boolean changingVariantOnly = classId.equals(oldClassId) && !variantId.equals(oldVariantId);
+
+        if (kit.teamCount) {
+            // maxPlayers = 每小队父职业上限；任意变体选择都计入该上限。
+            if (changingClass && countClassInSquad(team, squadId, classId) >= kit.maxPlayers) {
+                Espetro.LOGGER.info("{} 方小队 {} 职业 {} 已满，玩家 {} 无法选择",
+                    team, squadId, classId, player.getName().getString());
+                return SelectionResult.SQUAD_CLASS_FULL;
+            }
+            // strict_count：变体有独立上限，但仍叠加在父职业小队计数之上。
+            if (kit.strictCount && !variantId.equals(oldVariantId)
+                && countVariantInSquad(team, squadId, classId, variantId) >= variant.maxPlayers) {
+                return SelectionResult.VARIANT_FULL;
+            }
+        } else {
+            // 编制/队伍总限：父职业人数（含所有变体）。
+            if (changingClass && isFull(team, classId)) {
+                Espetro.LOGGER.info("{} 方职业 {} 已满，玩家 {} 无法选择",
+                    team, classId, player.getName().getString());
+                return SelectionResult.CLASS_FULL;
+            }
+            if (kit.maxPerSquad > 0
+                && changingClass
+                && countClassInSquad(team, squadId, classId) >= kit.maxPerSquad) {
+                return SelectionResult.SQUAD_CLASS_FULL;
+            }
+            // strict_count 变体独立上限；非 strict 时变体不单独限员，只占父职业名额。
+            if (kit.strictCount && !variantId.equals(oldVariantId)
+                && getVariantCount(team, classId, variantId) >= variant.maxPlayers) {
+                return SelectionResult.VARIANT_FULL;
+            }
         }
 
         if (oldClassId != null && oldVariantId == null) {
@@ -239,31 +282,41 @@ public class ClassCountManager {
             }
         }
 
-        if (oldClassId != null && !oldClassId.equals(classId)) {
+        // 队伍记分板只服务非 team_count 职业（编制总限）。
+        // 父职业 +1/-1 覆盖该职业下所有变体；strict 时再维护变体分计数。
+        FactionDataLoader.ClassKitData oldKitForBoard = oldClassId != null
+            ? loader.getClassKit(oldClassId) : null;
+        boolean oldUsesTeamBoard = oldKitForBoard == null || !oldKitForBoard.teamCount;
+        boolean newUsesTeamBoard = !kit.teamCount;
+
+        if (oldClassId != null && changingClass && oldUsesTeamBoard) {
             incrementScore(team, oldClassId, -1);
         }
-        if (oldClassId != null && oldVariantId != null) {
+        if (oldClassId != null && oldVariantId != null && oldUsesTeamBoard
+            && (changingClass || changingVariantOnly)
+            && (oldKitForBoard == null || oldKitForBoard.strictCount)) {
             incrementVariantScore(team, oldClassId, oldVariantId, -1);
         }
 
-        if (!classId.equals(oldClassId)) {
+        if (changingClass && newUsesTeamBoard) {
             incrementScore(team, classId, 1);
         }
-        incrementVariantScore(team, classId, variantId, 1);
+        if (kit.strictCount && newUsesTeamBoard
+            && (changingClass || changingVariantOnly)) {
+            incrementVariantScore(team, classId, variantId, 1);
+        }
         playerClasses.put(uuid, classId);
         playerVariants.put(uuid, variantId);
-        
-        // 仅在玩家没有faction记录时才从职业ID提取阵营
-        // 避免覆盖编制选择阶段已设置好的 faction（如 russia_army）
+
         if (playerFactions.get(uuid) == null) {
             String factionId = extractFactionId(classId);
             playerFactions.put(uuid, factionId);
         }
 
-        Espetro.LOGGER.debug("玩家 {} 选择 {} 方职业 {} / {} (职业 {}/{}, 变体 {}/{})",
+        Espetro.LOGGER.debug(
+            "玩家 {} 选择 {} 方职业 {} / {} (team_count={}, strict={}, 父职业队伍计数 {}/{})",
             player.getName().getString(), team, classId, variantId,
-            getCount(team, classId), getMaxCount(classId),
-            getVariantCount(team, classId, variantId), variant.maxPlayers);
+            kit.teamCount, kit.strictCount, getCount(team, classId), getMaxCount(classId));
 
         return SelectionResult.SUCCESS;
     }
@@ -274,7 +327,93 @@ public class ClassCountManager {
         INVALID_CLASS,
         INVALID_VARIANT,
         CLASS_FULL,
-        VARIANT_FULL
+        VARIANT_FULL,
+        REQUIRES_SQUAD,
+        SQUAD_CLASS_FULL
+    }
+
+    public int countClassInSquad(String team, int squadId, String classId) {
+        if (team == null || classId == null || squadId == SquadManager.NO_SQUAD) {
+            return 0;
+        }
+        int count = 0;
+        for (UUID member : SquadManager.getInstance().getSquadMemberUuids(team, squadId)) {
+            if (classId.equals(playerClasses.get(member))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int countVariantInSquad(String team, int squadId, String classId, String variantId) {
+        if (team == null || classId == null || variantId == null || squadId == SquadManager.NO_SQUAD) {
+            return 0;
+        }
+        int count = 0;
+        for (UUID member : SquadManager.getInstance().getSquadMemberUuids(team, squadId)) {
+            if (classId.equals(playerClasses.get(member))
+                && variantId.equals(playerVariants.get(member))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 对查看者有效的职业当前人数（UI）。
+     * team_count：本小队人数；否则：队伍人数。
+     */
+    public int getEffectiveClassCountForViewer(UUID viewerId, String team, String classId) {
+        FactionDataLoader.ClassKitData kit = FactionDataProvider.getOrCreateLoader().getClassKit(classId);
+        if (kit != null && kit.teamCount) {
+            int squadId = SquadManager.getInstance().getPlayerSquadId(viewerId);
+            if (squadId == SquadManager.NO_SQUAD) {
+                return 0;
+            }
+            return countClassInSquad(team, squadId, classId);
+        }
+        return getCount(team, classId);
+    }
+
+    public int getSquadClassCountForViewer(UUID viewerId, String team, String classId) {
+        int squadId = SquadManager.getInstance().getPlayerSquadId(viewerId);
+        if (squadId == SquadManager.NO_SQUAD) {
+            return 0;
+        }
+        return countClassInSquad(team, squadId, classId);
+    }
+
+    /**
+     * 离开班组小队：若当前职业启用 team_count，清除职业并扣队伍记分板。
+     */
+    public void onPlayerLeftSquad(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        clearTeamCountClassIfNeeded(player.getUUID(), player, true);
+    }
+
+    public void onPlayerLeftSquadOffline(UUID uuid) {
+        clearTeamCountClassIfNeeded(uuid, null, false);
+    }
+
+    private void clearTeamCountClassIfNeeded(UUID uuid, ServerPlayer onlinePlayer, boolean notify) {
+        String classId = playerClasses.get(uuid);
+        if (classId == null) {
+            return;
+        }
+        FactionDataLoader.ClassKitData kit = FactionDataProvider.getOrCreateLoader().getClassKit(classId);
+        if (kit == null || !kit.teamCount) {
+            return;
+        }
+        String team = getEffectivePlayerTeam(uuid);
+        String variantId = playerVariants.remove(uuid);
+        playerClasses.remove(uuid);
+        // team_count 职业从未写入队伍记分板，离队时无需（也不应）扣队伍分数。
+        if (notify && onlinePlayer != null) {
+            onlinePlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§e已离开班组小队，小队限定职业已取消。请重新选择职业。"));
+        }
     }
 
     /**
@@ -286,9 +425,14 @@ public class ClassCountManager {
         String classId = playerClasses.remove(uuid);
         String variantId = playerVariants.remove(uuid);
         if (team != null && classId != null) {
-            incrementScore(team, classId, -1);
-            if (variantId != null) {
-                incrementVariantScore(team, classId, variantId, -1);
+            FactionDataLoader.ClassKitData kit =
+                FactionDataProvider.getOrCreateLoader().getClassKit(classId);
+            // team_count 职业不占编制总限记分板，离线/移除时不改队伍分数。
+            if (kit == null || !kit.teamCount) {
+                incrementScore(team, classId, -1);
+                if (variantId != null && (kit == null || kit.strictCount)) {
+                    incrementVariantScore(team, classId, variantId, -1);
+                }
             }
         }
         playerFactions.remove(uuid);

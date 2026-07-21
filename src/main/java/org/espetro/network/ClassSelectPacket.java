@@ -132,6 +132,8 @@ public class ClassSelectPacket {
                 String message = switch (selection) {
                     case CLASS_FULL -> "§c该职业人数已满！请选择其他职业。";
                     case VARIANT_FULL -> "§c该装备变体人数已满！请选择其他变体。";
+                    case SQUAD_CLASS_FULL -> "§c本小队该职业人数已满！请选择其他职业或小队。";
+                    case REQUIRES_SQUAD -> "§c请先加入班组小队后再选择职业！";
                     case INVALID_VARIANT -> "§c无效的职业装备变体。";
                     case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
                     default -> "§c当前无法选择该职业装备变体。";
@@ -164,9 +166,12 @@ public class ClassSelectPacket {
 
             String team = countManager.getEffectivePlayerTeam(player.getUUID());
             String factionId = countManager.getPlayerFaction(player.getUUID());
+            // 不再 syncSquadsToTeam：成员 className 变化曾触发整页 rebuild 闪烁。
+            // 给同队玩家发完整部署包以更新小队作用域人数；客户端 updateSquads
+            // 在结构未变时不会 rebuild。
             NetworkManager.broadcastClassCounts(team,
                 factionId != null ? factionId : teamOrFaction);
-            NetworkManager.syncSquadsToTeam(team);
+            NetworkManager.refreshUnifiedDeployScreensForTeam(team);
         });
         ctx.get().setPacketHandled(true);
     }

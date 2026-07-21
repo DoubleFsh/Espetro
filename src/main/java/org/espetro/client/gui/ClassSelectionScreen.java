@@ -107,7 +107,7 @@ public class ClassSelectionScreen extends Screen {
                 .map(v -> new VariantDisplay(v.variantId, v.name, v.description, v.maxPlayers))
                 .toList();
             displayClasses[i] = new ClassDisplay(ci.classId, ci.name, ci.description, ci.role, ci.icon,
-                ci.maxPlayers, ci.troopValue, ci.healthBonus, ci.speedBonus, variants);
+                ci.maxPlayers, ci.strictCount, ci.troopValue, ci.healthBonus, ci.speedBonus, variants);
             classCounts.put(ci.classId, 0);
         }
 
@@ -129,7 +129,7 @@ public class ClassSelectionScreen extends Screen {
                     .map(v -> new VariantDisplay(v.id, v.name, v.description, v.maxPlayers))
                     .toList();
                 displayClasses[i] = new ClassDisplay(kit.id, kit.name, kit.description, kit.role, kit.icon,
-                    kit.maxPlayers, kit.troopValue, kit.healthBonus, kit.speedBonus, variants);
+                    kit.maxPlayers, kit.strictCount, kit.troopValue, kit.healthBonus, kit.speedBonus, variants);
                 classCounts.put(kit.id, 0);
             }
         } else {
@@ -396,14 +396,21 @@ public class ClassSelectionScreen extends Screen {
             int rowW = POPUP_W - 6;
             int count = variantCounts.getOrDefault(cls.classId, Collections.emptyMap())
                 .getOrDefault(variant.variantId(), 0);
-            boolean full = count >= variant.maxPlayers();
+            // 非严格模式下不检查变体独立人数上限
+            boolean full = cls.strictCount && count >= variant.maxPlayers();
             boolean hovered = inside(mouseX, mouseY, rowX, rowY, rowW, POPUP_ROW_H - 1);
             graphics.fill(rowX, rowY, rowX + rowW, rowY + POPUP_ROW_H - 1,
                 full ? 0xD02B2025 : hovered ? 0xE0435145 : 0xD01B1E20);
             graphics.renderOutline(rowX, rowY, rowW, POPUP_ROW_H - 1,
                 hovered && !full ? 0xFFB7C9B8 : 0x8059605E);
 
-            String countText = (full ? "§c" : "§a") + "[" + count + "/" + variant.maxPlayers() + "]";
+            String countText;
+            if (cls.strictCount) {
+                countText = (full ? "§c" : "§a") + "[" + count + "/" + variant.maxPlayers() + "]";
+            } else {
+                // 非严格模式：仅显示当前选择人数，不显示变体上限
+                countText = "§a" + count + "人";
+            }
             graphics.drawString(this.font,
                 Component.literal((full ? "§8" : "§f") + variant.name()),
                 rowX + 5, rowY + 4, 0xFFFFFF, false);
@@ -493,7 +500,8 @@ public class ClassSelectionScreen extends Screen {
                 VariantDisplay variant = cls.variants.get(variantIndex);
                 int count = variantCounts.getOrDefault(cls.classId, Collections.emptyMap())
                     .getOrDefault(variant.variantId(), 0);
-                if (count < variant.maxPlayers()) {
+                // 非严格模式下不检查变体独立人数上限
+                if (!cls.strictCount || count < variant.maxPlayers()) {
                     ClassSelectionGui.selectClass(factionId, cls.classId, variant.variantId());
                     closeVariantPopup();
                     this.onClose();
@@ -530,13 +538,14 @@ public class ClassSelectionScreen extends Screen {
         final String icon;
         final ResourceLocation iconResource;
         final int maxPlayers;
+        final boolean strictCount;
         final int troopValue;
         final int healthBonus;
         final float speedBonus;
         final List<VariantDisplay> variants;
 
         ClassDisplay(String classId, String name, String description, String role, String icon,
-                     int maxPlayers, int troopValue, int healthBonus, float speedBonus,
+                     int maxPlayers, boolean strictCount, int troopValue, int healthBonus, float speedBonus,
                      List<VariantDisplay> variants) {
             this.classId = classId;
             this.name = name;
@@ -545,6 +554,7 @@ public class ClassSelectionScreen extends Screen {
             this.icon = icon;
             this.iconResource = RoleIconResources.resolve(icon);
             this.maxPlayers = maxPlayers;
+            this.strictCount = strictCount;
             this.troopValue = troopValue;
             this.healthBonus = healthBonus;
             this.speedBonus = speedBonus;

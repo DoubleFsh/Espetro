@@ -48,7 +48,7 @@ public class OpenClassSelectionPacket {
             }
             this.classes.add(new ClassInfo(
                 kit.id, kit.name, kit.description, kit.role, kit.icon,
-                kit.maxPlayers, kit.troopValue, kit.healthBonus, kit.speedBonus, variants
+                kit.maxPlayers, kit.strictCount, kit.troopValue, kit.healthBonus, kit.speedBonus, variants
             ));
         }
     }
@@ -69,6 +69,7 @@ public class OpenClassSelectionPacket {
             String role = buf.readUtf();
             String icon = buf.readUtf();
             int maxPlayers = buf.readVarInt();
+            boolean strictCount = buf.readBoolean();
             int troopValue = buf.readVarInt();
             int healthBonus = buf.readVarInt();
             float speedBonus = buf.readFloat();
@@ -78,7 +79,7 @@ public class OpenClassSelectionPacket {
                 variants.add(new VariantInfo(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt()));
             }
             classes.add(new ClassInfo(
-                classId, name, description, role, icon, maxPlayers,
+                classId, name, description, role, icon, maxPlayers, strictCount,
                 troopValue, healthBonus, speedBonus, variants
             ));
         }
@@ -108,6 +109,7 @@ public class OpenClassSelectionPacket {
             buf.writeUtf(ci.role);
             buf.writeUtf(ci.icon == null ? "" : ci.icon);
             buf.writeVarInt(ci.maxPlayers);
+            buf.writeBoolean(ci.strictCount);
             buf.writeVarInt(ci.troopValue);
             buf.writeVarInt(ci.healthBonus);
             buf.writeFloat(ci.speedBonus);
@@ -151,13 +153,14 @@ public class OpenClassSelectionPacket {
         public final String role;
         public final String icon;
         public final int maxPlayers;
+        public final boolean strictCount;
         public final int troopValue;
         public final int healthBonus;
         public final float speedBonus;
         public final List<VariantInfo> variants;
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
-                         int maxPlayers, int troopValue, int healthBonus, float speedBonus,
+                         int maxPlayers, boolean strictCount, int troopValue, int healthBonus, float speedBonus,
                          List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
@@ -165,6 +168,7 @@ public class OpenClassSelectionPacket {
             this.role = role;
             this.icon = icon;
             this.maxPlayers = maxPlayers;
+            this.strictCount = strictCount;
             this.troopValue = troopValue;
             this.healthBonus = healthBonus;
             this.speedBonus = speedBonus;

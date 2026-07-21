@@ -5,6 +5,7 @@ public final class KubeCommanderSkillDefinition {
     private final String displayName;
     private final String description;
     private final String stats;
+    private final String icon;
     private final String trigger;
     private final int cooldownSeconds;
     private final boolean enabled;
@@ -13,6 +14,7 @@ public final class KubeCommanderSkillDefinition {
                                          String displayName,
                                          String description,
                                          String stats,
+                                         String icon,
                                          String trigger,
                                          int cooldownSeconds,
                                          boolean enabled) {
@@ -20,6 +22,7 @@ public final class KubeCommanderSkillDefinition {
         this.displayName = displayName == null || displayName.isBlank() ? this.id : displayName;
         this.description = description == null ? "" : description;
         this.stats = stats == null ? "" : stats;
+        this.icon = icon == null ? "" : icon.trim();
         this.trigger = trigger == null || trigger.isBlank() ? "activate" : trigger.trim().toLowerCase();
         this.cooldownSeconds = Math.max(0, cooldownSeconds);
         this.enabled = enabled;
@@ -55,6 +58,14 @@ public final class KubeCommanderSkillDefinition {
 
     public String getStats() {
         return stats;
+    }
+
+    public String icon() {
+        return icon;
+    }
+
+    public String getIcon() {
+        return icon;
     }
 
     public String trigger() {

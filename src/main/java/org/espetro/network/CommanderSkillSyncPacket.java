@@ -43,7 +43,8 @@ public class CommanderSkillSyncPacket {
                 buf.readUtf(128),
                 buf.readUtf(128),
                 buf.readUtf(512),
-                buf.readUtf(512)
+                buf.readUtf(512),
+                buf.readUtf(256)
             ));
         }
         return new CommanderSkillSyncPacket(isCommander, cooldowns, skills);
@@ -62,6 +63,7 @@ public class CommanderSkillSyncPacket {
             buf.writeUtf(limit(skill.displayName(), 128), 128);
             buf.writeUtf(limit(skill.description(), 512), 512);
             buf.writeUtf(limit(skill.stats(), 512), 512);
+            buf.writeUtf(limit(skill.icon(), 256), 256);
         }
     }
 

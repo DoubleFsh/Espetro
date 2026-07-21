@@ -1,6 +1,5 @@
 package org.espetro.client.gui;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -175,14 +174,12 @@ public class ClassSelectScreen extends MutilScreen {
             graphics.fill(imageX, imageY, imageX + imageW, imageY + imageH, 0xD0101214);
 
             if (texture != null) {
-                RenderSystem.enableBlend();
-                RenderSystem.setShaderColor(1f, 1f, 1f, enabled ? 1f : 0.55f);
+                graphics.setColor(1f, 1f, 1f, enabled ? 1f : 0.55f);
                 // UV 宽高与虚拟纹理宽高相同，始终完整采样整张纹理；
                 // 源文件分辨率无需预先获知，并统一拉伸/缩放到固定卡片图片区。
                 graphics.blit(texture, imageX, imageY, imageW, imageH,
                     0f, 0f, imageW, imageH, imageW, imageH);
-                RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-                RenderSystem.disableBlend();
+                graphics.setColor(1f, 1f, 1f, 1f);
             }
 
             String prefix = selected ? "\u00a7a✓ " : enabled ? "\u00a7f" : "\u00a78";

@@ -233,6 +233,51 @@ public final class SupplyManager {
             : 1;
     }
 
+    /**
+     * 背包中 Espetro 建材补给的总点数（与存入 FOB 的 construction 点数同一体系）。
+     */
+    public int countConstructionPoints(ServerPlayer player) {
+        int total = 0;
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+            ItemStack stack = player.getInventory().getItem(slot);
+            if (stack.isEmpty() || getSupplyType(stack) != SupplyType.CONSTRUCTION) {
+                continue;
+            }
+            total += stack.getCount() * getPointsPerItem(stack);
+        }
+        return total;
+    }
+
+    /**
+     * 按点数从背包扣除 Espetro 建材补给。点数不足时不修改背包并返回 false。
+     * 按整件扣减（与存入 FOB 相同）；无法拆分单件点数。
+     */
+    public boolean consumeConstructionPoints(ServerPlayer player, int points) {
+        if (points <= 0) {
+            return true;
+        }
+        if (countConstructionPoints(player) < points) {
+            return false;
+        }
+        int remaining = points;
+        for (int slot = 0; slot < player.getInventory().getContainerSize() && remaining > 0; slot++) {
+            ItemStack stack = player.getInventory().getItem(slot);
+            if (stack.isEmpty() || getSupplyType(stack) != SupplyType.CONSTRUCTION) {
+                continue;
+            }
+            int pointsPerItem = getPointsPerItem(stack);
+            int consume = Math.min(stack.getCount(), (remaining + pointsPerItem - 1) / pointsPerItem);
+            if (consume <= 0) {
+                continue;
+            }
+            stack.shrink(consume);
+            remaining -= consume * pointsPerItem;
+        }
+        player.getInventory().setChanged();
+        player.inventoryMenu.broadcastChanges();
+        return true;
+    }
+
     private boolean matchesBlock(List<String> matchers, BlockState state) {
         if (matchers == null || matchers.isEmpty()) {
             return true;

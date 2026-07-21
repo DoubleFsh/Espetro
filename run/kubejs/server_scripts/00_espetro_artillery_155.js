@@ -1,5 +1,5 @@
 // Espetro 默认指挥官技能实现脚本：155火炮支援。
-// 本文件由 Espetro 首次启动时写入；火炮效果完全由 KubeJS server_scripts 实现。
+// 本文件由 Espetro 首次启动时写入；火炮效果完全由 KubeJS 原生方法实现。
 var EspetroArtilleryTasks = []
 var EspetroArtilleryTick = 0
 var EspetroArtilleryEntityId = 'superbwarfare:mortar_shell'
@@ -42,7 +42,7 @@ EspetroCommanderSkills.on('artillery_155', event => {
     secondBatchIntervalTicks: 4 * 20,
     secondBatchEntitiesPerWave: 4
   })
-  console.info('[Espetro] artillery_155 queued through KubeJS wrappers: ' + fired)
+  console.info('[Espetro] artillery_155 queued through KubeJS native API: ' + fired)
   return fired
 })
 
@@ -120,6 +120,7 @@ function espetroQueueArtilleryShot(cfg, delayTicks) {
   })
 }
 
+// 使用 KubeJS 原生方法生成炮击实体
 function espetroSpawnArtilleryEntity(cfg, spawnX, spawnY, spawnZ) {
   var projectile = cfg.level.createEntity(cfg.entityType)
   if (projectile == null) {
@@ -128,23 +129,13 @@ function espetroSpawnArtilleryEntity(cfg, spawnX, spawnY, spawnZ) {
   }
 
   projectile.setPosition(spawnX, spawnY, spawnZ)
-  espetroSetArtilleryMotion(projectile, 0, -cfg.downwardVelocity, 0)
+  projectile.setMotion(0, -cfg.downwardVelocity, 0)
   projectile.spawn()
   console.info('[Espetro] artillery_155 spawned ' + cfg.entity + ' at '
     + espetroCommandNumber(spawnX) + ', '
     + espetroCommandNumber(spawnY) + ', '
     + espetroCommandNumber(spawnZ))
   return true
-}
-
-function espetroSetArtilleryMotion(entity, motionX, motionY, motionZ) {
-  try {
-    entity.setMotion(motionX, motionY, motionZ)
-  } catch (error) {
-    entity.setMotionX(motionX)
-    entity.setMotionY(motionY)
-    entity.setMotionZ(motionZ)
-  }
 }
 
 function espetroArtilleryEntityType(id) {

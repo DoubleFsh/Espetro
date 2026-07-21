@@ -99,9 +99,12 @@ public class SquadActionPacket {
             if (result.team != null) {
                 TeamPackManager.getInstance().reconcileTeam(result.team);
                 NetworkManager.syncSquadsToTeam(result.team);
+                // 入队/离队后刷新部署界面职业人数（小队作用域与禁用态依赖 mySquadId）。
+                NetworkManager.sendUnifiedDeployScreen(player, -1);
             } else {
                 TeamPackManager.getInstance().syncTeamPackItem(player);
                 NetworkManager.sendSquadSync(player);
+                NetworkManager.sendUnifiedDeployScreen(player, -1);
             }
         });
         ctx.get().setPacketHandled(true);

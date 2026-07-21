@@ -93,8 +93,13 @@ public class BastionCommand {
         // 执行兵站选择
         boolean success = BastionSelectionPacket.handleBastionSelect(player, bastionId);
         if (success) {
-            // 战局中加入：部署完成后触发职业选择
-            onDeployComplete(player);
+            // Rally 冷却排队时仍保持 waiting，不触发“部署完成”。
+            if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+                onDeployComplete(player);
+            } else {
+                // 刷新 GUI 上的个人冷却 n/m
+                org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
+            }
             return 1;
         }
         return 0;

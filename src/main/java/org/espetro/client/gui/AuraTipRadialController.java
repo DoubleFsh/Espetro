@@ -11,13 +11,25 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.RadialActionPacket;
+import org.espetro.team.CommanderSkillManager;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Hold-key state machine for Espetro's AuraTip tactical radial.
+ *
+ * <p>设计约束：
+ * <ul>
+ *   <li>Overlay 活跃期间绝不调用 {@code RadialMenuRegistry.setMenus}、close/open Overlay。</li>
+ *   <li>菜单重建延迟到 Alt 已松开且 Overlay 已关闭后执行；每次关闭最多重建一次。</li>
+ *   <li>技能同步由服务端在入服/指挥官变更/技能激活时主动推送，不依赖首次 Alt 长按。</li>
+ *   <li>根菜单仅依据 {@code cachedIsCommander} 决定是否加入技能槽位，不以技能列表是否为空作为条件。</li>
+ *   <li>冷却值更新仅影响下次打开时的菜单内容，不触发 Overlay 内重建。</li>
+ * </ul>
  */
 public final class AuraTipRadialController {
 
@@ -27,17 +39,17 @@ public final class AuraTipRadialController {
     private static final ResourceLocation ROOT_MENU = id("tactical_root");
     private static final ResourceLocation DEPLOY_MENU = id("tactical_deploy");
     private static final ResourceLocation LOGISTICS_MENU = id("tactical_logistics");
+    private static final ResourceLocation SKILLS_MENU = id("tactical_skills");
     private static final ResourceLocation OPEN_SUBMENU_ACTION = id("open_tactical_submenu");
     private static final ResourceLocation EXECUTE_ACTION = id("execute_tactical_action");
+    private static final ResourceLocation SKILL_ACTIVATE_ACTION = id("skill_activate");
 
-    private static final ResourceLocation RADIO =
-        id("textures/gui/squad/radio.png");
-    private static final ResourceLocation RALLY =
-        id("textures/gui/squad/rally.png");
-    private static final ResourceLocation CONSTRUCTION =
-        id("textures/gui/squad/construction_supply.png");
-    private static final ResourceLocation AMMO =
-        id("textures/gui/squad/ammo_supply.png");
+    private static final ResourceLocation RADIO = id("textures/gui/squad/radio.png");
+    private static final ResourceLocation RALLY = id("textures/gui/squad/rally.png");
+    private static final ResourceLocation CONSTRUCTION = id("textures/gui/squad/construction_supply.png");
+    private static final ResourceLocation AMMO = id("textures/gui/squad/ammo_supply.png");
+    private static final ResourceLocation COMMAND_ICON = id("textures/gui/commander_skills/command.png");
+    private static final ResourceLocation UNAVAILABLE_ICON = id("textures/gui/commander_skills/unavailable.png");
 
     private static boolean initialized;
     private static boolean keyWasDown;
@@ -46,6 +58,24 @@ public final class AuraTipRadialController {
     private static boolean consumedUntilRelease;
     private static int heldTicks;
     private static ResourceLocation pendingMenu;
+
+    // === 已确认的技能缓存（仅在客户端线程中读写） ===
+    private static boolean cachedIsCommander;
+    private static boolean hasSkillSnapshot;
+    private static final Map<String, Integer> cachedCooldowns = new HashMap<>();
+    private static final List<CommanderSkillManager.SkillView> cachedSkills = new ArrayList<>();
+    /** 上次 rebuildMenus 时使用的签名；相同签名不重建 */
+    private static String lastMenuSignature = "";
+
+    // === 网络线程写入的待确认数据 ===
+    private static volatile boolean skillsDirty;
+    private static volatile boolean pendingIsCommander;
+    private static volatile boolean pendingHasSnapshot;
+    private static final Map<String, Integer> pendingCooldowns = new HashMap<>();
+    private static final List<CommanderSkillManager.SkillView> pendingSkills = new ArrayList<>();
+
+    /** 是否有待延迟执行的菜单重建 */
+    private static boolean pendingRebuild;
 
     private AuraTipRadialController() {
     }
@@ -61,6 +91,7 @@ public final class AuraTipRadialController {
             pendingMenu = switch (menu) {
                 case "deploy" -> DEPLOY_MENU;
                 case "logistics" -> LOGISTICS_MENU;
+                case "skills" -> SKILLS_MENU;
                 default -> null;
             };
             submenuActive = false;
@@ -78,19 +109,114 @@ public final class AuraTipRadialController {
             submenuActive = false;
             pendingMenu = null;
         });
+        Actions.register(SKILL_ACTIVATE_ACTION, params -> {
+            String skillId = params.getString("skillId", "");
+            if (skillId.isEmpty()) {
+                return;
+            }
+            NetworkManager.sendCommanderSkillActivate(skillId);
+            consumedUntilRelease = true;
+            ownsOverlay = false;
+            submenuActive = false;
+            pendingMenu = null;
+        });
 
-        RadialMenuRegistry.setMenus(OWNER, List.of(
-            rootMenu(),
-            deployMenu(),
-            logisticsMenu()
-        ));
+        rebuildMenus();
     }
+
+    // ==================== 技能同步 ====================
+
+    /**
+     * 由 ClientPacketHandlers 在收到 CommanderSkillSyncPacket 时调用（网络线程）。
+     * 仅存储待确认数据并标记 dirty，不修改菜单，不触发 Overlay 操作。
+     */
+    public static void updateSkills(boolean isCommander, Map<String, Integer> cooldowns,
+                                    List<CommanderSkillManager.SkillView> skills) {
+        pendingIsCommander = isCommander;
+        pendingHasSnapshot = true;
+        synchronized (pendingCooldowns) {
+            pendingCooldowns.clear();
+            if (cooldowns != null) {
+                pendingCooldowns.putAll(cooldowns);
+            }
+        }
+        synchronized (pendingSkills) {
+            pendingSkills.clear();
+            if (skills != null) {
+                pendingSkills.addAll(skills);
+            }
+        }
+        skillsDirty = true;
+    }
+
+    /**
+     * 客户端线程中消费待确认的技能数据。
+     * 仅在内容签名变化时标记 {@code pendingRebuild}，不直接重建。
+     */
+    private static void flushSkillUpdate() {
+        if (!skillsDirty) {
+            return;
+        }
+        skillsDirty = false;
+
+        cachedIsCommander = pendingIsCommander;
+        hasSkillSnapshot = pendingHasSnapshot;
+        synchronized (pendingCooldowns) {
+            cachedCooldowns.clear();
+            cachedCooldowns.putAll(pendingCooldowns);
+        }
+        synchronized (pendingSkills) {
+            cachedSkills.clear();
+            cachedSkills.addAll(pendingSkills);
+        }
+
+        String newSig = computeSignature();
+        if (!newSig.equals(lastMenuSignature)) {
+            if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) {
+                pendingRebuild = true;
+            } else {
+                rebuildMenus();
+            }
+        }
+    }
+
+    /**
+     * 计算当前菜单内容签名：isCommander + 技能 ID 列表 + 每个技能的冷却秒数。
+     * 冷却值变化也会触发下次打开时的重建（但不会在 Overlay 活跃期间重建）。
+     */
+    private static String computeSignature() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(cachedIsCommander ? '1' : '0');
+        sb.append('|');
+        for (CommanderSkillManager.SkillView skill : cachedSkills) {
+            sb.append(skill.id()).append(':')
+              .append(cachedCooldowns.getOrDefault(skill.id(), 0)).append(',');
+        }
+        return sb.toString();
+    }
+
+    // ==================== 菜单构建 ====================
+
+    private static void rebuildMenus() {
+        lastMenuSignature = computeSignature();
+        List<cc.sighs.auratip.data.RadialMenuData> menus = new ArrayList<>();
+        menus.add(rootMenu());
+        menus.add(deployMenu());
+        menus.add(logisticsMenu());
+        menus.add(skillsMenu());
+        RadialMenuRegistry.setMenus(OWNER, menus);
+    }
+
+    // ==================== Tick ====================
 
     public static void tick(Minecraft minecraft, KeyMapping key) {
         if (!initialized || minecraft == null || key == null || minecraft.player == null) {
             reset(false);
             return;
         }
+
+        // 客户端线程中消费网络线程的技能更新
+        flushSkillUpdate();
 
         boolean down = key.isDown();
         if (!down) {
@@ -100,6 +226,8 @@ public final class AuraTipRadialController {
             keyWasDown = false;
             heldTicks = 0;
             consumedUntilRelease = false;
+            // 轮盘关闭后，应用待重建的菜单（最多一次）
+            tryApplyPendingRebuild();
             return;
         }
 
@@ -110,6 +238,7 @@ public final class AuraTipRadialController {
         if (minecraft.screen != null) {
             closeOwnedOverlay();
             heldTicks = 0;
+            tryApplyPendingRebuild();
             return;
         }
 
@@ -135,6 +264,18 @@ public final class AuraTipRadialController {
             submenuActive = false;
         }
     }
+
+    /**
+     * Overlay 已关闭时执行一次延迟重建。
+     */
+    private static void tryApplyPendingRebuild() {
+        if (pendingRebuild && !ownsOverlay && !RadialMenuOverlay.INSTANCE.isActive()) {
+            pendingRebuild = false;
+            rebuildMenus();
+        }
+    }
+
+    // ==================== Overlay 生命周期 ====================
 
     private static void finishSelection(Minecraft minecraft) {
         if (!ownsOverlay) {
@@ -176,15 +317,22 @@ public final class AuraTipRadialController {
         }
     }
 
+    // ==================== 菜单数据 ====================
+
     private static cc.sighs.auratip.data.RadialMenuData rootMenu() {
-        return base(ROOT_MENU)
+        var builder = base(ROOT_MENU)
             .slot("espetro.deploy", RADIO,
                 Actions.script(OPEN_SUBMENU_ACTION, Map.of("menu", "deploy")),
                 Component.translatable("radial.espetro.deploy"), "#FFD5B25C")
             .slot("espetro.logistics", CONSTRUCTION,
                 Actions.script(OPEN_SUBMENU_ACTION, Map.of("menu", "logistics")),
-                Component.translatable("radial.espetro.logistics"), "#FF6EA07A")
-            .build();
+                Component.translatable("radial.espetro.logistics"), "#FF6EA07A");
+        if (cachedIsCommander) {
+            builder = builder.slot("espetro.skills", COMMAND_ICON,
+                Actions.script(OPEN_SUBMENU_ACTION, Map.of("menu", "skills")),
+                Component.translatable("radial.espetro.skills"), "#FFD5A25C");
+        }
+        return builder.build();
     }
 
     private static cc.sighs.auratip.data.RadialMenuData deployMenu() {
@@ -204,6 +352,55 @@ public final class AuraTipRadialController {
             .slot("espetro.fob_status", AMMO, action(RadialActionPacket.Action.FOB_STATUS),
                 Component.translatable("radial.espetro.fob_status"), "#FF6B9DB5")
             .build();
+    }
+
+    private static cc.sighs.auratip.data.RadialMenuData skillsMenu() {
+        var builder = base(SKILLS_MENU);
+
+        if (!hasSkillSnapshot) {
+            builder = builder.slot("espetro.skills_loading", UNAVAILABLE_ICON,
+                Actions.script(EXECUTE_ACTION, Map.of("action", "FOB_STATUS")),
+                Component.literal("§7加载中…"), "#FF4A3030");
+            return builder.build();
+        }
+        if (!cachedIsCommander) {
+            builder = builder.slot("espetro.not_commander", UNAVAILABLE_ICON,
+                Actions.script(EXECUTE_ACTION, Map.of("action", "FOB_STATUS")),
+                Component.literal("§c你不是指挥官"), "#FF4A3030");
+            return builder.build();
+        }
+        if (cachedSkills.isEmpty()) {
+            builder = builder.slot("espetro.no_skills", UNAVAILABLE_ICON,
+                Actions.script(EXECUTE_ACTION, Map.of("action", "FOB_STATUS")),
+                Component.literal("§7暂无已注册技能"), "#FF4A3030");
+            return builder.build();
+        }
+
+        for (CommanderSkillManager.SkillView skill : cachedSkills) {
+            int cooldown = cachedCooldowns.getOrDefault(skill.id(), 0);
+            boolean onCooldown = cooldown > 0;
+            String color = onCooldown ? "#FF4A3030" : "#FFD5B25C";
+            String label = onCooldown
+                ? skill.displayName() + " §7(" + cooldown + "s)"
+                : skill.displayName();
+            ResourceLocation icon = resolveSkillIcon(skill);
+            builder = builder.slot("espetro.skill." + skill.id(), icon,
+                Actions.script(SKILL_ACTIVATE_ACTION, Map.of("skillId", skill.id())),
+                Component.literal(label), color);
+        }
+        return builder.build();
+    }
+
+    /**
+     * 解析技能图标资源位置。无效或缺失时回退 command.png。
+     */
+    private static ResourceLocation resolveSkillIcon(CommanderSkillManager.SkillView skill) {
+        String raw = skill.icon();
+        if (raw == null || raw.isBlank()) {
+            return COMMAND_ICON;
+        }
+        ResourceLocation loc = ResourceLocation.tryParse(raw.trim());
+        return loc != null ? loc : COMMAND_ICON;
     }
 
     private static RadialMenuBuilder base(ResourceLocation menuId) {

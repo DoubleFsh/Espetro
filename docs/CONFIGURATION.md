@@ -228,10 +228,12 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 
 | 字段 | 内置值 | 无文件回退 | 说明 |
 | --- | ---: | ---: | --- |
-| `cooldown_seconds` | 800 | 800 | 玩家建造兵站冷却 |
-| `required_planks` | 0 | 640 | 建造所需任意木板数；0 为不消耗 |
+| `cooldown_seconds` | 800 | 800 | 玩家建造兵站冷却的**默认值**；可被 `logistics.radio.cooldown_seconds` 覆盖（≥0 时） |
+| `required_planks` | 0 | 640 | **补给建材点数**默认值（非任意原版木板）；可被 `logistics.radio.required_planks` 覆盖；0 为不消耗 |
 | `armor_stand_health` | 5 | 5 | 核心生命值，解析时至少为 1 |
 | `destroy_troop_penalty` | 20 | 20 | 兵站被摧毁时本方扣兵力 |
+
+放置阶段/权限/排斥半径/队友人数等见 [LOGISTICS_CONFIG.md](LOGISTICS_CONFIG.md) 的 `logistics.radio`。
 
 弹药补给冷却固定为 5 分钟，不在此 JSON 中配置。
 
@@ -240,12 +242,34 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 ```json
 {
   "team_pack": {
-    "cooldown_seconds": 300
+    "cooldown_seconds": 120,
+    "durability": 1,
+    "break_speed_multiplier": 8.0,
+    "teammate_count": 0,
+    "teammate_radius": 8.0,
+    "enemy_placement_radius": 50.0,
+    "enemy_burn_radius": 30.0,
+    "wave_seconds": 60,
+    "minimum_respawn_seconds": 20
   }
 }
 ```
 
-`cooldown_seconds` 是每个小队部署队包的冷却，最小为 0。队包只允许小队队长放置，使用带 Espetro NBT 标记的信标物品。
+| 字段 | 默认值 | 说明 |
+| --- | ---: | --- |
+| `cooldown_seconds` | 120 | 每个小队部署队包的冷却，最小为 0 |
+| `durability` | 1 | Rally 耐久 |
+| `break_speed_multiplier` | 8.0 | 破坏速度倍率 |
+| `teammate_count` | 0 | 放置者之外所需的附近同小队队员人数；0 表示不要求队员 |
+| `teammate_radius` | 8.0 | 以实际放置点为中心检测同小队队员的半径，最小为 0 |
+| `enemy_placement_radius` | 50.0 | 附近有敌人时禁止放置 |
+| `enemy_burn_radius` | 30.0 | 敌人进入后烧毁 Rally |
+| `wave_seconds` | 60 | 小队共享波次周期；个人就绪时刻对齐到该时钟 |
+| `minimum_respawn_seconds` | 20 | 死亡后最短个人等待，再与波次对齐 |
+
+队包只允许**小队队长**通过 **Alt 轮盘 → 部署 Rally** 放置（不要求背包有 Rally 物品；手持信标放置不再注册为队包）。附近人数只统计同维度、存活且非旁观模式的玩家。个人复活冷却固定为 `wave_seconds`（部署落地后立刻重新计满该秒数，不随共享波次时钟缩短）。
+
+主部署 GUI 中 Rally 显示的是**当前玩家**的个人就绪倒计时（选中后排队 `spawnAt`），客户端每秒更新标签且不重建整页布局。若玩家在排队期间改选 HAB/原部署点/前哨并成功部署，服务端会取消其 Rally 队列，冷却结束后不会再被拉回队包。
 
 ## `outposts.json`
 
@@ -386,7 +410,10 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | --- | --- | --- |
 | `name`, `description`, `role` | String | GUI 信息 |
 | `icon` | String | 可选；`assets/espetro/textures/gui/roles/` 下不带扩展名的职业图标短名 |
-| `maxPlayers` | Integer | 职业总人数上限，必须大于 0；按整个 `ATTACK`/`DEFEND` 队伍统计，不按小队拆分 |
+| `maxPlayers` | Integer | 必须大于 0。默认（`team_count: false`）为编制/队伍总上限；`team_count: true` 时为**每个班组小队**上限 |
+| `team_count` | Boolean | 默认 `false`；也接受 `teamCount`。`true` 时人数在班组小队内统计，未入小队不可选该职业 |
+| `max_per_squad` | Integer | 默认 0（不限）。仅 `team_count: false` 时生效：每个班组小队内该职业上限，必须 `≤ maxPlayers`；未入小队只受总限 |
+| `strict_count` | Boolean | 变体计数模式，默认 `true`；也接受别名 `strictCount`。详见下方说明 |
 | `troopValue` | Integer | 0 或缺失时回退 1；阵亡扣兵力 |
 | `healthBonus` | Integer | 默认 0 |
 | `speedBonus` | Float | 默认 0 |
@@ -407,7 +434,25 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `resupply.ammo_cost` | Integer | 此变体单次有效补给消耗；缺失时使用 `logistics.json` 默认值 |
 
 显式配置 `variants` 时，每个变体都是独立完整配装，装备和补给不会从职业节点或其他变体继承。
-所有变体的 `maxPlayers` 之和必须**严格等于**职业的 `maxPlayers`；任何变体无效、人数不相等，都会在启动或 `/reload` 时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
+
+#### `strict_count` 行为说明
+
+- **`strict_count: true`**（默认）：每个变体有**独立**人数上限，但选择任一变体时仍会先占用**父职业**一个名额（父职业 `maxPlayers` / 小队父职业上限）。变体 `maxPlayers` 之和必须**严格等于**职业的 `maxPlayers`；不满足时拒绝加载整个编制。非 `team_count` 时变体人数在队伍记分板中独立维护；界面显示 `[当前/上限]`。
+- **`strict_count: false`**：变体仅代表不同配装，**没有**独立人数名额，只计父职业人数。不检查变体满员、不维护变体记分板，不要求变体 `maxPlayers` 总和等于职业 `maxPlayers`。`playerVariants` 仍记录以供装备、补给使用。界面变体行仅显示选择人数，不标红。
+
+缺失 `strict_count` 时默认 `true`，确保旧数据包兼容。
+
+#### `team_count` / `max_per_squad` 行为说明
+
+- **共性（入队门槛）**：**所有职业**均须先加入班组小队后才能选择；未入队时服务端返回 `REQUIRES_SQUAD`，界面禁用全部职业按钮。
+- **未入队 UI**：`team_count: true` 的按钮标红且**不显示** `[人数/上限]`；其它职业仍显示 `[当前选择人数/编制总上限]`，按钮禁用。
+- **已入队 UI**：`team_count: true` 显示 `[小队 当前/小队上限]` 且可点（未满时）；其它职业显示 `[队伍当前/编制总上限]`（若有 `max_per_squad` 可附加 `·小队 a/b`）。
+- **`team_count: true`**：`maxPlayers` 为每个班组小队内**父职业**上限；任意变体都计入该上限。只扫本小队，**忽略编制总限与队伍记分板**。离队取消该职业。`max_per_squad` 忽略。
+- **`team_count: false`（默认）**：父职业 `maxPlayers` 为整支攻/守队伍总限。可选 `max_per_squad`。`max_per_squad ≤ maxPlayers` 即可。
+- **变体**：无论 `strict_count` 如何，**选变体 = 选父职业的一个席位**；`strict_count: true` 时再叠加变体自身上限。
+
+
+任何变体无效、（`strict_count: true` 时）人数不相等，都会在启动或 `/reload` 时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
 
 兼容旧 JSON：若完全没有 `variants`，职业节点原有的 `commands`、`equipment`、`wearable_equipment`、`auto_equip_wearables` 和 `resupply` 会被合成为一个隐式 `default` 变体，人数等于职业上限。若显式配置了 `variants`，它不可为空，职业节点上的这些旧装备字段会被忽略并警告。
 

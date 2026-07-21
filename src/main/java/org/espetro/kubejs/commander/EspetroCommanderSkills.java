@@ -189,7 +189,8 @@ public final class EspetroCommanderSkills {
                 definition.description(),
                 definition.stats().isBlank()
                     ? "§8KubeJS | 冷却: " + definition.cooldownSeconds() + "秒"
-                    : definition.stats()
+                    : definition.stats(),
+                definition.icon()
             ));
         }
         return views;
@@ -200,6 +201,7 @@ public final class EspetroCommanderSkills {
             .displayName("无人机侦测")
             .description("短时间高亮指挥官附近敌方玩家")
             .stats("§8高亮半径: 100格 | 持续: 10秒 | 冷却: 60秒")
+            .icon("espetro:textures/gui/commander_skills/drone_detection.png")
             .activate()
             .cooldownSeconds(60)
             .register();
@@ -208,6 +210,7 @@ public final class EspetroCommanderSkills {
             .displayName("载具补给站")
             .description("在指挥官当前位置部署载具补给站")
             .stats("§8生成载具补给实体和方块 | 冷却: 120秒")
+            .icon("espetro:textures/gui/commander_skills/vehicle_supply_station.png")
             .activate()
             .cooldownSeconds(120)
             .register();
@@ -216,6 +219,7 @@ public final class EspetroCommanderSkills {
             .displayName("155火炮支援")
             .description("打开 ESPoints 战术地图选择炮击坐标，再交给 KubeJS 执行火力效果")
             .stats("§8ESPoints地图选点 | KubeJS两批实体炮击 | 冷却: 180秒")
+            .icon("espetro:textures/gui/commander_skills/artillery_155.png")
             .targetMap()
             .cooldownSeconds(180)
             .register();

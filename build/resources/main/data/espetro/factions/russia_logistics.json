@@ -86,11 +86,14 @@
   },
   "classes": {
     "RUS_LOGI_CREW": {
+      "strict_count": true,
       "name": "载具组员",
       "icon": "crewman",
       "description": "运输载具驾驶员与操作员",
       "role": "载具操作",
       "maxPlayers": 6,
+      "team_count": false,
+      "max_per_squad": 2,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -126,11 +129,14 @@
       }
     },
     "RUS_LOGI_ARTILLERY": {
+      "strict_count": true,
       "name": "炮兵",
       "icon": "sapper",
       "description": "远程火力支援",
       "role": "炮兵支援",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -172,11 +178,14 @@
       }
     },
     "RUS_LOGI_GRENADIER": {
+      "strict_count": true,
       "name": "榴弹兵",
       "icon": "grenadier",
       "description": "榴弹远程压制",
       "role": "榴弹支援",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -211,11 +220,14 @@
       }
     },
     "RUS_LOGI_SQUADMG": {
+      "strict_count": true,
       "name": "班组机枪",
       "icon": "automatic_rifleman",
       "description": "班组压制火力",
       "role": "火力压制",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -251,11 +263,14 @@
       }
     },
     "RUS_LOGI_MARKSMAN": {
+      "strict_count": true,
       "name": "精确射手",
       "icon": "marksman",
       "description": "远程精确打击",
       "role": "精确射击",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -290,11 +305,14 @@
       }
     },
     "RUS_LOGI_ANTITANK": {
+      "strict_count": true,
       "name": "反坦克兵",
       "icon": "light_at",
       "description": "反装甲作战",
       "role": "反装甲",
       "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
       "troopValue": 2,
       "variants": {
         "default": {
@@ -335,11 +353,14 @@
       }
     },
     "RUS_LOGI_ASSAULT": {
+      "strict_count": true,
       "name": "自动步枪",
       "icon": "rifleman",
       "description": "标准突击步兵",
       "role": "突击",
       "maxPlayers": 9,
+      "team_count": false,
+      "max_per_squad": 4,
       "troopValue": 1,
       "variants": {
         "default": {

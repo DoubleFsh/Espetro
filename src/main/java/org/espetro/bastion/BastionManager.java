@@ -140,17 +140,34 @@ public class BastionManager {
     }
 
     /**
-     * 获取冷却时间（秒）
+     * 获取 bastion.json 中的冷却时间（秒）。放置请用 {@link #getEffectiveRadioCooldownSeconds()}。
      */
     public int getCooldownSeconds() {
         return cooldownSeconds;
     }
 
     /**
-     * 获取所需木板数量
+     * 获取 bastion.json 中的所需建材点数。放置请用 {@link #getEffectiveRadioRequiredConstruction()}。
      */
     public int getRequiredPlanks() {
         return requiredPlanks;
+    }
+
+    /**
+     * Radio 放置冷却：logistics.radio.cooldown_seconds ≥ 0 时覆盖，否则 bastion.json。
+     */
+    public int getEffectiveRadioCooldownSeconds() {
+        int configured = org.espetro.logistics.LogisticsConfig.get().getRadio().cooldownSeconds;
+        return configured >= 0 ? configured : cooldownSeconds;
+    }
+
+    /**
+     * Radio 放置所需 Espetro 建材点数：logistics.radio.required_planks ≥ 0 时覆盖，否则 bastion.json。
+     * 与补给站 construction 点数同一体系（非任意原版木板）。
+     */
+    public int getEffectiveRadioRequiredConstruction() {
+        int configured = org.espetro.logistics.LogisticsConfig.get().getRadio().requiredPlanks;
+        return configured >= 0 ? Math.max(0, configured) : Math.max(0, requiredPlanks);
     }
 
     /**
@@ -185,7 +202,7 @@ public class BastionManager {
     public BastionData createBastion(ServerLevel level, BlockPos pos, String team, String name) {
         if (!hasBastionCapacity(team)) {
             Espetro.LOGGER.warn("队伍 {} 的生效兵站数量已达到上限 {}，拒绝创建: {} ({})",
-                team, MAX_BASTIONS, name, pos);
+                team, getBastionLimitPerTeam(), name, pos);
             return null;
         }
 
@@ -590,7 +607,13 @@ public class BastionManager {
      * 指定队伍是否还能建造兵站。上限只统计当前场上同队伍生效兵站。
      */
     public boolean hasBastionCapacity(String team) {
-        return getActiveBastionCount(team) < MAX_BASTIONS;
+        return getActiveBastionCount(team) < getBastionLimitPerTeam();
+    }
+
+    /** Radio 配置可覆盖默认的每队兵站上限。 */
+    public int getBastionLimitPerTeam() {
+        int configured = LogisticsConfig.get().getRadio().maxActivePerTeam;
+        return configured >= 0 ? configured : MAX_BASTIONS;
     }
 
     /**
@@ -806,13 +829,17 @@ public class BastionManager {
      * @return 剩余冷却秒数，0表示无冷却
      */
     public int getBastionCooldownRemaining(UUID playerId) {
+        return getBastionCooldownRemaining(playerId, cooldownSeconds);
+    }
+
+    public int getBastionCooldownRemaining(UUID playerId, int effectiveCooldownSeconds) {
         Long lastUse = bastionCooldowns.get(playerId);
         if (lastUse == null) {
             return 0;
         }
 
         long elapsed = System.currentTimeMillis() - lastUse;
-        int remaining = (int) ((cooldownSeconds * 1000L - elapsed) / 1000L);
+        int remaining = (int) ((Math.max(0, effectiveCooldownSeconds) * 1000L - elapsed) / 1000L);
         return Math.max(0, remaining);
     }
 
@@ -829,7 +856,12 @@ public class BastionManager {
      */
     @Nullable
     public String canBuildBastion(UUID playerId) {
-        int remaining = getBastionCooldownRemaining(playerId);
+        return canBuildBastion(playerId, cooldownSeconds);
+    }
+
+    @Nullable
+    public String canBuildBastion(UUID playerId, int effectiveCooldownSeconds) {
+        int remaining = getBastionCooldownRemaining(playerId, effectiveCooldownSeconds);
         if (remaining > 0) {
             return "§c兵站建造冷却中！请等待 " + remaining + " 秒后再试。";
         }
@@ -927,7 +959,8 @@ public class BastionManager {
             return false;
         }
 
-        // 清除等待状态
+        // 改选原部署点：取消未完成的 Rally 波次队列。
+        org.espetro.team.TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
         clearWaiting(player.getUUID());
 
         // 传送玩家到原部署点。该坐标由队伍复活点 JSON 配置保存，不再因目标区块未加载而取消。

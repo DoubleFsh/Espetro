@@ -50,6 +50,7 @@ public final class EspetroKubeJSDefaultScripts {
           .displayName('无人机侦测')
           .description('短时间高亮指挥官附近敌方玩家')
           .stats('§8高亮半径: 100格 | 持续: 10秒 | 冷却: 60秒')
+          .icon('espetro:textures/gui/commander_skills/drone_detection.png')
           .activate()
           .cooldownSeconds(60)
           .register()
@@ -62,6 +63,7 @@ public final class EspetroKubeJSDefaultScripts {
           .displayName('载具补给站')
           .description('在指挥官当前位置部署载具补给站')
           .stats('§8生成载具补给实体和方块 | 冷却: 120秒')
+          .icon('espetro:textures/gui/commander_skills/vehicle_supply_station.png')
           .activate()
           .cooldownSeconds(120)
           .register()
@@ -74,6 +76,7 @@ public final class EspetroKubeJSDefaultScripts {
           .displayName('155火炮支援')
           .description('打开 ESPoints 战术地图选择炮击坐标，再交给 KubeJS 执行火力效果')
           .stats('§8ESPoints地图选点 | KubeJS两批实体炮击 | 冷却: 180秒')
+          .icon('espetro:textures/gui/commander_skills/artillery_155.png')
           .targetMap()
           .cooldownSeconds(180)
           .register()
@@ -117,11 +120,12 @@ public final class EspetroKubeJSDefaultScripts {
 
     private static final String DEFAULT_VEHICLE_SUPPLY_STATION_SERVER_SCRIPT = """
         // Espetro 默认指挥官技能实现脚本：载具补给站。
-        // 本文件由 Espetro 首次启动时写入；效果使用 KubeJS 封装的原版对象方法实现。
+        // 本文件由 Espetro 首次启动时写入；效果使用 KubeJS 原生方法实现。
 
         EspetroCommanderSkills.on('vehicle_supply_station', event => {
           const team = event.team()
           const level = event.level()
+          const commander = event.commander()
           const x = event.blockX()
           const y = event.blockY()
           const z = event.blockZ()
@@ -131,64 +135,39 @@ public final class EspetroKubeJSDefaultScripts {
             return false
           }
 
-          const barrel = level.getBlock(x + 2, y, z)
-          if (!espetroSupplyIsReplaceable(barrel)) {
-            event.tell('§c载具补给站方块位置已有方块: ' + (x + 2) + ', ' + y + ', ' + z)
+          const barrelPos = [x + 2, y, z]
+          const barrel = level.getBlock(barrelPos[0], barrelPos[1], barrelPos[2])
+          const barrelId = String(barrel.getId())
+          if (barrelId !== 'minecraft:air' && barrelId !== 'minecraft:cave_air' && barrelId !== 'minecraft:void_air') {
+            event.tell('§c载具补给站方块位置已有方块: ' + barrelPos[0] + ', ' + barrelPos[1] + ', ' + barrelPos[2])
             return false
           }
+
+          // 使用 KubeJS 原生方法放置方块
           barrel.set(Utils.id('minecraft', 'barrel'))
 
-          const spawned = espetroSupplySummonEntity(level, 'minecraft:armor_stand', x + 0.5, y, z + 0.5, team)
-          if (!spawned) {
+          // 使用 KubeJS 原生方法创建实体
+          var entityType = Utils.id('minecraft', 'armor_stand')
+          var entity = level.createEntity(entityType)
+          if (entity == null) {
             barrel.set(Utils.id('minecraft', 'air'))
             event.tell('§c载具补给站实体创建失败。')
             return false
           }
+
+          entity.setPosition(x + 0.5, y, z + 0.5)
+          entity.setCustomName(Component.literal('载具补给站'))
+          entity.setCustomNameVisible(true)
+          entity.addTag('espetro_vehicle_supply_station')
+          entity.addTag('espetro_vehicle_supply_station_team_' + team)
+          entity.addTag('espetro_team_' + team)
+          entity.addTag('espetro_commander_skill')
+          entity.spawn()
+
           event.tell('§a载具补给站已部署！位置: ' + x + ', ' + y + ', ' + z)
-          console.info('[Espetro] vehicle_supply_station deployed through KubeJS wrappers')
+          console.info('[Espetro] vehicle_supply_station deployed via KubeJS native API at ' + x + ', ' + y + ', ' + z)
           return true
         })
-
-        function espetroSupplySummonEntity(level, id, x, y, z, team) {
-          var tags = [
-            'espetro_vehicle_supply_station',
-            'espetro_vehicle_supply_station_team_' + team,
-            'espetro_team_' + team,
-            'espetro_commander_skill'
-          ]
-          var command = 'summon ' + id + ' '
-            + espetroSupplyCommandNumber(x) + ' '
-            + espetroSupplyCommandNumber(y) + ' '
-            + espetroSupplyCommandNumber(z) + ' '
-            + "{CustomName:'{\\"text\\":\\"载具补给站\\"}',CustomNameVisible:1b,Tags:" + espetroSupplyNbtStringList(tags) + '}'
-          var result = level.runCommandSilent(command)
-          if (result <= 0) {
-            console.warn('[Espetro] vehicle_supply_station summon command failed: ' + command)
-          }
-          return result > 0
-        }
-
-        function espetroSupplyNbtStringList(values) {
-          var result = []
-          for (var i = 0; i < values.length; i++) {
-            result.push(espetroSupplyNbtString(values[i]))
-          }
-          return '[' + result.join(',') + ']'
-        }
-
-        function espetroSupplyNbtString(value) {
-          return '"' + String(value).replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"') + '"'
-        }
-
-        function espetroSupplyCommandNumber(value) {
-          const number = Number(value)
-          return Number.isFinite(number) ? number.toFixed(3) : '0.000'
-        }
-
-        function espetroSupplyIsReplaceable(block) {
-          const id = String(block.getId())
-          return id === 'minecraft:air' || id === 'minecraft:cave_air' || id === 'minecraft:void_air'
-        }
         """;
 
     private static final String DEFAULT_ARTILLERY_155_SERVER_SCRIPT = """
@@ -308,6 +287,7 @@ public final class EspetroKubeJSDefaultScripts {
             commander: event.commander(),
             skillId: event.skillId(),
             entity: entity,
+            entityType: espetroArtilleryEntityType(entity),
             centerX: espetroNumberValue(espetroTargetCoordinate(event, 'x', 0), 0),
             centerZ: espetroNumberValue(espetroTargetCoordinate(event, 'z', 0), 0),
             targetY: espetroNumberValue(espetroTargetCoordinate(event, 'y', 0), 0),
@@ -363,35 +343,59 @@ public final class EspetroKubeJSDefaultScripts {
           })
         }
 
+        // 使用 KubeJS 原生方法生成炮击实体
         function espetroSpawnArtilleryEntity(cfg, spawnX, spawnY, spawnZ) {
-          var command = 'summon ' + cfg.entity + ' '
-            + espetroCommandNumber(spawnX) + ' '
-            + espetroCommandNumber(spawnY) + ' '
-            + espetroCommandNumber(spawnZ) + ' {Motion:[0.0d,'
-            + espetroNbtDouble(-cfg.downwardVelocity) + ',0.0d]}'
-          var result = cfg.level.runCommandSilent(command)
-          if (result <= 0) {
-            console.warn('[Espetro] artillery_155 summon command failed: ' + command)
-            espetroDebugTell(cfg, '§c/summon 失败: ' + command)
+          var projectile = cfg.level.createEntity(cfg.entityType)
+          if (projectile == null) {
+            console.warn('[Espetro] artillery_155 could not create entity: ' + cfg.entity)
+            espetroDebugTell(cfg, '§c实体创建失败: ' + cfg.entity)
             return false
           }
 
-          console.info('[Espetro] artillery_155 summoned ' + cfg.entity + ' at '
+          projectile.setPosition(spawnX, spawnY, spawnZ)
+          espetroSetArtilleryMotion(projectile, 0, -cfg.downwardVelocity, 0)
+          projectile.spawn()
+
+          console.info('[Espetro] artillery_155 spawned ' + cfg.entity + ' at '
             + espetroCommandNumber(spawnX) + ', '
             + espetroCommandNumber(spawnY) + ', '
             + espetroCommandNumber(spawnZ))
-          espetroDebugTell(cfg, '/summon 返回=' + result + ' 坐标='
+          espetroDebugTell(cfg, '生成 ' + cfg.entity + ' 坐标='
             + espetroCommandNumber(spawnX) + ', '
             + espetroCommandNumber(spawnY) + ', '
             + espetroCommandNumber(spawnZ))
-          var verify = cfg.level.runCommandSilent('execute positioned '
-            + espetroCommandNumber(spawnX) + ' '
-            + espetroCommandNumber(spawnY) + ' '
-            + espetroCommandNumber(spawnZ)
-            + ' if entity @e[type=' + cfg.entity + ',distance=..4]')
-          console.info('[Espetro] artillery_155 summon verify near spawn: ' + verify)
-          espetroDebugTell(cfg, '附近炮弹校验=' + verify)
           return true
+        }
+
+        function espetroSetArtilleryMotion(entity, motionX, motionY, motionZ) {
+          try {
+            entity.setMotion(motionX, motionY, motionZ)
+          } catch (error) {
+            try {
+              entity.setMotionX(motionX)
+              entity.setMotionY(motionY)
+              entity.setMotionZ(motionZ)
+            } catch (ignored) {
+              console.warn('[Espetro] artillery_155 failed to set motion: ' + error)
+            }
+          }
+        }
+
+        function espetroArtilleryEntityType(id) {
+          var entityId = espetroResourceId(id)
+          if (entityId == null || EspetroArtilleryEntityRegistry == null || !EspetroArtilleryEntityRegistry.hasValue(entityId)) {
+            return null
+          }
+          return EspetroArtilleryEntityRegistry.getValue(entityId)
+        }
+
+        function espetroResourceId(id) {
+          var value = String(id || '')
+          if (value.length === 0) return null
+          var separator = value.indexOf(':')
+          return separator >= 0
+            ? Utils.id(value.substring(0, separator), value.substring(separator + 1))
+            : Utils.id('minecraft', value)
         }
 
         function espetroDebugTell(cfg, message) {

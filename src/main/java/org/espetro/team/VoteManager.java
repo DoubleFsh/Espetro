@@ -231,7 +231,10 @@ public class VoteManager {
             String name = getPlayerName(server, defendCommander);
             Espetro.broadcastToTeam("DEFEND", "§6★ 你所在的队伍指挥官为§9" + name + "§6！★");
             if (defendCommander != null) {
-                Espetro.sendToPlayer(server.getPlayerList().getPlayer(defendCommander), "§a你已被选为§9守方§a指挥官！");
+                ServerPlayer cmd = server.getPlayerList().getPlayer(defendCommander);
+                Espetro.sendToPlayer(cmd, "§a你已被选为§9守方§a指挥官！");
+                // 指挥官身份变更，立即同步技能数据
+                org.espetro.network.NetworkManager.sendCommanderSkillSync(cmd);
             }
             Espetro.LOGGER.info("守方指挥官投票结束！指挥官: {}", name);
             org.espetro.network.NetworkManager.syncSquadsToTeam("DEFEND");
@@ -240,7 +243,10 @@ public class VoteManager {
             String name = getPlayerName(server, attackCommander);
             Espetro.broadcastToTeam("ATTACK", "§6★ 你所在的队伍指挥官为§c" + name + "§6！★");
             if (attackCommander != null) {
-                Espetro.sendToPlayer(server.getPlayerList().getPlayer(attackCommander), "§a你已被选为§c攻方§a指挥官！");
+                ServerPlayer cmd = server.getPlayerList().getPlayer(attackCommander);
+                Espetro.sendToPlayer(cmd, "§a你已被选为§c攻方§a指挥官！");
+                // 指挥官身份变更，立即同步技能数据
+                org.espetro.network.NetworkManager.sendCommanderSkillSync(cmd);
             }
             Espetro.LOGGER.info("攻方指挥官投票结束！指挥官: {}", name);
             org.espetro.network.NetworkManager.syncSquadsToTeam("ATTACK");

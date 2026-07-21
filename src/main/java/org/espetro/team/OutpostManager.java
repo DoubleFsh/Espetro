@@ -199,6 +199,8 @@ public class OutpostManager {
 
         Outpost outpost = outposts.get(outpostIndex);
         ServerLevel overworld = player.server.overworld();
+        // 改选前哨：取消未完成的 Rally 波次队列。
+        TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
         BastionManager.getInstance().clearWaiting(player.getUUID());
         player.teleportTo(overworld, outpost.x, outpost.y, outpost.z, outpost.yaw, 0f);
         player.setGameMode(GameType.SURVIVAL);

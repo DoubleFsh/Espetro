@@ -158,25 +158,6 @@ public class BastionEventHandler {
     }
 
     @SubscribeEvent
-    public static void onTeamPackPlace(BlockEvent.EntityPlaceEvent event) {
-        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-        if (!(event.getLevel() instanceof ServerLevel level) || !event.getPlacedBlock().is(Blocks.BEACON)) {
-            return;
-        }
-        if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
-            return;
-        }
-
-        String error = TeamPackManager.getInstance().placeTeamPack(player, level, event.getPos());
-        if (error != null) {
-            event.setCanceled(true);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(error));
-        }
-    }
-
-    @SubscribeEvent
     public static void onTeamPackBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel().isClientSide()) {
             return;

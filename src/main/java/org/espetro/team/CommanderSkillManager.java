@@ -33,7 +33,7 @@ public class CommanderSkillManager {
     private final List<ArtillerySupportRequest> artillerySupportRequests = new ArrayList<>();
     private final Map<UUID, String> pendingTargetSkillIds = new HashMap<>();
 
-    public record SkillView(String id, String displayName, String description, String stats) {
+    public record SkillView(String id, String displayName, String description, String stats, String icon) {
     }
 
     public record SkillStatus(String id,
@@ -434,7 +434,7 @@ public class CommanderSkillManager {
                 ? "\u00a78KubeJS | 冷却: " + definition.cooldownSeconds() + "秒"
                 : definition.stats();
             views.put(definition.id(), new SkillView(definition.id(), definition.displayName(),
-                definition.description(), stats));
+                definition.description(), stats, definition.icon()));
         }
 
         return views.values().stream()

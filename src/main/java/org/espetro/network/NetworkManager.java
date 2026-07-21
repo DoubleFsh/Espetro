@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.6";
+    public static final String PROTOCOL_VERSION = "1.9";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -329,6 +329,26 @@ public class NetworkManager {
     /**
      * 将某阵营当前编制的职业人数立即广播给同阵营全员。
      */
+    /**
+     * 向同队在线玩家刷新统一部署面板数据（职业人数含小队作用域）。
+     * 客户端在小队结构未变时不会整页 rebuild。
+     */
+    public static void refreshUnifiedDeployScreensForTeam(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || team == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (team.equals(Espetro.getPlayerTeam(player))) {
+                int remaining = -1;
+                if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase()
+                    == org.espetro.team.GamePhase.DEPLOYING) {
+                    remaining = org.espetro.team.GameStateManager.getInstance()
+                        .getDeployTimeRemainingSeconds();
+                }
+                sendUnifiedDeployScreen(player, remaining);
+            }
+        }
+    }
+
     public static void broadcastClassCounts(String team, String factionId) {
         MinecraftServer server = Espetro.getServer();
         if (server == null || team == null || factionId == null || factionId.isBlank()) return;
@@ -741,19 +761,26 @@ public class NetworkManager {
         java.util.Map<String, Integer> classCountMap = new java.util.HashMap<>();
         FactionDataLoader.ClassKitData[] kits = loader.getClassesForFaction(factionId);
         if (kits != null) {
+            ClassCountManager counts = ClassCountManager.getInstance();
             for (FactionDataLoader.ClassKitData kit : kits) {
-                int count = ClassCountManager.getInstance().getCount(team, kit.id);
+                int count = counts.getEffectiveClassCountForViewer(player.getUUID(), team, kit.id);
+                int squadCount = counts.getSquadClassCountForViewer(player.getUUID(), team, kit.id);
                 java.util.List<UnifiedDeployScreenPacket.VariantInfo> variants = new java.util.ArrayList<>();
                 if (kit.variants != null) {
                     for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                        int vCount = kit.teamCount
+                            ? counts.countVariantInSquad(team,
+                                org.espetro.team.SquadManager.getInstance().getPlayerSquadId(player.getUUID()),
+                                kit.id, variant.id)
+                            : counts.getVariantCount(team, kit.id, variant.id);
                         variants.add(new UnifiedDeployScreenPacket.VariantInfo(
-                            variant.id, variant.name, variant.description, variant.maxPlayers,
-                            ClassCountManager.getInstance().getVariantCount(team, kit.id, variant.id)));
+                            variant.id, variant.name, variant.description, variant.maxPlayers, vCount));
                     }
                 }
                 classList.add(new UnifiedDeployScreenPacket.ClassInfo(
                     kit.id, kit.name, kit.description, kit.role, kit.icon,
-                    kit.maxPlayers, count, kit.troopValue, kit.healthBonus, kit.speedBonus, variants
+                    kit.maxPlayers, kit.strictCount, count, kit.troopValue, kit.healthBonus, kit.speedBonus,
+                    kit.teamCount, kit.maxPerSquad, squadCount, variants
                 ));
                 classCountMap.put(kit.id, count);
             }
