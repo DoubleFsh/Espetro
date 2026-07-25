@@ -1,17 +1,15 @@
 package org.espetro.client.gui;
 
-import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
-import org.lwjgl.glfw.GLFW;
 import se.mickelus.mutil.gui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 班组小队界面。
@@ -24,22 +22,31 @@ public class SquadScreen extends MutilScreen {
     private static final int GAP = 1;
     private static final float TEXT_SCALE = 0.72f;
     private static final float MEMBER_TEXT_SCALE = 0.68f;
+    /** 与 J 键部署屏同色阶：不依赖全局透明 PANEL。 */
+    private static final int SCREEN_SHADE = 0xFF121517;
+    private static final int PANEL_BG = 0xFF191C1E;
+    private static final int PANEL_SOFT_BG = 0xFF212527;
 
     private final List<UnifiedDeployScreenPacket.SquadInfo> squads = new ArrayList<>();
     private final String team;
+    private final List<UnifiedDeployScreenPacket.SquadCategoryInfo> categories = new ArrayList<>();
     private final Screen parent;
 
     private int mySquadId;
     private int selectedSquadId;
-    private NameField nameField;
+    private SquadNameField nameField;
+    private boolean choosingCategory;
+    private String pendingSquadName = "";
 
-    public SquadScreen(List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId, String team, Screen parent) {
+    public SquadScreen(List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId, String team,
+                       List<UnifiedDeployScreenPacket.SquadCategoryInfo> categories, Screen parent) {
         super(Component.literal("班组小队"));
         if (squads != null) {
             this.squads.addAll(squads);
         }
         this.mySquadId = mySquadId;
         this.team = team;
+        if (categories != null) this.categories.addAll(categories);
         this.parent = parent;
         this.selectedSquadId = NO_SQUAD;
     }
@@ -76,6 +83,12 @@ public class SquadScreen extends MutilScreen {
     }
 
     @Override
+    protected void renderBeforeMutil(net.minecraft.client.gui.GuiGraphics graphics,
+                                     int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, SCREEN_SHADE);
+    }
+
+    @Override
     protected void buildMutilRoot(GuiElement root) {
         int panelW = Math.max(250, Math.min(520, this.width - 12));
         int panelH = Math.max(154, Math.min(210, this.height - 12));
@@ -83,7 +96,7 @@ public class SquadScreen extends MutilScreen {
         int panelY = Math.max(4, (this.height - panelH) / 2);
 
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH,
-            EspetroMutilWidgets.PANEL, EspetroMutilWidgets.BORDER));
+            PANEL_BG, EspetroMutilWidgets.BORDER));
 
         root.addChild(compactText(panelX + 5, panelY + 5,
             "\u00a76\u00a7l班组小队", EspetroMutilWidgets.GOLD));
@@ -98,7 +111,7 @@ public class SquadScreen extends MutilScreen {
         int inputY = panelY + 25;
         int createW = 32;
         int inputW = Math.min(150, panelW / 2 - createW - 10);
-        nameField = new NameField(panelX + 5, inputY, inputW, BUTTON_H, "小队名称", this::createSquad);
+        nameField = new SquadNameField(panelX + 5, inputY, inputW, BUTTON_H, "小队名称", this::createSquad);
         root.addChild(nameField);
         root.addChild(compactButton(panelX + 5 + inputW + 3, inputY, createW, BUTTON_H,
             "创建", this::createSquad)
@@ -117,11 +130,14 @@ public class SquadScreen extends MutilScreen {
 
         buildSquadList(root, listX, contentY, listW, contentH);
         buildDetails(root, detailX, contentY, detailW, contentH);
+        if (choosingCategory) {
+            buildCategoryPopup(root, panelX, panelY, panelW, panelH);
+        }
     }
 
     private void buildSquadList(GuiElement root, int x, int y, int width, int height) {
         root.addChild(EspetroMutilWidgets.panel(x, y, width, height,
-            EspetroMutilWidgets.PANEL_SOFT, EspetroMutilWidgets.BORDER));
+            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
 
         ScrollableList list = new ScrollableList(x + 3, y + 3, width - 6, height - 6)
             .setScrollStep(ROW_H + GAP)
@@ -140,7 +156,9 @@ public class SquadScreen extends MutilScreen {
             boolean joined = squad.id == mySquadId;
             boolean full = squad.memberCount >= squad.maxMembers && !joined;
             String count = "\u00a77[" + squad.memberCount + "/" + squad.maxMembers + "]";
-            String label = (joined ? "\u00a7a" : full ? "\u00a7c" : "\u00a7f") + squad.name + " " + count;
+            String marker = firstCodePoint(squad.categoryId, squad.categoryDisplayName);
+            String label = (joined ? "\u00a7a" : full ? "\u00a7c" : "\u00a7f")
+                + squad.name + " " + count + (marker.isEmpty() ? "" : " \u00a76[" + marker + "]");
 
             EspetroMutilWidgets.ActionButton joinButton = compactButton(
                 0, rowY, buttonW, ROW_H, label, () -> NetworkManager.joinSquad(squad.id))
@@ -165,7 +183,7 @@ public class SquadScreen extends MutilScreen {
 
     private void buildDetails(GuiElement root, int x, int y, int width, int height) {
         root.addChild(EspetroMutilWidgets.panel(x, y, width, height,
-            EspetroMutilWidgets.PANEL_SOFT, EspetroMutilWidgets.BORDER));
+            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
 
         UnifiedDeployScreenPacket.SquadInfo squad = findSquad(selectedSquadId);
         if (squad == null) {
@@ -195,15 +213,66 @@ public class SquadScreen extends MutilScreen {
         }
 
         int lineY = 0;
+        boolean localLeader = isLocalPlayerLeader(squad);
+        UUID localId = Minecraft.getInstance().player != null
+            ? Minecraft.getInstance().player.getUUID() : null;
         for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
             String label = member.leader
                 ? "[队长] " + member.playerName + " - " + member.className
                 : member.playerName + " - " + member.className;
-            detailList.addChild(compactText(0, lineY, detailList.getWidth() - 6,
+            int textWidth = localLeader && !member.leader ? detailList.getWidth() - 39
+                : detailList.getWidth() - 6;
+            detailList.addChild(compactText(0, lineY, textWidth,
                 label, ClientTacticalState.getSquadMemberColor(squad.id, member),
                 MEMBER_TEXT_SCALE));
+            if (localLeader && !member.leader && member.uuid != null
+                && !member.uuid.equals(new UUID(0L, 0L))
+                && !member.uuid.equals(localId)) {
+                detailList.addChild(compactButton(detailList.getWidth() - 35, lineY - 1,
+                    29, 9, "踢出", () -> NetworkManager.sendMatchStatsAction(
+                        org.espetro.network.MatchStatsActionPacket.Action.KICK_FROM_SQUAD,
+                        member.uuid)).setTextColor(EspetroMutilWidgets.NEGATIVE));
+            }
             lineY += 8;
         }
+    }
+
+    private void buildCategoryPopup(GuiElement root, int panelX, int panelY, int panelW, int panelH) {
+        List<UnifiedDeployScreenPacket.SquadCategoryInfo> options = categories.isEmpty()
+            ? List.of(new UnifiedDeployScreenPacket.SquadCategoryInfo("none", "无"))
+            : categories;
+        int rowH = BUTTON_H + 2;
+        int visibleRows = Math.max(1, Math.min(6, options.size()));
+        int popupW = Math.min(180, panelW - 12);
+        int popupH = 22 + visibleRows * rowH + 5;
+        int x = panelX + 5;
+        int y = Math.min(panelY + panelH - popupH - 5, panelY + 39);
+        root.addChild(EspetroMutilWidgets.panel(x, y, popupW, popupH,
+            0xF0181818, EspetroMutilWidgets.BORDER_ACTIVE));
+        root.addChild(compactText(x + 6, y + 6, "\u00a76\u00a7l选择小队类别",
+            EspetroMutilWidgets.GOLD));
+        root.addChild(compactButton(x + popupW - 34, y + 4, 28, BUTTON_H,
+            "取消", () -> {
+                choosingCategory = false;
+                pendingSquadName = "";
+                rebuildMutilRoot();
+            }));
+        ScrollableList list = new ScrollableList(x + 6, y + 22, popupW - 12, popupH - 28)
+            .setScrollStep(BUTTON_H + 2)
+            .setAlwaysShowScrollbar(options.size() > visibleRows);
+        root.addChild(list);
+        int rowY = 0;
+        for (UnifiedDeployScreenPacket.SquadCategoryInfo category : options) {
+            list.addChild(compactButton(0, rowY, list.getWidth() - 12, BUTTON_H,
+                category.displayName, () -> finishCreate(category.id)));
+            rowY += BUTTON_H + 2;
+        }
+    }
+
+    private static String firstCodePoint(String categoryId, String displayName) {
+        if ("none".equals(categoryId) || displayName == null || displayName.isEmpty()) return "";
+        int cp = displayName.codePointAt(0);
+        return new String(Character.toChars(cp));
     }
 
     private static EspetroMutilWidgets.Text compactText(int x, int y, String value, int color) {
@@ -229,10 +298,16 @@ public class SquadScreen extends MutilScreen {
 
     private void createSquad() {
         String name = nameField != null ? nameField.getValue() : "";
-        NetworkManager.createSquad(name);
-        if (nameField != null) {
-            nameField.clear();
-        }
+        pendingSquadName = name;
+        choosingCategory = true;
+        rebuildMutilRoot();
+    }
+
+    private void finishCreate(String categoryId) {
+        NetworkManager.sendSquadCreateWithCategory(pendingSquadName, categoryId);
+        pendingSquadName = "";
+        choosingCategory = false;
+        if (nameField != null) nameField.clear();
     }
 
     private UnifiedDeployScreenPacket.SquadInfo findSquad(int id) {
@@ -267,105 +342,17 @@ public class SquadScreen extends MutilScreen {
 
     @Override
     public void onClose() {
+        if (choosingCategory) {
+            choosingCategory = false;
+            pendingSquadName = "";
+            rebuildMutilRoot();
+            return;
+        }
         returnToParent();
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
-    }
-
-    private static class NameField extends GuiElement {
-        private static final int MAX_LENGTH = 18;
-
-        private final String placeholder;
-        private final Runnable submit;
-        private String value = "";
-        private boolean active = false;
-
-        NameField(int x, int y, int width, int height, String placeholder, Runnable submit) {
-            super(x, y, width, height);
-            this.placeholder = placeholder;
-            this.submit = submit;
-        }
-
-        String getValue() {
-            return value.trim();
-        }
-
-        void clear() {
-            value = "";
-        }
-
-        @Override
-        public boolean onMouseClick(int mouseX, int mouseY, int button) {
-            if (button != 0 || !isVisible()) {
-                return false;
-            }
-            active = hasFocus();
-            return active;
-        }
-
-        @Override
-        public boolean onKeyPress(int keyCode, int scanCode, int modifiers) {
-            if (!active) {
-                return false;
-            }
-
-            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
-                if (submit != null) {
-                    submit.run();
-                }
-                return true;
-            }
-
-            if (keyCode == GLFW.GLFW_KEY_BACKSPACE && !value.isEmpty()) {
-                int cut = value.offsetByCodePoints(value.length(), -1);
-                value = value.substring(0, cut);
-                return true;
-            }
-
-            return false;
-        }
-
-        @Override
-        public boolean onCharType(char codePoint, int modifiers) {
-            if (!active || value.length() >= MAX_LENGTH || !SharedConstants.isAllowedChatCharacter(codePoint)) {
-                return false;
-            }
-            value += codePoint;
-            return true;
-        }
-
-        @Override
-        public void draw(GuiGraphics graphics, int x, int y, int width, int height,
-                         int mouseX, int mouseY, float partialTick) {
-            if (!isVisible()) {
-                return;
-            }
-
-            int bx = x + getX();
-            int by = y + getY();
-            graphics.fill(bx, by, bx + getWidth(), by + getHeight(), active ? 0x80504834 : 0x70404040);
-            graphics.renderOutline(bx, by, getWidth(), getHeight(),
-                active ? EspetroMutilWidgets.BORDER_ACTIVE : EspetroMutilWidgets.BORDER);
-
-            String drawn = value.isEmpty() ? placeholder : value;
-            int color = value.isEmpty() ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT;
-            int logicalTextWidth = Math.max(8, (int) ((getWidth() - 6) / TEXT_SCALE));
-            String trimmed = Minecraft.getInstance().font.plainSubstrByWidth(drawn, logicalTextWidth);
-            int textHeight = Math.max(1,
-                Math.round(Minecraft.getInstance().font.lineHeight * TEXT_SCALE));
-            EspetroMutilWidgets.drawScaledString(graphics, trimmed,
-                bx + 3, by + Math.max(1, (getHeight() - textHeight) / 2),
-                color, TEXT_SCALE);
-
-            if (active && !value.isEmpty() && (System.currentTimeMillis() / 500) % 2 == 0) {
-                int textW = Math.round(Minecraft.getInstance().font.width(trimmed) * TEXT_SCALE);
-                int cursorX = Math.min(bx + getWidth() - 3, bx + 3 + textW + 1);
-                graphics.fill(cursorX, by + 2, cursorX + 1, by + getHeight() - 2,
-                    EspetroMutilWidgets.TEXT);
-            }
-        }
     }
 }

@@ -12,6 +12,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
 import org.espetro.config.GameConfig;
+import org.espetro.mapconfig.BattlefieldContext;
+import org.espetro.stats.PlayerMatchStatsManager;
 
 /**
  * 兵力统计管理器
@@ -220,6 +222,11 @@ public class TroopCountManager {
         // 只在战斗阶段扣除兵力
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
         if (phase != GamePhase.BATTLE) return;
+        if (!BattlefieldContext.isActiveBattlefield(player.serverLevel())) return;
+
+        // Scoreboard rules: every battle death counts; only a direct enemy
+        // ServerPlayer kill grants a kill.
+        PlayerMatchStatsManager.getInstance().onPlayerDeath(player, event.getSource());
 
         // 获取玩家当前职业（未选择则使用默认值）
         String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
@@ -265,20 +272,14 @@ public class TroopCountManager {
         int defendTroops = getDefendTroops();
 
         if (attackTroops <= 0) {
-            Espetro.broadcastToAll("§9========================================");
-            Espetro.broadcastToAll("§a§l★ 防守方胜利！ ★");
-            Espetro.broadcastToAll("§9========================================");
             Espetro.LOGGER.info("===== 防守方胜利 =====");
-            // 可以添加游戏结束逻辑
+            GameStateManager.getInstance().endRound("DEFEND");
             return;
         }
 
         if (defendTroops <= 0) {
-            Espetro.broadcastToAll("§c========================================");
-            Espetro.broadcastToAll("§a§l★ 进攻方胜利！ ★");
-            Espetro.broadcastToAll("§c========================================");
             Espetro.LOGGER.info("===== 进攻方胜利 =====");
-            // 可以添加游戏结束逻辑
+            GameStateManager.getInstance().endRound("ATTACK");
         }
     }
 }

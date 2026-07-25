@@ -104,6 +104,8 @@ public class ClassSelectManager {
             if (faction != null && faction.id != null && !faction.id.isEmpty()) {
                 // 排除空文件的编制
                 if (loader.getClassesForFaction(faction.id).length == 0) continue;
+                if (!loader.isCompatibleWithMap(faction.id,
+                    org.espetro.mapconfig.BattlefieldContext.getOrNull())) continue;
                 allFactions.add(faction);
             }
         }
@@ -181,6 +183,11 @@ public class ClassSelectManager {
         if (factionId == null || factionId.isBlank()) {
             return false;
         }
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        if (!loader.isCompatibleWithMap(factionId,
+            org.espetro.mapconfig.BattlefieldContext.getOrNull())) {
+            return false;
+        }
         String opponentFaction = "ATTACK".equals(team) ? finalDefendClass
             : "DEFEND".equals(team) ? finalAttackClass : null;
         return opponentFaction == null || !hasSameFactionId(factionId, opponentFaction);
@@ -206,6 +213,10 @@ public class ClassSelectManager {
                 continue;
             }
             if (loader.getClassesForFaction(faction.id).length == 0) {
+                continue;
+            }
+            if (!loader.isCompatibleWithMap(faction.id,
+                org.espetro.mapconfig.BattlefieldContext.getOrNull())) {
                 continue;
             }
             ids.add(faction.id);
@@ -260,6 +271,16 @@ public class ClassSelectManager {
     public String getPlayerFactionVote(UUID playerId, String team) {
         Map<UUID, String> votes = "ATTACK".equals(team) ? attackFactionVotes : defendFactionVotes;
         return votes.get(playerId);
+    }
+
+    public void removePlayerVote(UUID playerId) {
+        if (playerId == null) return;
+        boolean changed = attackFactionVotes.remove(playerId) != null;
+        changed |= defendFactionVotes.remove(playerId) != null;
+        if (changed && selectingActive && currentSelectingTeam != null) {
+            org.espetro.network.NetworkManager.sendClassSelectScreenForTeam(
+                currentSelectingTeam, getRemainingSeconds());
+        }
     }
 
     /**
@@ -387,10 +408,10 @@ public class ClassSelectManager {
         int timeout = getCurrentTimeoutSeconds();
         int secondsRemaining = timeout - (selectTickCounter / TICKS_PER_SECOND);
 
-        // Keep the displayed countdown aligned with the server clock one
-        // second at a time without changing the phase timeout itself.
+        // 每秒只推轻量倒计时包，避免全量 ClassSelectScreenPacket 带来整页刷新感。
         if (selectTickCounter % TICKS_PER_SECOND == 0) {
-            org.espetro.network.NetworkManager.broadcastClassSelectScreenForTeam(currentSelectingTeam, secondsRemaining);
+            org.espetro.network.NetworkManager.broadcastClassSelectTimerForTeam(
+                currentSelectingTeam, secondsRemaining);
         }
     }
 

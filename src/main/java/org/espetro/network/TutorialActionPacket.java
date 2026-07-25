@@ -15,6 +15,7 @@ public class TutorialActionPacket {
     public static final byte ACTION_NEXT = 0;
     public static final byte ACTION_SKIP_ALL = 1;
     public static final byte ACTION_DISMISS = 2;
+    public static final byte ACTION_REOPEN = 3;
 
     private final byte action;
     private final String stepId;
@@ -36,6 +37,10 @@ public class TutorialActionPacket {
         return new TutorialActionPacket(ACTION_DISMISS, stepId);
     }
 
+    public static TutorialActionPacket reopen() {
+        return new TutorialActionPacket(ACTION_REOPEN, "");
+    }
+
     public static TutorialActionPacket read(FriendlyByteBuf buf) {
         byte action = buf.readByte();
         String stepId = buf.readUtf();
@@ -51,6 +56,10 @@ public class TutorialActionPacket {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) {
+                return;
+            }
+            if (action == ACTION_REOPEN) {
+                TutorialManager.getInstance().reopen(player);
                 return;
             }
             TutorialManager.Action mapped = switch (action) {

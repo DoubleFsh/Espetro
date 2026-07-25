@@ -183,10 +183,20 @@ public class CommanderVoteScreen extends MutilScreen {
         root.addChild(voteStatusText);
     }
 
+    private String lastVoteStatusRendered;
+    private int lastTimeRemainingRendered = Integer.MIN_VALUE;
+    private int lastOpponentTimeRendered = Integer.MIN_VALUE;
+
     private void refreshDynamicElements() {
         if (phaseHeader != null) {
-            phaseHeader.setStatus(buildTimeText());
-            phaseHeader.setDetail(buildOpponentText());
+            // PhaseHeader 内部 setIfChanged；此处仍避免无意义拼装外的重复写。
+            if (timeRemaining != lastTimeRemainingRendered
+                || opponentTimeRemaining != lastOpponentTimeRendered) {
+                lastTimeRemainingRendered = timeRemaining;
+                lastOpponentTimeRendered = opponentTimeRemaining;
+                phaseHeader.setStatus(buildTimeText());
+                phaseHeader.setDetail(buildOpponentText());
+            }
         }
 
         boolean votingOpen = timeRemaining > 0;
@@ -203,7 +213,11 @@ public class CommanderVoteScreen extends MutilScreen {
                 .setTextColor(isSelf ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
         }
         if (voteStatusText != null) {
-            voteStatusText.setText(buildVoteStatusText());
+            String next = buildVoteStatusText();
+            if (!Objects.equals(lastVoteStatusRendered, next)) {
+                lastVoteStatusRendered = next;
+                voteStatusText.setText(next);
+            }
         }
     }
 
@@ -250,7 +264,7 @@ public class CommanderVoteScreen extends MutilScreen {
     }
 
     private void voteFor(String playerName) {
-        if (playerName == null || timeRemaining <= 0) {
+        if (tutorialPreviewMode || playerName == null || timeRemaining <= 0) {
             return;
         }
 

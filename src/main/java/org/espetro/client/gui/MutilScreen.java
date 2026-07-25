@@ -11,9 +11,19 @@ abstract class MutilScreen extends Screen {
     protected GuiElement root;
     private boolean rootRebuildPending;
     private boolean rebuildingRoot;
+    /** 教程预览：打开阶段 GUI 但禁用业务交互与发包。 */
+    protected boolean tutorialPreviewMode;
 
     protected MutilScreen(Component title) {
         super(title);
+    }
+
+    public final void setTutorialPreviewMode(boolean tutorialPreviewMode) {
+        this.tutorialPreviewMode = tutorialPreviewMode;
+    }
+
+    public final boolean isTutorialPreviewMode() {
+        return tutorialPreviewMode;
     }
 
     @Override
@@ -96,6 +106,13 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (tutorialPreviewMode) {
+            // 业务按钮 no-op；左下「退出教程」由 TutorialHudOverlay 处理。
+            if (TutorialHudOverlay.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            return true;
+        }
         if (root != null) {
             root.updateFocusState(0, 0, (int) mouseX, (int) mouseY);
             if (root.onMouseClick((int) mouseX, (int) mouseY, button)) {
@@ -107,6 +124,9 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (tutorialPreviewMode) {
+            return true;
+        }
         if (root != null) {
             root.onMouseRelease((int) mouseX, (int) mouseY, button);
         }
@@ -115,6 +135,9 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (tutorialPreviewMode) {
+            return true;
+        }
         if (root != null && root.onMouseScroll(mouseX, mouseY, delta)) {
             return true;
         }
@@ -123,6 +146,13 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (TutorialClientController.handleKeyPressed(keyCode, scanCode, modifiers)) {
+            return true;
+        }
+        if (tutorialPreviewMode) {
+            // Esc 默认不退出教程；Enter 由 TutorialClientController 处理。
+            return true;
+        }
         if (root != null && root.onKeyPress(keyCode, scanCode, modifiers)) {
             return true;
         }
@@ -131,6 +161,9 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (tutorialPreviewMode) {
+            return true;
+        }
         if (root != null && root.onKeyRelease(keyCode, scanCode, modifiers)) {
             return true;
         }
@@ -139,6 +172,9 @@ abstract class MutilScreen extends Screen {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        if (tutorialPreviewMode) {
+            return true;
+        }
         if (root != null && root.onCharType(codePoint, modifiers)) {
             return true;
         }

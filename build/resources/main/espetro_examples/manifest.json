@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "files": [
+    "EsDimensions.json",
+    "EsWorld/test_flat/level.dat",
+    "EsWorld/test_flat/region/r.-1.-1.mca",
+    "EsWorld/test_flat/region/r.-1.0.mca",
+    "EsWorld/test_flat/region/r.0.-1.mca",
+    "EsWorld/test_flat/region/r.0.0.mca",
+    "EsWorld/test_flat/EsConfig/SquadTypes.json",
+    "EsWorld/test_flat/EsConfig/TacticalMap.json",
+    "EsWorld/test_flat/EsConfig/CapturePoints.json",
+    "EsWorld/test_flat/EsConfig/VehSpawn.json",
+    "EsWorld/test_flat/EsConfig/bastion.json",
+    "EsWorld/test_flat/EsConfig/game.json",
+    "EsWorld/test_flat/EsConfig/logistics.json",
+    "EsWorld/test_flat/EsConfig/outposts.json",
+    "EsWorld/test_flat/EsConfig/spawn_points.json",
+    "EsWorld/test_flat/EsConfig/team_pack.json"
+  ]
+}

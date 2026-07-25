@@ -144,8 +144,6 @@ public class BastionBuildingWandItem extends FishingRodItem {
             }
 
             bastionManager.setBastionCooldown(serverPlayer.getUUID());
-            org.espetro.tutorial.TutorialManager.getInstance().tryShow(
-                serverPlayer, org.espetro.tutorial.TutorialStep.BASTION);
 
             buildBastionStructure(serverLevel, targetPos, team);
             bastion.setShulkerPos(new BlockPos(targetPos.getX(), targetPos.getY(), targetPos.getZ() + 1));

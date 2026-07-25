@@ -136,7 +136,8 @@ public class BastionCommand {
         }
 
         // 执行原部署点复活
-        if (BastionManager.getInstance().respawnAtDeployPoint(player.server.overworld(), player)) {
+        if (BastionManager.getInstance().respawnAtDeployPoint(
+            org.espetro.mapconfig.BattlefieldContext.requireBattlefield(player.server), player)) {
             // 战局中加入：部署完成后触发职业选择
             onDeployComplete(player);
             return 1;

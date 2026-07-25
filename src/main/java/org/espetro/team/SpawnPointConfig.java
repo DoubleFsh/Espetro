@@ -57,32 +57,12 @@ public class SpawnPointConfig {
     /**
      * 加载复活点配置
      */
+    /** @deprecated 不从 datapack 加载；由 GameConfigBridge 设置。 */
+    @Deprecated
     public static void loadConfig(MinecraftServer server) {
-        try {
-            ResourceManager resourceManager = server.getResourceManager();
-            
-            // 优先使用存档内 datapacks 数据包，再回退模组内置
-            ResourceLocation configLocation = ResourceLocation.fromNamespaceAndPath("espetro", "config/spawn_points.json");
-
-            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(resourceManager, configLocation);
-            if (resourceOptional.isPresent()) {
-                try (var inputStream = resourceOptional.get().open()) {
-                    String json = new String(inputStream.readAllBytes());
-                    parseAndApplyConfig(json);
-                    Espetro.LOGGER.info("成功从 {} 加载复活点配置",
-                        org.espetro.data.EspetroDataResources.describeSource(resourceOptional.get()));
-                    return;
-                }
-            }
-            
-            // 文件不存在，重置为默认值
-            applyDefaults();
-            Espetro.LOGGER.warn("未找到复活点配置文件，使用默认配置");
-        } catch (Exception e) {
-            applyDefaults();
-            Espetro.LOGGER.error("加载复活点配置失败，使用默认配置", e);
-        }
+        // 有意留空
     }
+
 
     /**
      * 重置为默认复活点

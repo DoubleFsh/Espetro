@@ -9,10 +9,10 @@ import org.espetro.Espetro;
 import org.espetro.data.EspetroDataResources;
 
 /**
- * 游戏全局配置加载器
- * 从 data/espetro/config/game.json 加载游戏参数
- * 
- * 涵盖: 人数要求、各阶段超时、兵力初始值、复活保护等
+ * 游戏参数运行时态。
+ * <p>权威值来自活动地图 {@code EsWorld/<map>/EsConfig/game.json}，
+ * 经 {@link #applySnapshot} 在战场激活时写入。启动阶段仅保留代码默认值，
+ * 不再从 datapack {@code data/espetro/config/game.json} 读取。
  */
 public class GameConfig {
 
@@ -45,96 +45,28 @@ public class GameConfig {
     private static int staminaRegenDelaySeconds = 4;
     private static int staminaRegenPerSecond = 2;
 
-    // ========== 新手教程 ==========
-    private static boolean tutorialEnabled = false;
-    private static boolean tutorialShowOnJoin = true;
+    // ========== 多维度战局新增字段 ==========
+    private static int teamSelectSeconds = 60;
+    private static int factionRevealSeconds = 5;
+    private static int roundEndSeconds = 10;
+    private static int impeachmentVoteSeconds = 60;
+    private static int impeachmentCooldownSeconds = 600;
+    private static int commanderVacancySeconds = 180;
+
+    // AuraTip 新手教程（仅手动 reopen/命令；默认不在进服/阶段切换自动弹出）
+    private static boolean tutorialEnabled = true;
+    private static boolean tutorialShowOnJoin = false;
     private static boolean tutorialAllowSkip = true;
 
     private static boolean loaded = false;
 
     /**
-     * 从数据包加载配置（服务端启动时调用）
+     * @deprecated 不再从 datapack 加载。保留空实现以免外部调用崩溃。
+     * 运行时参数仅由 {@link #applySnapshot} 从活动地图 EsConfig 设置。
      */
+    @Deprecated
     public static void loadConfig(MinecraftServer server) {
-        try {
-            ResourceManager resourceManager = server.getResourceManager();
-            ResourceLocation configLocation = EspetroDataResources.location("config/game.json");
-
-            var resourceOptional = EspetroDataResources.getPreferred(resourceManager, configLocation);
-            if (resourceOptional.isPresent()) {
-                var resource = resourceOptional.get();
-                String jsonStr = EspetroDataResources.readUtf8(resource);
-                JsonObject root = GSON.fromJson(jsonStr, JsonObject.class);
-
-                // 游戏参数
-                if (root.has("game")) {
-                    JsonObject game = root.getAsJsonObject("game");
-                    requiredPlayers = getInt(game, "required_players", requiredPlayers);
-                    deployTimeoutSeconds = getInt(game, "deploy_timeout_seconds", deployTimeoutSeconds);
-                    deployWarningSeconds = getInt(game, "deploy_warning_seconds", deployWarningSeconds);
-                    defendCommanderVoteSeconds = getInt(game, "defend_commander_vote_seconds", defendCommanderVoteSeconds);
-                    attackCommanderVoteSeconds = getInt(game, "attack_commander_vote_seconds", attackCommanderVoteSeconds);
-                    defendFactionSelectSeconds = getInt(game, "defend_faction_select_seconds", defendFactionSelectSeconds);
-                    attackFactionSelectSeconds = getInt(game, "attack_faction_select_seconds", attackFactionSelectSeconds);
-                    factionPoolSize = getInt(game, "faction_pool_size", factionPoolSize);
-                    respawnInvincibilityTicks = getInt(game, "respawn_invincibility_ticks", respawnInvincibilityTicks);
-                    teammateNameTagDistance = getDouble(game, "teammate_name_tag_distance", teammateNameTagDistance);
-                    waitingY = getDouble(game, "waiting_y", waitingY);
-                }
-
-                // 兵力参数
-                if (root.has("troops")) {
-                    JsonObject troops = root.getAsJsonObject("troops");
-                    initialAttackTroops = getInt(troops, "initial_attack", initialAttackTroops);
-                    initialDefendTroops = getInt(troops, "initial_defend", initialDefendTroops);
-                    commanderDeathPenalty = getInt(troops, "commander_death_penalty", commanderDeathPenalty);
-                }
-
-                // 体力参数
-                if (root.has("stamina")) {
-                    JsonObject stamina = root.getAsJsonObject("stamina");
-                    int configuredStamina = getInt(stamina, "player_stamina", playerStamina);
-                    playerStamina = configuredStamina == -1 ? -1 : Math.max(0, configuredStamina);
-                    sprintStaminaCostPerSecond = Math.max(0,
-                        getInt(stamina, "sprint_cost_per_second", sprintStaminaCostPerSecond));
-                    jumpStaminaCost = Math.max(0,
-                        getInt(stamina, "jump_cost", jumpStaminaCost));
-                    staminaRegenDelaySeconds = Math.max(0,
-                        getInt(stamina, "regen_delay_seconds", staminaRegenDelaySeconds));
-                    staminaRegenPerSecond = Math.max(0,
-                        getInt(stamina, "regen_per_second", staminaRegenPerSecond));
-                }
-
-                // 新手教程
-                if (root.has("tutorial")) {
-                    JsonObject tutorial = root.getAsJsonObject("tutorial");
-                    tutorialEnabled = getBoolean(tutorial, "enabled", tutorialEnabled);
-                    tutorialShowOnJoin = getBoolean(tutorial, "show_on_join", tutorialShowOnJoin);
-                    tutorialAllowSkip = getBoolean(tutorial, "allow_skip", tutorialAllowSkip);
-                }
-
-                loaded = true;
-                Espetro.LOGGER.info("已从 {} 加载游戏配置: 需要{}人, 部署{}秒, 守方指挥官投票{}秒, 攻方指挥官投票{}秒, 守方编制选择{}秒, 攻方编制选择{}秒, 编制池{}个",
-                    EspetroDataResources.describeSource(resource), requiredPlayers, deployTimeoutSeconds,
-                    defendCommanderVoteSeconds, attackCommanderVoteSeconds,
-                    defendFactionSelectSeconds, attackFactionSelectSeconds, factionPoolSize);
-                Espetro.LOGGER.info("兵力配置: 攻方{} | 守方{} | 指挥官阵亡惩罚{}",
-                    initialAttackTroops, initialDefendTroops, commanderDeathPenalty);
-                Espetro.LOGGER.info("体力配置: {}",
-                    playerStamina == -1
-                        ? "已禁用"
-                        : String.format("上限%d | 奔跑每秒消耗%d | 跳跃消耗%d | %d秒后每秒恢复%d",
-                            playerStamina, sprintStaminaCostPerSecond, jumpStaminaCost,
-                            staminaRegenDelaySeconds, staminaRegenPerSecond));
-                Espetro.LOGGER.info("教程配置: enabled={} show_on_join={} allow_skip={}",
-                    tutorialEnabled, tutorialShowOnJoin, tutorialAllowSkip);
-                return;
-            }
-
-            Espetro.LOGGER.warn("未找到 game.json 配置文件，使用默认游戏参数");
-        } catch (Exception e) {
-            Espetro.LOGGER.error("加载游戏配置失败，使用默认参数", e);
-        }
+        // 有意留空
     }
 
     private static int getInt(JsonObject obj, String key, int defaultValue) {
@@ -153,41 +85,18 @@ public class GameConfig {
     }
 
     /**
-     * 检查是否成功加载了 JSON 配置
+     * 是否已应用过地图 EsConfig 快照（或历史上的 datapack 加载）。
      */
     public static boolean isLoaded() {
         return loaded;
     }
 
     /**
-     * 热重载配置（数据包更改后调用）
+     * 热重载已禁用：请重启以读取 EsWorld/.../EsConfig。
      */
+    @Deprecated
     public static void reloadConfig(MinecraftServer server) {
-        // 重置为默认值，确保缺少的字段不会被旧值残留
-        requiredPlayers = 20;
-        deployTimeoutSeconds = 240;
-        deployWarningSeconds = 30;
-        defendCommanderVoteSeconds = 20;
-        attackCommanderVoteSeconds = 20;
-        defendFactionSelectSeconds = 30;
-        attackFactionSelectSeconds = 30;
-        factionPoolSize = 6;
-        respawnInvincibilityTicks = 60;
-        teammateNameTagDistance = 10.0;
-        waitingY = 200.0;
-        initialAttackTroops = 280;
-        initialDefendTroops = 1200;
-        commanderDeathPenalty = 2;
-        playerStamina = 100;
-        sprintStaminaCostPerSecond = 5;
-        jumpStaminaCost = 15;
-        staminaRegenDelaySeconds = 4;
-        staminaRegenPerSecond = 2;
-        tutorialEnabled = false;
-        tutorialShowOnJoin = true;
-        tutorialAllowSkip = true;
-        loaded = false;
-        loadConfig(server);
+        Espetro.LOGGER.warn("GameConfig 不支持热重载；地图参数仅在战场激活时从 EsConfig 应用。请重启服务端。");
     }
 
     // ========== Getter ==========
@@ -272,6 +181,69 @@ public class GameConfig {
         return staminaRegenPerSecond;
     }
 
+    public static int getTeamSelectSeconds() {
+        return teamSelectSeconds;
+    }
+
+    public static int getFactionRevealSeconds() {
+        return factionRevealSeconds;
+    }
+
+    public static int getRoundEndSeconds() {
+        return roundEndSeconds;
+    }
+
+    public static int getImpeachmentVoteSeconds() {
+        return impeachmentVoteSeconds;
+    }
+
+    public static int getImpeachmentCooldownSeconds() {
+        return impeachmentCooldownSeconds;
+    }
+
+    public static int getCommanderVacancySeconds() {
+        return commanderVacancySeconds;
+    }
+
+    /**
+     * Apply frozen ActiveMapConfig game settings (startup or map activation).
+     * Does not re-read JSON from disk.
+     */
+    public static void applySnapshot(org.espetro.mapconfig.GameSettingsSnapshot s) {
+        if (s == null) {
+            return;
+        }
+        teamSelectSeconds = s.teamSelectSeconds;
+        deployTimeoutSeconds = s.deployTimeoutSeconds;
+        deployWarningSeconds = s.deployWarningSeconds;
+        defendCommanderVoteSeconds = s.defendCommanderVoteSeconds;
+        attackCommanderVoteSeconds = s.attackCommanderVoteSeconds;
+        defendFactionSelectSeconds = s.defendFactionSelectSeconds;
+        attackFactionSelectSeconds = s.attackFactionSelectSeconds;
+        factionPoolSize = s.factionPoolSize;
+        factionRevealSeconds = s.factionRevealSeconds;
+        roundEndSeconds = s.roundEndSeconds;
+        respawnInvincibilityTicks = s.respawnInvincibilityTicks;
+        teammateNameTagDistance = s.teammateNameTagDistance;
+        waitingY = s.waitingY;
+        initialAttackTroops = s.initialAttackTroops;
+        initialDefendTroops = s.initialDefendTroops;
+        commanderDeathPenalty = s.commanderDeathPenalty;
+        playerStamina = s.playerStamina;
+        sprintStaminaCostPerSecond = s.sprintCostPerSecond;
+        jumpStaminaCost = s.jumpCost;
+        staminaRegenDelaySeconds = s.regenDelaySeconds;
+        staminaRegenPerSecond = s.regenPerSecond;
+        impeachmentVoteSeconds = s.impeachmentVoteSeconds;
+        impeachmentCooldownSeconds = s.impeachmentCooldownSeconds;
+        commanderVacancySeconds = s.commanderVacancySeconds;
+        // required_players is deprecated; tutorial steps are AuraTip-driven (manual).
+        loaded = true;
+        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 弹劾{}s/冷却{}s",
+            teamSelectSeconds, deployTimeoutSeconds, factionRevealSeconds, roundEndSeconds,
+            impeachmentVoteSeconds, impeachmentCooldownSeconds);
+    }
+
     public static boolean isTutorialEnabled() {
         return tutorialEnabled;
     }
@@ -283,4 +255,5 @@ public class GameConfig {
     public static boolean isTutorialAllowSkip() {
         return tutorialAllowSkip;
     }
+
 }

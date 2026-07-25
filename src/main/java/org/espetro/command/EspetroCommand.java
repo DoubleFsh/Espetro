@@ -32,10 +32,69 @@ public class EspetroCommand {
             .then(Commands.literal("reload")
                 .executes(ctx -> {
                     Espetro.reloadAllConfigs();
-                    ctx.getSource().sendSystemMessage(Component.literal("§a[Espetro] 所有配置已热重载！"));
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "§e[Espetro] 外部地图/编制/EsConfig 不支持热重载；修改将在重启后生效。"));
                     return 1;
                 })
             )
+            .then(Commands.literal("prestart")
+                .executes(ctx -> {
+                    boolean started = GameStateManager.getInstance().prestart(ctx.getSource().getServer());
+                    ctx.getSource().sendSystemMessage(Component.literal(started
+                        ? "§a[Espetro] 已开始地图投票。"
+                        : "§c[Espetro] 无法开始：必须处于主城、至少一人在线且存在有效地图/编制。"));
+                    return started ? 1 : 0;
+                })
+            )
+            .then(Commands.literal("stop")
+                .executes(ctx -> {
+                    CommandSourceStack source = ctx.getSource();
+                    boolean stopping = GameStateManager.getInstance().forceStopGame(
+                        source.getServer(),
+                        result -> source.sendSystemMessage(Component.literal(result.success()
+                            ? "§a[Espetro] 强制结束完成：玩家已回到主城，战场存档副本已删除。"
+                            : "§c[Espetro] 玩家已回到主城，但战场存档副本删除失败："
+                                + result.error())));
+                    source.sendSystemMessage(Component.literal(stopping
+                        ? "§e[Espetro] 正在强制结束游戏并将所有玩家送回主城……"
+                        : "§c[Espetro] 已有一个强制结束流程正在执行。"));
+                    return stopping ? 1 : 0;
+                })
+            )
+            .then(Commands.literal("end")
+                .then(Commands.argument("winner", StringArgumentType.word())
+                    .executes(ctx -> {
+                        String winner = StringArgumentType.getString(ctx, "winner");
+                        boolean ended = GameStateManager.getInstance().endRound(winner);
+                        ctx.getSource().sendSystemMessage(Component.literal(ended
+                            ? "§a[Espetro] 已结束本回合。"
+                            : "§c[Espetro] 仅战斗阶段可结束，winner 必须是 attack/defend/draw。"));
+                        return ended ? 1 : 0;
+                    })))
+            .then(Commands.literal("maps")
+                .executes(ctx -> {
+                    var maps = org.espetro.mapconfig.ExternalConfigBootstrap.getAllMaps();
+                    ctx.getSource().sendSystemMessage(Component.literal("§6========== 地图注册状态 =========="));
+                    for (var map : maps) {
+                        boolean formationsPlayable = map.usable
+                            && FactionDataProvider.getOrCreateLoader().isMapPlayable(map);
+                        String status = formationsPlayable ? "§a可用" : "§c拒绝";
+                        String reason;
+                        if (!map.rejectionReasons.isEmpty()) {
+                            reason = " §7- " + String.join("; ", map.rejectionReasons);
+                        } else if (!formationsPlayable) {
+                            reason = " §7- 至少需要两个 faction_id 不同且与 VehSpawn 兼容的编制";
+                        } else {
+                            reason = "";
+                        }
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            status + " §f" + map.displayName + " §7[" + map.dimensionId + "]" + reason));
+                    }
+                    for (String error : org.espetro.mapconfig.ExternalConfigBootstrap.getBootstrapErrors()) {
+                        ctx.getSource().sendSystemMessage(Component.literal("§c" + error));
+                    }
+                    return maps.size();
+                }))
             .then(Commands.literal("reset")
                 .executes(ctx -> {
                     var server = ctx.getSource().getServer();
@@ -59,18 +118,11 @@ public class EspetroCommand {
             )
             .then(Commands.literal("start")
                 .executes(ctx -> {
-                    var server = ctx.getSource().getServer();
-
-                    if (GameStateManager.getInstance().isGameStarted()) {
-                        ctx.getSource().sendSystemMessage(Component.literal("§c对局已经开始！"));
-                        return 0;
-                    }
-
-                    // 强制开始对局
-                    GameStateManager.getInstance().forceStartGame();
-
-                    ctx.getSource().sendSystemMessage(Component.literal("§6[Espetro] 管理员强制开始对局！"));
-                    return 1;
+                    boolean started = GameStateManager.getInstance().prestart(ctx.getSource().getServer());
+                    ctx.getSource().sendSystemMessage(Component.literal(started
+                        ? "§a[Espetro] /start 兼容别名已开始地图投票。"
+                        : "§c[Espetro] 当前无法开始。"));
+                    return started ? 1 : 0;
                 })
             )
             .then(Commands.literal("status")
@@ -79,11 +131,14 @@ public class EspetroCommand {
                     var gameState = GameStateManager.getInstance();
 
                     ctx.getSource().sendSystemMessage(Component.literal("§6========== 对局状态 =========="));
-                    ctx.getSource().sendSystemMessage(Component.literal("§e状态: §f" + (gameState.isGameStarted() ? "§a已开始" : "§e等待中")));
+                    ctx.getSource().sendSystemMessage(Component.literal("§e阶段: §f" + gameState.getCurrentPhase().name()
+                        + " §7(" + gameState.getCurrentPhase().getDisplayName() + ")"));
                     ctx.getSource().sendSystemMessage(Component.literal("§e在线玩家: §f" + server.getPlayerCount() + " 人"));
-                    ctx.getSource().sendSystemMessage(Component.literal("§e已选择职业: §f" + gameState.getReadyCount() + " 人"));
-                    ctx.getSource().sendSystemMessage(Component.literal("§e等待选择: §f" + gameState.getWaitingCount() + " 人"));
-                    ctx.getSource().sendSystemMessage(Component.literal("§e开始要求: §f20 人"));
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "§e已选边: §f" + gameState.getTeamSelectedCount() + " 人"));
+                    org.espetro.mapconfig.BattlefieldContext.get().ifPresent(map ->
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            "§e战场: §f" + map.displayName + " §7[" + map.dimensionId + "]")));
                     ctx.getSource().sendSystemMessage(Component.literal("§6================================"));
                     return 1;
                 })
@@ -352,6 +407,7 @@ public class EspetroCommand {
             })
         );
 
+
         // 新手教程：任意玩家可用（不继承管理员 requires）
         dispatcher.register(Commands.literal("espetro")
             .then(Commands.literal("tutorial")
@@ -394,5 +450,6 @@ public class EspetroCommand {
                 )
             )
         );
+
     }
 }

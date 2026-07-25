@@ -14,12 +14,61 @@ import org.espetro.logistics.LogisticsConfig;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import org.espetro.mapconfig.ActiveMapConfig;
+import org.espetro.mapconfig.BattlefieldContext;
+import org.espetro.stats.PlayerMatchStatsManager;
+import org.espetro.team.GameStateManager;
+import net.minecraft.server.MinecraftServer;
 
 /**
  * Espetro 对外提供的 API
  * 供其他模组查询玩家的阵营、小队、指挥官信息
  */
 public class EspetroAPI {
+
+    public static Optional<String> getActiveMapId() {
+        return BattlefieldContext.get().map(map -> map.mapFolder);
+    }
+
+    public static Optional<String> getActiveMapName() {
+        return BattlefieldContext.get().map(map -> map.displayName);
+    }
+
+    public static Optional<ResourceKey<Level>> getActiveBattlefieldDimension() {
+        return BattlefieldContext.getActiveDimensionKey();
+    }
+
+    public static boolean isActiveBattlefield(ServerLevel level) {
+        return BattlefieldContext.isActiveBattlefield(level);
+    }
+
+    public static Optional<ServerLevel> getActiveBattlefieldLevel(MinecraftServer server) {
+        if (server == null) {
+            return Optional.empty();
+        }
+        return BattlefieldContext.getActiveDimensionKey()
+            .map(server::getLevel);
+    }
+
+    public static Optional<ActiveBattlefieldSnapshot> getActiveBattlefieldSnapshot() {
+        return BattlefieldContext.get().map(EspetroAPI::toPublicSnapshot);
+    }
+
+    public static boolean endRound(String winner) {
+        return GameStateManager.getInstance().endRound(winner);
+    }
+
+    public static Optional<PlayerMatchStatsManager.PlayerMatchStats> getPlayerMatchStats(UUID playerId) {
+        return PlayerMatchStatsManager.getInstance().get(playerId);
+    }
+
+    public static Optional<String> getSquadCategory(UUID playerId) {
+        return Optional.ofNullable(SquadManager.getInstance().getPlayerCategoryId(playerId));
+    }
 
     /**
      * 获取玩家所在阵营（ATTACK 或 DEFEND）
@@ -194,6 +243,18 @@ public class EspetroAPI {
                               int x, int y, int z, int construction, int ammunition,
                               boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
                               double buildRadius, double exclusionRadius) {
+    }
+
+    private static ActiveBattlefieldSnapshot toPublicSnapshot(ActiveMapConfig map) {
+        return new ActiveBattlefieldSnapshot(
+            map.mapFolder,
+            map.displayName,
+            map.dimensionKey,
+            map.esPoints.tacticalMapJson,
+            map.esPoints.capturePointsJson,
+            map.esPoints.backgroundImage,
+            map.esPoints.backgroundBytes()
+        );
     }
 
     private static String getPlayerTeamById(UUID playerId) {

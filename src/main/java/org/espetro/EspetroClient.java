@@ -8,6 +8,8 @@ package org.espetro;
  * （注解扫描会触发服务端类加载导致 DEDICATED_SERVER 错误）
  */
 public class EspetroClient {
+    private static boolean tutorialExitMouseWasDown;
+
     /**
      * 客户端初始化 —— 由 Espetro 主类通过 DistExecutor 调用，仅在 CLIENT 侧执行
      */
@@ -61,6 +63,21 @@ public class EspetroClient {
             Espetro.KEY_RADIAL instanceof net.minecraft.client.KeyMapping key ? key : null;
         org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
         org.espetro.client.gui.TutorialOverlay.tick();
+        // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
+        if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
+            boolean down = org.lwjgl.glfw.GLFW.glfwGetMouseButton(
+                mc.getWindow().getWindow(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+            if (down && !tutorialExitMouseWasDown) {
+                double scale = mc.getWindow().getGuiScale();
+                double mx = mc.mouseHandler.xpos() / scale;
+                double my = mc.mouseHandler.ypos() / scale;
+                org.espetro.client.gui.TutorialHudOverlay.mouseClicked(mx, my, 0);
+            }
+            tutorialExitMouseWasDown = down;
+        } else {
+            tutorialExitMouseWasDown = false;
+        }
 
         if (mc.player == null) return;
 
@@ -72,13 +89,17 @@ public class EspetroClient {
 
         // K键 - 请求游戏状态后打开对应界面（不直接打开，先请求服务端）
         if (Espetro.KEY_TEAM != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_TEAM).consumeClick()) {
-            // 发送请求到服务端，服务端会返回 GameStateResponsePacket
-            // 客户端在收到响应后根据状态决定是否打开界面
-            org.espetro.network.NetworkManager.requestGameState();
+            if (mc.screen == null) {
+                // 发送请求到服务端，服务端会返回 GameStateResponsePacket
+                // 客户端在收到响应后根据状态决定是否打开界面
+                org.espetro.network.NetworkManager.requestGameState();
+            }
         }
         // J键 - 请求职业选择 (在部署/战斗阶段允许)
         if (Espetro.KEY_CLASS != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_CLASS).consumeClick()) {
-            if (org.espetro.client.gui.ClientGameState.canOpenClassSelection()) {
+            // 不允许快捷键覆盖当前阶段强制显示的选择/重部署界面。
+            if (mc.screen == null
+                && org.espetro.client.gui.ClientGameState.canOpenClassSelection()) {
                 String playerTeam = org.espetro.client.gui.ClientGameState.getPlayerTeam();
                 if (playerTeam == null) {
                     org.espetro.network.NetworkManager.requestGameState();
@@ -94,9 +115,12 @@ public class EspetroClient {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc != null && mc.level != null) {
             if (mc.screen == null) {
-                org.espetro.client.gui.TroopCountOverlay.render(event.getGuiGraphics(), mc);
-                org.espetro.client.gui.StaminaOverlay.render(event.getGuiGraphics(), mc);
+                org.espetro.client.gui.MutilHudOverlay.render(
+                    event.getGuiGraphics(), mc, event.getPartialTick());
             }
+            // 教程 HUD 始终叠在最上层（含预览 Screen 打开时）
+            org.espetro.client.gui.TutorialHudOverlay.render(
+                event.getGuiGraphics(), mc, event.getPartialTick());
         }
     }
 

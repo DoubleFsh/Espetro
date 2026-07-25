@@ -1,0 +1,10 @@
+{
+  "_comment": "示例地图省略 dimension_id，由系统稳定生成 espetro:test_flat；修改后必须重启。",
+  "map_vote_seconds": 30,
+  "dimensions": [
+    {
+      "name": "Espetro 超平坦功能测试场",
+      "map": "test_flat"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "totalBatches": 2,
+  "endBehavior": "terminate",
+  "teamReinforcements": {
+    "ATTACK": 280,
+    "DEFEND": 1200
+  },
+  "plannedPoints": [
+    {
+      "name": "A",
+      "batch": 1,
+      "pos1": {"x": -24, "y": 60, "z": -24},
+      "pos2": {"x": 24, "y": 72, "z": 24}
+    },
+    {
+      "name": "B",
+      "batch": 2,
+      "pos1": {"x": 104, "y": 60, "z": -24},
+      "pos2": {"x": 152, "y": 72, "z": 24}
+    }
+  ]
+}

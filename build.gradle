@@ -32,6 +32,9 @@ minecraft {
     // Simply re-run your setup task after changing the mappings to update your workspace.
     mappings channel: mapping_channel, version: mapping_version
 
+    // Battlefield world rebuild needs access to MinecraftServer level map / storage.
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
     // When true, this property will have all Eclipse/IntelliJ IDEA run configurations run the "prepareX" task for the given run configuration before launching the game.
     // In most cases, it is not necessary to enable.
     // enableEclipsePrepareRuns = true
@@ -42,9 +45,12 @@ minecraft {
     // See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
     copyIdeResources = true
     runs {
+        // Allows isolated fixture/server runs without touching the tracked run/
+        // directory: ./gradlew runServer -PespetroRunDir=/tmp/example
+        def espetroRunDir = providers.gradleProperty('espetroRunDir').orElse('run').get()
         // applies to all the run configs below
         configureEach {
-            workingDirectory project.file('run')
+            workingDirectory project.file(espetroRunDir)
 
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
@@ -150,16 +156,32 @@ dependencies {
     implementation fg.deobf("curse.maven:mutil-351914:7772906")
     implementation fg.deobf("cc.sighs.oelib:OELib-forge-1.20.1:${oelib_version}")
     implementation fg.deobf("cc.sighs.auratip:auratip-forge-1.20.1:${auratip_version}")
-
     implementation fg.deobf("dev.latvian.mods:rhino-forge:${rhino_version}")
     implementation fg.deobf("dev.architectury:architectury-forge:${architectury_version}")
     implementation fg.deobf("dev.latvian.mods:kubejs-forge:${kubejs_version}")
 
-    // ESPoints depends on Espetro, so Espetro integrates through reflection and
-    // only adds the sibling project's jar to local development runs.
+    // ESPoints depends on Espetro, so Espetro integrates through reflection.
+    // Keep the sibling jar opt-in: older ESPoints builds still require AuraTip
+    // and must not silently make Espetro's standalone dev server fail.
     def localEspointsJar = file("../../../IdeaProjects/espetro-HCR/build/libs/espoints-${espoints_version}.jar")
-    if (localEspointsJar.exists()) {
+    def includeLocalEspoints = providers.gradleProperty("espetroIncludeLocalEspoints")
+        .map { it.toBoolean() }
+        .getOrElse(false)
+    if (includeLocalEspoints && localEspointsJar.exists()) {
         runtimeOnly fg.deobf("local:espoints:${espoints_version}")
+    }
+
+    // 单元测试：仅用于不依赖运行时 Minecraft 服务端的纯解析器测试。
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
     }
 }
 
@@ -171,7 +193,8 @@ tasks.named('processResources', ProcessResources).configure {
                              mod_authors         : mod_authors, mod_description: mod_description,
                              espoints_version    : espoints_version, rhino_version: rhino_version,
                              architectury_version: architectury_version, kubejs_version: kubejs_version,
-                             auratip_version     : auratip_version, oelib_version: oelib_version,]
+                             oelib_version       : oelib_version,
+                             auratip_version     : auratip_version,]
 
     inputs.properties replaceProperties
 

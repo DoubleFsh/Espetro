@@ -1,42 +1,144 @@
 # Espetro 配置文档
 
-## 数据包覆盖规则
+## 启动冻结与目录结构
 
-Espetro 使用 `EspetroDataResources` 读取 `data/espetro`。同一路径存在多个资源时，优先选择世界数据包等外部资源，找不到时回退到模组内置 JSON。
+地图、编制及游戏设置不再从存档 datapack 读取。它们直接位于游戏实例或服务端根目录，并且只在客户端/服务端启动阶段读取一次：
 
-推荐服务器目录：
+**运行时权威：** 阶段秒数、兵力、复活点、兵站/前哨/后勤/队包等**地图级**参数在战场激活时由该图 `EsWorld/<map>/EsConfig/` 快照应用；**不再**从 `data/espetro/config` datapack 读取。编制仅来自根目录 `EsFactions/`。
 
 ```text
-world/datapacks/espetro_server_config/
-├── pack.mcmeta
-└── data/espetro/
-    ├── config/
-    │   ├── game.json
-    │   ├── spawn_points.json
-    │   ├── bastion.json
-    │   ├── logistics.json
-    │   ├── team_pack.json
-    │   └── outposts.json
-    └── factions/
-        ├── my_attack_faction.json
-        └── my_defend_faction.json
+<游戏或服务端根目录>/
+├── EsDimensions.json
+├── EsFactions/
+│   ├── my_attack_faction.json
+│   └── my_defend_faction.json
+└── EsWorld/
+    └── my_map/
+        ├── level.dat
+        ├── region/
+        ├── entities/
+        ├── poi/
+        ├── data/
+        └── EsConfig/
+            ├── game.json
+            ├── spawn_points.json
+            ├── bastion.json
+            ├── logistics.json
+            ├── team_pack.json
+            ├── outposts.json
+            ├── SquadTypes.json
+            ├── VehSpawn.json
+            ├── TacticalMap.json
+            ├── CapturePoints.json
+            └── map.png              # 可选战术地图底图
 ```
 
-`pack.mcmeta`：
+`level.dat` 与至少一个非空 `region/*.mca` 是有效地图模板的必要条件。维度生成器直接从该地图自己的 `level.dat` 读取，因此超平坦、噪声世界等模板不会共享一份写死的生成器。服务端在 `ServerAboutToStartEvent`、原版创建各个 `ServerLevel` 之前，把所有有效模板的 `region/entities/poi/data/EsConfig` 复制到当前存档，作为每张地图的首局副本。地图使用完毕后会卸载并删除该副本；后续再次选中同一地图时，才重新从只读模板复制并挂载新的 `ServerLevel`。因此每局地形破坏只存在于当前存档副本中，`EsWorld` 原件始终不变。
+
+首次启动会从 JAR 导出 `test_flat` 超平坦地图与地图侧 JSON 示例，**不会**向 `EsFactions/` 写入任何预设或示例编制（该目录仅创建为空文件夹，编制需自行放置）。导出器只创建缺失文件，不覆盖服主已有配置。`/reload` 与 `/espetro reload` 明确不会重读上述文件；修改后必须完整重启。
+
+JSON 必须是 UTF-8，不支持注释和尾随逗号。指挥官技能仍由 KubeJS 脚本按 KubeJS 自身规则加载。
+
+### `EsDimensions.json`
 
 ```json
 {
-  "pack": {
-    "pack_format": 15,
-    "description": "Espetro server configuration"
-  }
+  "_comment": "dimension_id 可省略，推荐让系统稳定生成并避免冲突；修改后必须重启。",
+  "map_vote_seconds": 30,
+  "dimensions": [
+    {
+      "name": "我的战场",
+      "map": "my_map"
+    }
+  ]
 }
 ```
 
-执行 `/reload` 或 `/espetro reload` 后会重新加载阵营、游戏参数、复活点、兵站、队包、载具和前哨配置。指挥官技能由 KubeJS 脚本注册和实现，按 KubeJS 自身的脚本加载规则生效。JSON 必须是 UTF-8，不支持注释和尾随逗号。
+- `name`：投票与界面显示名。
+- `map`：`EsWorld/` 下的安全单层目录名。
+- `dimension_id`：可选的 `<namespace>:<path>`；省略时稳定生成 `espetro:<map>`。禁止使用 `minecraft`、`forge`、`espetro` 作为手工 namespace，也禁止重复 ID。
+- `map_vote_seconds`：全局地图投票时长，最少 5 秒。
+
+缺失地图、非法目录、无效 `level.dat`、缺少区块或任一必需 `EsConfig` 时，该维度会输出明确错误并拒绝注册。
 
 `logistics.json` 的补给方块、方块标签、方块实体 NBT、补给物品和 FOB 库存配置见
 [后勤与补给配置](LOGISTICS_CONFIG.md)。
+
+## ESPoints 地图扩展
+
+每张地图必须在自己的 `EsConfig/` 下提供 `TacticalMap.json` 和
+`CapturePoints.json`。Espetro 在启动时解析、校验并冻结它们；地图激活后通过只读快照交给
+ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包，也不会写入
+`EsWorld/<地图>/EsConfig/`。
+
+### `TacticalMap.json`
+
+```json
+{
+  "topLeftX": -512,
+  "topLeftZ": -512,
+  "bottomRightX": 512,
+  "bottomRightZ": 512,
+  "initialRange": 512,
+  "minimumRange": 64,
+  "backgroundImage": "map.png",
+  "backgroundImageWidth": 1024,
+  "backgroundImageHeight": 1024,
+  "showGrid": true,
+  "showLabels": true,
+  "tacticalMarkerDurationSeconds": 120,
+  "tacticalMarkerFadeSeconds": 120
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `topLeftX/topLeftZ` | 战术地图西北角世界坐标 |
+| `bottomRightX/bottomRightZ` | 战术地图东南角世界坐标，必须分别大于左上角 |
+| `initialRange` | 打开地图时显示的世界范围，必须大于 0 |
+| `minimumRange` | 最大放大时的最小范围，必须大于 0 且不超过 `initialRange` |
+| `backgroundImage` | 可留空；非空时只能引用同一 `EsConfig/` 内的相对 PNG 文件 |
+| `backgroundImageWidth/Height` | 底图原始尺寸提示；不用底图时可为 0 |
+| `showGrid/showLabels` | 是否显示网格和名称 |
+| `tacticalMarkerDurationSeconds` | 标点完整显示时长 |
+| `tacticalMarkerFadeSeconds` | 标点淡出时长 |
+
+底图最大 16 MiB。绝对路径、`..`、跨目录路径、非 PNG 文件、符号链接和伪造 PNG 都会使整张地图在启动时被拒绝。底图内容由服务端从冻结快照分片同步给客户端。
+
+### `CapturePoints.json`
+
+```json
+{
+  "totalBatches": 2,
+  "endBehavior": "terminate",
+  "teamReinforcements": {
+    "ATTACK": 280,
+    "DEFEND": 1200
+  },
+  "plannedPoints": [
+    {
+      "name": "A",
+      "batch": 1,
+      "pos1": {"x": -24, "y": 60, "z": -24},
+      "pos2": {"x": 24, "y": 72, "z": 24}
+    },
+    {
+      "name": "B",
+      "batch": 2,
+      "pos1": {"x": 104, "y": 60, "z": -24},
+      "pos2": {"x": 152, "y": 72, "z": 24}
+    }
+  ]
+}
+```
+
+- `totalBatches` 必须至少为 1。
+- `endBehavior` 只能为 `terminate` 或 `loop`。
+- `teamReinforcements.ATTACK/DEFEND` 都必须为正整数。
+- `plannedPoints` 必须是数组；据点名只能是单个 `A-Z` 字母且不能重复。
+- `batch` 必须落在 `1..totalBatches`，每批最多 7 个据点；`pos1` 与 `pos2` 是占领区域的两个不同角点。
+- 部署阶段开始时 ESPoints 根据这个冻结快照创建第一批据点。切换地图或强制结束时，据点、标点、底图和缓存会一起清空。
+- 管理命令的“保存配置”只会导出到 `config/espoints/exports/`，不会修改地图模板。
 
 ## 构建与模组元数据配置
 
@@ -45,7 +147,7 @@ world/datapacks/espetro_server_config/
 | `minecraft_version` | `1.20.1` | 目标游戏版本 |
 | `forge_version` | `47.4.20` | Forge 开发版本 |
 | `mod_id` | `espetro` | 模组 ID 与数据包命名空间 |
-| `mod_version` | `1.0.6-final` | 构建版本 |
+| `mod_version` | `1.0.9-alpha` | 构建版本 |
 | `mod_group_id` | `com.shuai` | Maven group |
 | `mutil_version` | `6.3.0` | MUtil 强制依赖版本 |
 | `rhino_version` | `2001.2.2-build.17` | Rhino 强制依赖版本，用于 KubeJS JavaScript |
@@ -53,7 +155,7 @@ world/datapacks/espetro_server_config/
 | `espoints_version` | `1.0.6-final` | ESPoints 可选运行时依赖版本 |
 | `kubejs_version` | `2001.6.5-build.26` | KubeJS 强制运行依赖版本 |
 
-`META-INF/mods.toml` 声明 MUtil 6.3.0、Rhino `2001.2.2-build.17`、Architectury API `>=9.1.12` 和 KubeJS `>=2001.6.5-build.26` 为强制依赖，并将模组 ID 为 `espoints` 的 ESPoints `>=1.0.6-final` 声明为可选依赖。未安装 ESPoints 时部署界面使用占位地图；如需战术地图或 `155火炮支援` 选点，客户端和服务器必须同时安装 ESPoints。版本升级时应同步修改 Gradle 属性、本地开发依赖和元数据范围。
+`META-INF/mods.toml` 声明 MUtil 6.3.0、Rhino `2001.2.2-build.17`、Architectury API `>=9.1.12` 和 KubeJS `>=2001.6.5-build.26` 为强制依赖，并将模组 ID 为 `espoints` 的 ESPoints `>=1.0.6-final` 声明为可选依赖。未安装 ESPoints 时部署界面使用占位地图；如需战术地图、据点或 `155火炮支援` 选点，客户端和服务器必须同时安装工作区同步版 ESPoints。该同步版不再依赖 AuraTip/OELib，也不再读取全局 `teamfight.json` 或数据包地图。开发环境仅在传入 `-PespetroIncludeLocalEspoints=true` 时注入兄弟项目 JAR。
 
 资源 JSON：
 
@@ -69,7 +171,7 @@ world/datapacks/espetro_server_config/
 ```json
 {
   "game": {
-    "required_players": 1,
+    "team_select_seconds": 60,
     "deploy_timeout_seconds": 3,
     "deploy_warning_seconds": 0,
     "defend_commander_vote_seconds": 1,
@@ -77,6 +179,8 @@ world/datapacks/espetro_server_config/
     "defend_faction_select_seconds": 1,
     "attack_faction_select_seconds": 1,
     "faction_pool_size": 6,
+    "faction_reveal_seconds": 3,
+    "round_end_seconds": 10,
     "respawn_invincibility_ticks": 60,
     "teammate_name_tag_distance": 10.0,
     "waiting_y": 200
@@ -93,10 +197,10 @@ world/datapacks/espetro_server_config/
     "regen_delay_seconds": 4,
     "regen_per_second": 2
   },
-  "tutorial": {
-    "enabled": false,
-    "show_on_join": true,
-    "allow_skip": true
+  "governance": {
+    "impeachment_vote_seconds": 60,
+    "impeachment_cooldown_seconds": 600,
+    "commander_vacancy_seconds": 180
   }
 }
 ```
@@ -105,7 +209,7 @@ world/datapacks/espetro_server_config/
 
 | 字段 | 内置值 | 缺失/无文件回退 | 单位与说明 |
 | --- | ---: | ---: | --- |
-| `required_players` | 1 | 20 | 自动开始所需玩家数 |
+| `team_select_seconds` | 60 | 60 | 地图载入后的自由选边时间 |
 | `deploy_timeout_seconds` | 3 | 240 | 部署阶段总时间，秒 |
 | `deploy_warning_seconds` | 0 | 30 | 部署结束警告，秒 |
 | `defend_commander_vote_seconds` | 1 | 20 | 守方指挥官投票，秒 |
@@ -113,6 +217,8 @@ world/datapacks/espetro_server_config/
 | `defend_faction_select_seconds` | 1 | 30 | 守方编制选择，秒 |
 | `attack_faction_select_seconds` | 1 | 30 | 攻方编制选择，秒 |
 | `faction_pool_size` | 6 | 6 | 每次编制候选池数量 |
+| `faction_reveal_seconds` | 3 | 8 | 双方编制揭示时间 |
+| `round_end_seconds` | 10 | 10 | 回合结算界面时间 |
 | `respawn_invincibility_ticks` | 60 | 60 | 复活保护 tick，20 tick = 1 秒 |
 | `teammate_name_tag_distance` | 10.0 | 10.0 | 队友名牌距离，方块 |
 | `waiting_y` | 200 | 200 | 统一等待部署点的高空 Y 坐标；玩家聚集于主世界 `(0.5, waiting_y, 0.5)`，选择部署点前保持旁观、失明并锁位 |
@@ -156,41 +262,13 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `regen_delay_seconds` | 4 | 最后一次消耗后，开始恢复前等待的秒数 |
 | `regen_per_second` | 2 | 恢复期间每秒恢复的体力 |
 
-### `tutorial`
+### 静态教程
 
-引导式新手教程：不打断正常 8 阶段对局，在进服与关键节点通过 AuraTip 原生提示层展示分步内容，不再向聊天栏重复发送教程正文。关闭当前 AuraTip 会继续队列中的下一步。进度仅本会话有效；「跳过」后本会话不再自动弹出。重进服务器会重新开始；也可用命令手动打开。
-
-| 字段 | 默认 | 说明 |
-| --- | --- | --- |
-| `enabled` | `false` | 总开关。生产服建议关闭；教学服在世界数据包中设为 `true` |
-| `show_on_join` | `true` | 进服是否自动推送欢迎与当前阶段步骤 |
-| `allow_skip` | `true` | 是否允许使用 `/espetro tutorial skip` 跳过全部教程；关闭当前提示始终可继续下一步 |
-
-教学服示例（世界数据包覆盖 `game.json` 片段）：
-
-```json
-"tutorial": {
-  "enabled": true,
-  "show_on_join": true,
-  "allow_skip": true
-}
-```
-
-玩家命令（无需 OP）：
-
-| 命令 | 说明 |
-| --- | --- |
-| `/espetro tutorial` | 重新打开欢迎/当前阶段教程 |
-| `/espetro tutorial next` | 下一步 |
-| `/espetro tutorial dismiss` | 关闭当前步骤（队列中有后续则继续展示） |
-| `/espetro tutorial skip` | 跳过本会话全部教程 |
-| `/espetro tutorial status` | 查看开关与本会话状态 |
-
-`/reload` 或 `/espetro reload` 后会重新读取 `tutorial` 节点；若 `enabled` 变为 `false`，会清除在线玩家的教程卡片。
+教程不再是配置项。玩家在主城 GUI 点击“进入新手教程”后，会打开静态、可滚动的 MUtil 教程页；对局过程中不会自动推送动态提示。
 
 持续奔跑会在开始时结算一次消耗，之后每秒结算一次；跳跃按次结算。停止消耗后经过 `regen_delay_seconds`，立即恢复一次，之后每秒按 `regen_per_second` 恢复。
 
-体力耗尽时，服务端会禁止玩家奔跑和跳跃。体力未满时，客户端 HUD 会在准星下方显示一条 `40×2` 像素、无数字的细白线，线条长度表示剩余体力；体力回满后自动隐藏。修改数据包配置后可使用 `/reload` 热重载。
+体力耗尽时，服务端会禁止玩家奔跑和跳跃。体力未满时，客户端 HUD 会在准星下方显示一条 `40×2` 像素、无数字的细白线，线条长度表示剩余体力；体力回满后自动隐藏。修改地图的 `EsConfig/game.json` 后必须重启。
 
 除 `player_stamina: -1` 这一禁用值外，生产配置应使用非负数，并确保阶段时间合理。
 
@@ -299,15 +377,58 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 
 前哨只在 `DEPLOYING` 阶段对防守方可用，进入 `BATTLE` 后停用。
 
+## `VehSpawn.json`
+
+地图先注册载具类型，再为每种类型按 JSON 顺序提供攻守双方出生点：
+
+```json
+{
+  "VehTypes": ["tank", "apc"],
+  "spawn_points": {
+    "tank": {
+      "tank_1": {
+        "attack": {"x": -94, "y": 65, "z": 36, "yaw": -90},
+        "defend": {"x": 94, "y": 65, "z": 36, "yaw": 90}
+      }
+    },
+    "apc": {
+      "apc_1": {
+        "attack": {"x": -94, "y": 65, "z": -36, "yaw": -90},
+        "defend": {"x": 94, "y": 65, "z": -36, "yaw": 90}
+      }
+    }
+  }
+}
+```
+
+也接受每种类型直接使用点位数组的等价格式。编制声明的 `VehTypes` 必须全部存在于当前地图；某类型的 `entity` 数量也不得超过该类型点位数，否则整个编制不会进入本局随机池。实体按数组顺序与点位顺序一一对应。
+
+## `SquadTypes.json`
+
+```json
+{
+  "types": [
+    {"id": "infantry", "display_name": "步兵队"},
+    {"id": "support", "display_name": "支援队"},
+    {"id": "vehicle", "display_name": "载具队"},
+    {"id": "recon", "display_name": "侦查队"},
+    {"id": "none", "display_name": "无"}
+  ]
+}
+```
+
+小队按钮使用 `display_name` 的第一个 Unicode 字符作为类别标记；`none` 不显示标记。
+
 ## 阵营/编制 JSON
 
-每个 `data/espetro/factions/<formation_id>.json` 定义一个编制。文件名（不含 `.json`）是编制 ID；
+每个 `EsFactions/<formation_id>.json` 定义一个编制。文件名（不含 `.json`）是编制 ID；
 `faction.faction_id` 则是该编制所属的阵营字符串。这两个概念彼此独立。
 
 ### 完整示例
 
 ```json
 {
+  "VehTypes": ["transport"],
   "faction": {
     "name": "示例合成旅",
     "description": "用于说明配置格式",
@@ -319,15 +440,12 @@ kubejs/server_scripts/00_espetro_artillery_155.js
   },
   "vehicles": {
     "transport": {
-      "entity_type": "minecraft:minecart",
+      "entity": ["minecraft:minecart", "minecraft:horse"],
       "display_name": "§6运输车",
-      "max": 2,
+      "per_max_count": 2,
       "respawn_minutes": 5,
       "troop_value": 5,
-      "deployment": {
-        "ATTACK": { "position": [3028, 9, -3640], "yaw": 90 },
-        "DEFEND": { "position": [-2276, 9, 2306], "yaw": 90 }
-      }
+      "entity_tags": ["example_transport"]
     }
   },
   "classes": {
@@ -410,6 +528,7 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | --- | --- | --- |
 | `name`, `description`, `role` | String | GUI 信息 |
 | `icon` | String | 可选；`assets/espetro/textures/gui/roles/` 下不带扩展名的职业图标短名 |
+| `IconImage` | String | 可选；**文件系统完整路径**的职业图标（优先于 `icon`），例 `/home/shu/图片/Icon/rifleman.png` |
 | `maxPlayers` | Integer | 必须大于 0。默认（`team_count: false`）为编制/队伍总上限；`team_count: true` 时为**每个班组小队**上限 |
 | `team_count` | Boolean | 默认 `false`；也接受 `teamCount`。`true` 时人数在班组小队内统计，未入小队不可选该职业 |
 | `max_per_squad` | Integer | 默认 0（不限）。仅 `team_count: false` 时生效：每个班组小队内该职业上限，必须 `≤ maxPlayers`；未入小队只受总限 |
@@ -452,7 +571,7 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 - **变体**：无论 `strict_count` 如何，**选变体 = 选父职业的一个席位**；`strict_count: true` 时再叠加变体自身上限。
 
 
-任何变体无效、（`strict_count: true` 时）人数不相等，都会在启动或 `/reload` 时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
+任何变体无效、（`strict_count: true` 时）人数不相等，都会在启动时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
 
 兼容旧 JSON：若完全没有 `variants`，职业节点原有的 `commands`、`equipment`、`wearable_equipment`、`auto_equip_wearables` 和 `resupply` 会被合成为一个隐式 `default` 变体，人数等于职业上限。若显式配置了 `variants`，它不可为空，职业节点上的这些旧装备字段会被忽略并警告。
 
@@ -473,39 +592,40 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 弹药库存大于 0、但不足完整费用时，玩家仍会得到本次补给，并扣除全部剩余弹药，
 使库存归零；库存已经为 0 时不发放补给。
 
-### `vehicles.<vehicle_id>`
+### `VehTypes` 与 `vehicles.<vehicle_type>`
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
-| `entity_type` | 必填 | 实体注册 ID，可来自其他模组 |
-| `display_name` | vehicle ID | 显示名，可含 `§` 颜色码 |
-| `max` | 1 | 同类最大部署数量 |
+| `VehTypes` | 必填 | 本编制使用的载具类型数组；类型必须与 `vehicles` key 一致并存在于当前地图 |
+| `entity` | 必填 | 实体注册 ID 数组，可来自其他模组；顺序对应地图点位顺序 |
+| `display_name` | vehicle type | 显示名，可含 `§` 颜色码 |
+| `per_max_count` | 1 | 同类型最大同时部署数量 |
 | `respawn_minutes` | 5 | 单辆刷新冷却 |
 | `troop_value` | 0 | 载具死亡/被摧毁时扣除的所属队伍兵力 |
-| `deployment.ATTACK.position` | 必填 | 该编制被攻方选中时使用的固定坐标 `[x,y,z]` |
-| `deployment.ATTACK.yaw` | 0 | 攻方载具朝向 |
-| `deployment.DEFEND.position` | 必填 | 该编制被守方选中时使用的固定坐标 `[x,y,z]` |
-| `deployment.DEFEND.yaw` | 0 | 守方载具朝向 |
+| `entity_tags` | `[]` | 生成后附加到实体的 tag 数组 |
 
-载具部署点只支持在阵营 JSON 中按 `ATTACK`/`DEFEND` 直接指定坐标；同一个编制被哪一方选中，就使用对应队伍下的坐标。不会再按玩家部署点、偏移量、半径或自动落地逻辑推导位置。
+编制文件不再保存部署坐标。部署位置完全由获胜地图的 `VehSpawn.json` 决定。
 
-## 内置编制
+## 随 JAR 导出的示例编制
 
 | 文件 ID | 队伍 | `faction_id` | 说明 |
 | --- | --- | --- | --- |
 | `pla_heavy_brigade` | ATTACK | `PLA` | PLA 重型合成旅 |
 | `pla_medium_brigade` | ATTACK | `PLA` | PLA 中型合成旅 |
-| `pla_rapid_force` | ATTACK | `PLA` | 快速反应占位编制，当前无职业/载具 |
 | `russia_army` | ATTACK | `RUSSIA` | 俄罗斯陆上部队 |
 | `russia_logistics` | ATTACK | `RUSSIA` | 俄罗斯后勤编制 |
 | `middle_east_militia` | ATTACK | `MIDDLE_EAST_MILITIA` | 中东联合武装 |
 | `us_airborne` | DEFEND | `USA` | 美国空降部队 |
 | `us_cavalry` | DEFEND | `USA` | 美国骑兵旅 |
 | `ukraine_irregular` | DEFEND | `UKRAINE_IRREGULAR` | 乌萨克非正规武装 |
+| `example_attack` | ATTACK | `EXAMPLE_ATK` | 最小可运行进攻示例 |
+| `example_defend` | DEFEND | `EXAMPLE_DEF` | 最小可运行防守示例 |
+
+空的旧 `pla_rapid_force` 不会导出。示例只在目标文件缺失时写入，服主修改后的同名文件不会被后续启动覆盖。
 
 ## 旧配置与生成文件
 
-- `config/espetro/factions/<id>.json` 只由 `FactionConfigLoader` 作为旧式队伍判断回退读取；完整编制应放数据包路径。
+- `data/espetro/config/*.json` 与 `data/espetro/factions/*.json` 已停止作为运行时配置；请迁移到每地图 `EsConfig` 与根目录 `EsFactions`。
 - 当前源码没有注册 Espetro Forge TOML。已有 `config/espetro-common.toml` 是旧构建遗留，不控制现行业务逻辑。
 - `assets/espetro/lang/*.json` 是翻译资源，不应作为服务器业务配置。
 
@@ -513,6 +633,9 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 
 ```text
 /espetro reload
+/espetro prestart
+/espetro stop
+/espetro end <attack|defend|draw>
 /espetro reset
 /espetro start
 /espetro status
@@ -536,3 +659,16 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 ```
 
 管理员配置命令通常要求权限等级 2；载具部署要求当前指挥官身份。
+
+`/espetro stop` 可在地图投票、地图装载、部署、战斗或结算阶段强制终止当前游戏。
+它会清除投票、职业、阵营、小队、兵力、比赛统计、兵站、队包、临时屏障、部署载具及冷却状态，
+并把所有在线玩家送回主世界主城、打开 MUtil 主城界面。若地图切换正在执行，清理会在切换后自动接续，
+避免留下半完成状态。
+
+战场维度在服务器启动时由 Forge 创建首份副本。玩家全部回城后，`stop` 会先把战场从服务器 Tick
+列表摘除，再由独立 IO 线程以“不保存本局破坏”的方式关闭区块、实体和 POI 存储句柄，并删除存档中的
+整个战场维度目录。下一局再次选中该地图时，系统会从只读 `EsWorld/<地图文件夹>` 重新复制地形并挂载
+新的 `ServerLevel`；任何时候都不会写入或删除 `EsWorld` 原件。
+
+这里不会调用会强制保存全部区块的 `ServerLevel.close()`；该保存等待会阻塞服务端主线程。
+战场使用可丢弃存储关闭路径，因此地图删除和复制期间主世界及其他维度仍可正常 Tick。

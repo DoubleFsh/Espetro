@@ -8,8 +8,6 @@ import org.espetro.config.GameConfig;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.TutorialSyncPacket;
 import org.espetro.team.GamePhase;
-import org.espetro.team.GameStateManager;
-import org.espetro.team.VoteManager;
 
 import java.util.ArrayDeque;
 import java.util.EnumSet;
@@ -41,74 +39,25 @@ public final class TutorialManager {
         return INSTANCE;
     }
 
+    /**
+     * 进服：仅建立会话，不自动弹教程（show_on_join 强制忽略，改为手动 reopen）。
+     */
     public void onPlayerJoin(ServerPlayer player, boolean midGame) {
-        if (!GameConfig.isTutorialEnabled()) {
+        if (player == null) {
             return;
         }
-        Session session = sessions.computeIfAbsent(player.getUUID(), id -> new Session());
-        session.skipped = false;
-        session.shownSteps.clear();
-        session.pending.clear();
-        session.currentStep = null;
-
-        if (!GameConfig.isTutorialShowOnJoin()) {
-            return;
-        }
-
-        if (midGame) {
-            enqueue(player, TutorialStep.MID_JOIN);
-        } else {
-            enqueue(player, TutorialStep.WELCOME);
-            enqueue(player, TutorialStep.TEAM_SELECT);
-        }
-
-        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-        TutorialStep phaseStep = TutorialStep.primaryForPhase(phase);
-        if (phaseStep != null && phaseStep != TutorialStep.TEAM_SELECT) {
-            enqueue(player, phaseStep);
-        }
-        enqueueTeamSpecificForPhase(player, phase);
-        flushDisplay(player);
+        sessions.computeIfAbsent(player.getUUID(), id -> new Session());
     }
 
     public void onPlayerLeave(UUID uuid) {
         sessions.remove(uuid);
     }
 
+    /**
+     * 阶段切换：不自动弹 tip（仅手动教程）。
+     */
     public void onPhaseChanged(GamePhase phase) {
-        if (!GameConfig.isTutorialEnabled() || phase == null) {
-            return;
-        }
-        MinecraftServer server = Espetro.getServer();
-        if (server == null) {
-            return;
-        }
-
-        TutorialStep primary = TutorialStep.primaryForPhase(phase);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (primary != null) {
-                enqueue(player, primary);
-            }
-            enqueueTeamSpecificForPhase(player, phase);
-
-            flushDisplay(player);
-        }
-    }
-
-    private void enqueueTeamSpecificForPhase(ServerPlayer player, GamePhase phase) {
-        if (phase == null) {
-            return;
-        }
-        String team = Espetro.getPlayerTeam(player);
-        if (phase == GamePhase.DEPLOYING) {
-            if ("ATTACK".equals(team)) {
-                enqueue(player, TutorialStep.DEPLOY_ATTACK_WAIT);
-            } else if ("DEFEND".equals(team)) {
-                enqueue(player, TutorialStep.DEPLOY_DEFEND_BUILD);
-                enqueue(player, TutorialStep.OUTPOST);
-            }
-            enqueue(player, TutorialStep.SQUAD);
-        }
+        // no-op: 教程仅主城按钮 / /espetro tutorial 触发
     }
 
     /**
@@ -193,7 +142,7 @@ public final class TutorialManager {
     }
 
     /**
-     * 命令：重新打开欢迎与当前阶段步骤。
+     * 主城 / 命令：按完整目录顺序播放全部 GUI/阶段说明。
      */
     public void reopen(ServerPlayer player) {
         if (!GameConfig.isTutorialEnabled()) {
@@ -202,12 +151,16 @@ public final class TutorialManager {
         }
         Session session = sessions.computeIfAbsent(player.getUUID(), id -> new Session());
         session.skipped = false;
-        tryShow(player, TutorialStep.WELCOME, true);
-        TutorialStep phaseStep = TutorialStep.primaryForPhase(
-            GameStateManager.getInstance().getCurrentPhase());
-        if (phaseStep != null && phaseStep != TutorialStep.WELCOME) {
-            enqueue(player, phaseStep);
+        session.shownSteps.clear();
+        session.pending.clear();
+        session.currentStep = null;
+        clearClient(player);
+
+        for (TutorialStep step : TutorialStep.values()) {
+            session.pending.add(step);
         }
+        player.sendSystemMessage(Component.translatable("tutorial.msg.started"));
+        flushDisplay(player);
     }
 
     public void skipAll(ServerPlayer player) {
@@ -264,9 +217,6 @@ public final class TutorialManager {
         if (session.shownSteps.contains(step) || session.currentStep == step || session.pending.contains(step)) {
             return false;
         }
-        if (!matchesFilter(player, step.getTeamFilter())) {
-            return false;
-        }
         session.pending.add(step);
         return true;
     }
@@ -279,9 +229,6 @@ public final class TutorialManager {
         while (!session.pending.isEmpty()) {
             TutorialStep next = session.pending.poll();
             if (next == null || session.shownSteps.contains(next)) {
-                continue;
-            }
-            if (!matchesFilter(player, next.getTeamFilter())) {
                 continue;
             }
             display(player, session, next);
@@ -299,26 +246,6 @@ public final class TutorialManager {
             TutorialStep.totalCount(),
             GameConfig.isTutorialAllowSkip()
         ));
-    }
-
-    private boolean matchesFilter(ServerPlayer player, TutorialStep.TeamFilter filter) {
-        if (filter == null || filter == TutorialStep.TeamFilter.ALL) {
-            return true;
-        }
-        if (filter == TutorialStep.TeamFilter.COMMANDER) {
-            return VoteManager.getInstance().isCommander(player.getUUID());
-        }
-        String team = Espetro.getPlayerTeam(player);
-        if (team == null) {
-            return false;
-        }
-        if (filter == TutorialStep.TeamFilter.ATTACK) {
-            return "ATTACK".equals(team);
-        }
-        if (filter == TutorialStep.TeamFilter.DEFEND) {
-            return "DEFEND".equals(team);
-        }
-        return true;
     }
 
     private static final class Session {

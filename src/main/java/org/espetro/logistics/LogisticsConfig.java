@@ -26,26 +26,20 @@ public final class LogisticsConfig {
         return settings;
     }
 
+    /** @deprecated 不从 datapack 加载；战场激活时 applyExternalJson。 */
     public static void load(MinecraftServer server) {
+        // 有意留空：默认 LogisticsSettings 已初始化
+    }
+
+    /** Apply the frozen logistics.json belonging to the active map. */
+    public static void applyExternalJson(String rawJson) {
         LogisticsSettings loaded = new LogisticsSettings();
-        ResourceLocation location = ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "config/logistics.json");
-        try {
-            var resource = EspetroDataResources.getPreferred(server.getResourceManager(), location);
-            if (resource.isPresent()) {
-                try (var reader = new InputStreamReader(resource.get().open(), StandardCharsets.UTF_8)) {
-                    JsonObject root = GSON.fromJson(reader, JsonObject.class);
-                    if (root != null && root.has("logistics")) {
-                        loaded = GSON.fromJson(root.get("logistics"), LogisticsSettings.class);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Espetro.LOGGER.error("加载 logistics.json 失败，使用默认配置", e);
+        JsonObject root = GSON.fromJson(rawJson, JsonObject.class);
+        if (root != null && root.has("logistics")) {
+            loaded = GSON.fromJson(root.get("logistics"), LogisticsSettings.class);
         }
         loaded.normalize();
         settings = loaded;
-        Espetro.LOGGER.info("后勤配置已加载: {} 个补给来源, FOB上限 {}/{}",
-            loaded.sources.size(), loaded.maxConstruction, loaded.maxAmmunition);
     }
 
     public static class LogisticsSettings {

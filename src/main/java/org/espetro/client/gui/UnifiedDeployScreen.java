@@ -3,12 +3,14 @@ package org.espetro.client.gui;
 import se.mickelus.mutil.gui.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.client.HcrTacticalMapBridge;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
+import org.espetro.network.GovernanceStatePacket;
+import org.espetro.network.GovernanceActionPacket;
+import org.espetro.team.GamePhase;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
@@ -20,13 +22,14 @@ import java.util.regex.Pattern;
  *
  * Squad-style layout: squads | roles and spawn points | tactical map.
  */
-public class UnifiedDeployScreen extends Screen {
+public class UnifiedDeployScreen extends MutilScreen {
 
     private static final int BTN_H = 12;
     private static final int CLASS_BTN_H = 22;
     private static final int CLASS_ICON_SIZE = 17;
     private static final int TITLE_H = 35;
     private static final int STATUS_BAR_H = 13;
+    private static final int MAP_FOOTER_H = BTN_H + 8;
     private static final int SECTION_TITLE_H = 10;
     private static final int INNER_PADDING = 3;
     private static final int SCROLLBAR_RESERVED_W = 6;
@@ -43,12 +46,19 @@ public class UnifiedDeployScreen extends Screen {
     private static final float SQUAD_TEXT_SCALE = 0.68f;
     private static final float SQUAD_MEMBER_TEXT_SCALE = 0.64f;
 
-    // EspButton 颜色
-    private static final int BTN_BG_NORMAL   = 0xD01B1E20;
-    private static final int BTN_BG_HOVER    = 0xE0435145;
-    private static final int BTN_BG_DISABLED = 0xB0181B1D;
+    // EspButton 颜色：全不透明，避免 isPauseScreen=false 时世界从按钮透出（Embeddium 叠影）。
+    private static final int BTN_BG_NORMAL   = 0xFF1B1E20;
+    private static final int BTN_BG_HOVER    = 0xFF435145;
+    private static final int BTN_BG_DISABLED = 0xFF181B1D;
     private static final int BTN_BORDER      = 0xFF59605E;
     private static final int BTN_TEXT        = 0xFFFFFF;
+    /** 标题/底栏/列面板：完全不透明，挡住 isPauseScreen=false 时透出的世界（防 Embeddium 叠影）。 */
+    private static final int CHROME_BG       = 0xFF16191B;
+    private static final int PANEL_LEFT_BG   = 0xFF171A1C;
+    private static final int PANEL_CENTER_BG = 0xFF121517;
+    private static final int PANEL_MAP_FOOTER_BG = 0xFF101416;
+    /** 全屏深黑灰遮罩：J 键主 GUI 专用，阶段投票 UI 不走此路径。 */
+    private static final int SCREEN_SHADE    = 0xFF121517;
     private static final Pattern COORDINATE_PATTERN =
         Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final ResourceLocation HAB_ICON =
@@ -69,14 +79,21 @@ public class UnifiedDeployScreen extends Screen {
     private final List<UnifiedDeployScreenPacket.BastionItem> bastions;
     private final boolean isCommander;
     private final List<UnifiedDeployScreenPacket.SquadInfo> squads;
+    private final List<UnifiedDeployScreenPacket.SquadCategoryInfo> squadCategories;
     private int mySquadId;
     private int deployTimeRemaining;
+    /** 上次从服务端同步倒计时时的 epoch ms / 秒数，用于本地每秒递减，避免依赖全量包刷新。 */
+    private long deployTimerAnchorMs;
+    private int deployTimerAnchorSeconds;
     private final String team;
     private boolean waitingForDeploySelection;
     private long outpostRedeployCooldownEndsAt;
-
-    // ===== Element 树 =====
-    private GuiElement root;
+    private GovernanceStatePacket governanceState = new GovernanceStatePacket(List.of());
+    private long governanceReceivedAtMs;
+    /** 上一帧已刷新过的 epoch 秒，用于把 Rally/冷却文案节流到每秒一次。 */
+    private int lastDynamicLabelEpochSec = -1;
+    /** 同 tick 内多次结构更新只 rebuild 一次。 */
+    private boolean structureRebuildQueued;
 
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
@@ -95,6 +112,7 @@ public class UnifiedDeployScreen extends Screen {
     private PlainText statusText;
     private PlainText deployTitleText;
     private PlainText statusTimerText;
+    private PlainText governanceTimerText;
     private String pendingDeployPosition;
     private String pendingDeployCommand;
     private final Set<Integer> expandedSquadIds = new HashSet<>();
@@ -106,10 +124,23 @@ public class UnifiedDeployScreen extends Screen {
     private int lastMouseX;
     private int lastMouseY;
 
+    // ===== 职业装备人物预览 =====
+    /** 预览渲染器实例（懒初始化虚拟玩家实体）。 */
+    private final ClassPreviewRenderer previewRenderer = new ClassPreviewRenderer();
+    /** 当前正在显示的人物预览（class index + variantId）；-1/null 表示无预览。 */
+    private int activePreviewClassIndex = -1;
+    private String activePreviewVariantId = null;
+    /** 鼠标离开所有预览目标后的宽限截止时刻（epoch ms）；0 表示未在宽限中。 */
+    private long previewGraceDeadlineMs = 0L;
+    /** 宽限过短时，鼠标在职业格间移动会频繁在战术地图/预览间切换，右侧整块闪烁。 */
+    private static final long PREVIEW_GRACE_MS = 350L;
+
     // ===== 滚轮列表 =====
     private ScrollableList classScrollList;
     private ScrollableList deployScrollList;
     private ScrollableList squadScrollList;
+    private Double pendingSquadScrollOffset;
+    private Double pendingDeployScrollOffset;
 
     // ===== 区域边界 =====
     private int leftX, leftY, leftW, leftH;
@@ -130,15 +161,25 @@ public class UnifiedDeployScreen extends Screen {
         replaceVariantCounts(data.getVariantCounts());
         this.hasDeployPoint = data.hasDeployPoint();
         this.deployPointPos = data.getDeployPointPos();
-        this.bastions = new ArrayList<>(data.getBastions());
+        this.bastions = new ArrayList<>(data.getBastions() == null ? List.of() : data.getBastions());
+        this.bastions.sort(Comparator
+            .comparing((UnifiedDeployScreenPacket.BastionItem b) -> b.type == null ? "" : b.type)
+            .thenComparing(b -> b.id == null ? "" : b.id.toString()));
         this.isCommander = data.isCommander();
         this.squads = new ArrayList<>(data.getSquads());
+        this.squadCategories = new ArrayList<>(data.getSquadCategories());
         this.mySquadId = data.getMySquadId();
-        this.deployTimeRemaining = data.getDeployTimeRemaining();
         this.team = data.getTeam();
         this.waitingForDeploySelection = data.isWaitingForDeploySelection();
         this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
             + data.getOutpostRedeployCooldownRemaining() * 1000L;
+        anchorDeployTimer(data.getDeployTimeRemaining());
+    }
+
+    private void anchorDeployTimer(int seconds) {
+        this.deployTimeRemaining = seconds;
+        this.deployTimerAnchorSeconds = seconds;
+        this.deployTimerAnchorMs = System.currentTimeMillis();
     }
 
     /**
@@ -146,7 +187,11 @@ public class UnifiedDeployScreen extends Screen {
      */
     public void updateBastions(List<UnifiedDeployScreenPacket.BastionItem> nextBastions) {
         List<UnifiedDeployScreenPacket.BastionItem> next = nextBastions == null
-            ? List.of() : nextBastions;
+            ? new ArrayList<>() : new ArrayList<>(nextBastions);
+        // 固定顺序，避免 Hash 遍历导致「结构变化」误 rebuild。
+        next.sort(Comparator
+            .comparing((UnifiedDeployScreenPacket.BastionItem b) -> b.type == null ? "" : b.type)
+            .thenComparing(b -> b.id == null ? "" : b.id.toString()));
         boolean structureChanged = bastions.size() != next.size();
         if (!structureChanged) {
             for (int i = 0; i < bastions.size(); i++) {
@@ -204,15 +249,9 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void rebuildGuiPreservingDeployAndSquadScroll() {
-        double squadOffset = squadScrollList != null ? squadScrollList.getOffset() : 0;
-        double deployOffset = deployScrollList != null ? deployScrollList.getOffset() : 0;
-        rebuildGui();
-        if (squadScrollList != null) {
-            squadScrollList.setOffset(squadOffset);
-        }
-        if (deployScrollList != null) {
-            deployScrollList.setOffset(deployOffset);
-        }
+        pendingSquadScrollOffset = squadScrollList != null ? squadScrollList.getOffset() : 0;
+        pendingDeployScrollOffset = deployScrollList != null ? deployScrollList.getOffset() : 0;
+        queueStructureRebuild();
     }
 
     public void updateClassCounts(Map<String, Integer> counts) {
@@ -221,9 +260,17 @@ public class UnifiedDeployScreen extends Screen {
 
     public void updateClassCounts(Map<String, Integer> counts,
                                   Map<String, Map<String, Integer>> updatedVariantCounts) {
-        this.classCounts.clear();
-        this.classCounts.putAll(counts);
-        if (updatedVariantCounts != null) {
+        boolean countsChanged = counts != null && !counts.equals(this.classCounts);
+        boolean variantsChanged = updatedVariantCounts != null
+            && !variantCountsEqual(this.variantCounts, updatedVariantCounts);
+        if (!countsChanged && !variantsChanged) {
+            return;
+        }
+        if (countsChanged) {
+            this.classCounts.clear();
+            this.classCounts.putAll(counts);
+        }
+        if (variantsChanged) {
             replaceVariantCounts(updatedVariantCounts);
         }
         refreshClassButtons();
@@ -237,23 +284,112 @@ public class UnifiedDeployScreen extends Screen {
         }
     }
 
+    private static boolean variantCountsEqual(Map<String, Map<String, Integer>> a,
+                                              Map<String, Map<String, Integer>> b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.size() != b.size()) return false;
+        for (Map.Entry<String, Map<String, Integer>> e : a.entrySet()) {
+            Map<String, Integer> other = b.get(e.getKey());
+            if (other == null || !other.equals(e.getValue())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * 同步职业元数据与对玩家有效的人数（含 team_count / max_per_squad / 小队当前人数）。
-     * 不 rebuild 整页，只刷新按钮 label/enabled。
+     * 不 rebuild 整页，只刷新按钮 label/enabled；仅职业格子数量/id 变化时重建网格。
      */
     public void updateClasses(List<UnifiedDeployScreenPacket.ClassInfo> nextClasses,
                               Map<String, Integer> counts,
                               Map<String, Map<String, Integer>> updatedVariantCounts) {
+        boolean countsChanged = counts != null && !counts.equals(this.classCounts);
+        boolean variantsChanged = updatedVariantCounts != null
+            && !variantCountsEqual(this.variantCounts, updatedVariantCounts);
+        boolean classDataChanged = false;
+        boolean classGridChanged = false;
+
         if (nextClasses != null) {
-            this.classes.clear();
-            this.classes.addAll(nextClasses);
+            classGridChanged = !classGridEquals(this.classes, nextClasses);
+            classDataChanged = !classDisplayStateEquals(this.classes, nextClasses);
+            if (classGridChanged || classDataChanged) {
+                this.classes.clear();
+                this.classes.addAll(nextClasses);
+            }
         }
-        updateClassCounts(counts, updatedVariantCounts);
+        if (countsChanged) {
+            this.classCounts.clear();
+            this.classCounts.putAll(counts);
+        }
+        if (variantsChanged) {
+            replaceVariantCounts(updatedVariantCounts);
+        }
+        if (!classGridChanged && !classDataChanged && !countsChanged && !variantsChanged) {
+            return;
+        }
+        if (classGridChanged && root != null) {
+            rebuildGuiPreservingDeployAndSquadScroll();
+            return;
+        }
         refreshClassButtons();
     }
 
+    /** 职业按钮网格结构（数量 + classId 顺序）。 */
+    private static boolean classGridEquals(
+            List<UnifiedDeployScreenPacket.ClassInfo> a,
+            List<UnifiedDeployScreenPacket.ClassInfo> b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            if (!Objects.equals(a.get(i).classId, b.get(i).classId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 影响按钮 label/enabled 的展示态是否一致（含小队当前人数、上限、图标名）。
+     */
+    private static boolean classDisplayStateEquals(
+            List<UnifiedDeployScreenPacket.ClassInfo> a,
+            List<UnifiedDeployScreenPacket.ClassInfo> b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            UnifiedDeployScreenPacket.ClassInfo x = a.get(i);
+            UnifiedDeployScreenPacket.ClassInfo y = b.get(i);
+            if (x == y) continue;
+            if (x == null || y == null) return false;
+            if (x.maxPlayers != y.maxPlayers
+                || x.strictCount != y.strictCount
+                || x.teamCount != y.teamCount
+                || x.maxPerSquad != y.maxPerSquad
+                || x.squadCurrentCount != y.squadCurrentCount
+                || !Objects.equals(x.classId, y.classId)
+                || !Objects.equals(x.name, y.name)
+                || !Objects.equals(x.icon, y.icon)
+                || !Objects.equals(x.iconImage, y.iconImage)
+                || x.variants.size() != y.variants.size()) {
+                return false;
+            }
+            for (int v = 0; v < x.variants.size(); v++) {
+                UnifiedDeployScreenPacket.VariantInfo vx = x.variants.get(v);
+                UnifiedDeployScreenPacket.VariantInfo vy = y.variants.get(v);
+                if (!Objects.equals(vx.variantId, vy.variantId)
+                    || vx.maxPlayers != vy.maxPlayers
+                    || vx.currentCount != vy.currentCount
+                    || !Objects.equals(vx.name, vy.name)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public void updateTimeRemaining(int seconds) {
-        this.deployTimeRemaining = seconds;
+        anchorDeployTimer(seconds);
         if (deployTitleText != null) {
             deployTitleText.setText(buildDeployTitle());
         }
@@ -267,6 +403,10 @@ public class UnifiedDeployScreen extends Screen {
         this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
             + Math.max(0, redeployCooldownRemaining) * 1000L;
         refreshDeployButtonStates();
+    }
+
+    public boolean isWaitingForDeploySelection() {
+        return waitingForDeploySelection;
     }
 
     public void updateSquads(List<UnifiedDeployScreenPacket.SquadInfo> updatedSquads, int updatedMySquadId) {
@@ -295,6 +435,28 @@ public class UnifiedDeployScreen extends Screen {
         }
         // 结构未变时只刷职业按钮（小队作用域人数/禁用态）；结构变时 rebuild 已重建职业区。
         refreshClassButtons();
+    }
+
+    public void updateGovernance(GovernanceStatePacket packet) {
+        GovernanceStatePacket.TeamState previous = activeGovernance();
+        governanceState = packet == null ? new GovernanceStatePacket(List.of()) : packet;
+        governanceReceivedAtMs = System.currentTimeMillis();
+        GovernanceStatePacket.TeamState current = activeGovernance();
+        if (root != null && !sameGovernanceLayout(previous, current)) {
+            rebuildGuiPreservingSquadScroll();
+        } else if (governanceTimerText != null && current != null) {
+            governanceTimerText.setText("\u00a7e剩余 " + current.remainingSeconds + "s");
+        }
+    }
+
+    private static boolean sameGovernanceLayout(GovernanceStatePacket.TeamState a,
+                                                GovernanceStatePacket.TeamState b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return Objects.equals(a.state, b.state)
+            && Objects.equals(a.commander, b.commander)
+            && Objects.equals(a.challenger, b.challenger)
+            && Objects.equals(a.volunteers, b.volunteers);
     }
 
     /**
@@ -332,7 +494,9 @@ public class UnifiedDeployScreen extends Screen {
             || a.maxMembers != b.maxMembers
             || a.isLocked != b.isLocked
             || !Objects.equals(a.name, b.name)
-            || !Objects.equals(a.leaderName, b.leaderName)) {
+            || !Objects.equals(a.leaderName, b.leaderName)
+            || !Objects.equals(a.categoryId, b.categoryId)
+            || !Objects.equals(a.categoryDisplayName, b.categoryDisplayName)) {
             return false;
         }
         List<UnifiedDeployScreenPacket.SquadMemberInfo> am = a.members;
@@ -387,7 +551,13 @@ public class UnifiedDeployScreen extends Screen {
         }
 
         void setEnabled(boolean e) { enabled = e; }
-        void setLabel(String l) { label = l; }
+        void setLabel(String l) {
+            String next = l == null ? "" : l;
+            if (java.util.Objects.equals(label, next)) {
+                return;
+            }
+            label = next;
+        }
         boolean isEnabled() { return enabled; }
         void setIcon(ResourceLocation icon, int textureWidth, int textureHeight) {
             this.icon = icon;
@@ -472,7 +642,7 @@ public class UnifiedDeployScreen extends Screen {
             int bx = x + getX();
             int by = y + getY();
             graphics.fill(bx, by, bx + getWidth(), by + getHeight(),
-                hasFocus() ? 0x80404743 : 0x60141617);
+                hasFocus() ? 0xF0404743 : 0xE0141617);
             graphics.fill(bx, by, bx + 1, by + getHeight(), accentColor);
 
             int textX = bx + 4;
@@ -513,7 +683,13 @@ public class UnifiedDeployScreen extends Screen {
         }
 
         void setColor(int c) { color = c; }
-        void setText(String value) { text = value == null ? "" : value; }
+        void setText(String value) {
+            String next = value == null ? "" : value;
+            if (java.util.Objects.equals(text, next)) {
+                return;
+            }
+            text = next;
+        }
 
         @Override
         public void draw(GuiGraphics graphics, int x, int y, int w, int h, int mx, int my, float tick) {
@@ -525,49 +701,68 @@ public class UnifiedDeployScreen extends Screen {
     // ==================== 界面构建 ====================
 
     @Override
-    protected void init() {
-        super.init();
-        rebuildGui();
+    protected void buildMutilRoot(GuiElement root) {
+        this.root = root;
+        populateGui();
+        if (pendingSquadScrollOffset != null && squadScrollList != null) {
+            squadScrollList.setOffset(pendingSquadScrollOffset);
+        }
+        if (pendingDeployScrollOffset != null && deployScrollList != null) {
+            deployScrollList.setOffset(pendingDeployScrollOffset);
+        }
+        pendingSquadScrollOffset = null;
+        pendingDeployScrollOffset = null;
         // 打开包已携带服务端最新人数，后续变更也由服务端主动推送，
         // 不再打开界面后立即发起第二次请求。
     }
 
     private void rebuildGui() {
-        this.root = new GuiElement(0, 0, this.width, this.height);
+        rebuildMutilRoot();
+    }
+
+    private void populateGui() {
         this.outpostRedeployButton = null;
         this.confirmDeployButton = null;
         this.statusText = null;
         this.deployTitleText = null;
         this.statusTimerText = null;
+        this.governanceTimerText = null;
         computeRegions();
 
         buildTitleBar();
         buildDividerLine(TITLE_H);
 
-        root.addChild(new GuiRect(leftX, leftY, leftW, leftH, 0xB0171A1C));
-        root.addChild(new GuiRect(centerX, centerY, centerW, centerH, 0xA8121517));
-        root.addChild(new GuiRect(mapX, mapY, mapW, mapH, 0x80101416));
+        // 左/中列不透明底，挡住背后世界与聊天；地图视口不铺半透明盖层（地图在 renderBefore 绘制）。
+        root.addChild(new GuiRect(leftX, leftY, leftW, leftH, PANEL_LEFT_BG));
+        root.addChild(new GuiRect(centerX, centerY, centerW, centerH, PANEL_CENTER_BG));
+        root.addChild(new GuiRect(mapX, mapY + Math.max(0, mapH - MAP_FOOTER_H),
+            mapW, MAP_FOOTER_H, PANEL_MAP_FOOTER_BG));
 
         buildSquadSection();
         buildClassSection();
-        root.addChild(new GuiRect(centerX + 3, deployAreaY - 3, centerW - 6, 1, 0x50FFFFFF));
+        root.addChild(new GuiRect(centerX + 3, deployAreaY - 3, centerW - 6, 1, 0xFF3A3F3D));
         buildDeploySection();
 
         root.addChild(new GuiRect(leftX + leftW, TITLE_H + 2, 1,
-            this.height - TITLE_H - STATUS_BAR_H - 4, 0x50FFFFFF));
+            this.height - TITLE_H - STATUS_BAR_H - 4, 0xFF3A3F3D));
         root.addChild(new GuiRect(centerX + centerW, TITLE_H + 2, 1,
-            this.height - TITLE_H - STATUS_BAR_H - 4, 0x50FFFFFF));
+            this.height - TITLE_H - STATUS_BAR_H - 4, 0xFF3A3F3D));
 
         buildMapPanel();
         buildStatusBar();
     }
 
     private void rebuildGuiPreservingSquadScroll() {
-        double previousOffset = squadScrollList == null ? 0 : squadScrollList.getOffset();
-        rebuildGui();
-        if (squadScrollList != null) {
-            squadScrollList.setOffset(previousOffset);
+        pendingSquadScrollOffset = squadScrollList == null ? 0 : squadScrollList.getOffset();
+        queueStructureRebuild();
+    }
+
+    private void queueStructureRebuild() {
+        if (structureRebuildQueued) {
+            return;
         }
+        structureRebuildQueued = true;
+        rebuildGui();
     }
 
     /** 计算所有区域的坐标和尺寸 */
@@ -607,7 +802,7 @@ public class UnifiedDeployScreen extends Screen {
 
     // ---------- 标题行 ----------
     private void buildTitleBar() {
-        root.addChild(new GuiRect(0, 0, this.width, TITLE_H, 0xF016191B));
+        root.addChild(new GuiRect(0, 0, this.width, TITLE_H, CHROME_BG));
         int teamAccent = "ATTACK".equals(team) ? 0xFFD35B50 : 0xFF5685C7;
         root.addChild(new GuiRect(0, 0, 3, TITLE_H, teamAccent));
 
@@ -643,7 +838,7 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void buildDividerLine(int y) {
-        root.addChild(new GuiRect(4, y, this.width - 8, 1, 0x50FFFFFF));
+        root.addChild(new GuiRect(4, y, this.width - 8, 1, 0xFF3A3F3D));
     }
 
     // ---------- 班组（左列） ----------
@@ -671,15 +866,22 @@ public class UnifiedDeployScreen extends Screen {
             boolean expanded = expandedSquadIds.contains(squad.id);
             String disclosure = expanded ? "\u00a7f\u25bc" : "\u00a7f\u25b6";
             String state = mine ? "\u00a7a\u25cf" : squad.isLocked ? "\u00a7c\u25a0" : "\u00a77\u25cb";
-            String label = disclosure + " " + state + " \u00a7f" + squad.id + " " + squad.name
+            String label = disclosure + " " + state + " \u00a7f" + squad.name
                 + " \u00a77" + squad.memberCount + "/" + squad.maxMembers;
             EspButton button = new EspButton(0, rowY, rowW, SQUAD_ROW_H,
                 label, () -> toggleSquadExpanded(squad.id));
             button.setTextScale(SQUAD_TEXT_SCALE);
             button.setCenteredText(false);
+            // \u884c\u6700\u53f3\u4fa7\u663e\u793a\u5fd7\u613f/\u73ed\u7ec4\u7c7b\u522b\uff08\u521b\u5efa\u65f6\u9009\u62e9\u7684 category\uff09\u3002
+            String category = squad.categoryDisplayName;
+            if (category != null && !category.isBlank()
+                && !"none".equalsIgnoreCase(squad.categoryId)
+                && !"\u65e0".equals(category)) {
+                button.setRightLabel("\u00a7e" + category);
+            }
             if (mine) {
-                button.normalColor = 0xD0344939;
-                button.hoverColor = 0xE03C5542;
+                button.normalColor = 0xFF344939;
+                button.hoverColor = 0xFF3C5542;
             }
             squadScrollList.addChild(button);
             rowY += SQUAD_ROW_H + SQUAD_ROW_GAP;
@@ -714,8 +916,8 @@ public class UnifiedDeployScreen extends Screen {
                 EspButton join = new EspButton(3, rowY, rowW - 3, SQUAD_ACTION_ROW_H,
                     "\u00a7a+ 加入班组", () -> NetworkManager.joinSquad(squad.id));
                 join.setTextScale(SQUAD_MEMBER_TEXT_SCALE);
-                join.normalColor = 0xB025352B;
-                join.hoverColor = 0xD03C5542;
+                join.normalColor = 0xFF25352B;
+                join.hoverColor = 0xFF3C5542;
                 squadScrollList.addChild(join);
                 rowY += SQUAD_ACTION_ROW_H + SQUAD_ROW_GAP;
             }
@@ -738,8 +940,19 @@ public class UnifiedDeployScreen extends Screen {
     }
 
     private void openSquadManagement() {
-        Minecraft.getInstance().setScreen(
-            new SquadScreen(new ArrayList<>(squads), mySquadId, team, this));
+        try {
+            Minecraft.getInstance().setScreen(
+                new SquadScreen(new ArrayList<>(squads), mySquadId, team,
+                    new ArrayList<>(squadCategories), this));
+        } catch (Throwable t) {
+            // 避免班组界面类加载失败时拖垮整局客户端。
+            org.espetro.Espetro.LOGGER.error("打开班组管理界面失败", t);
+            var player = Minecraft.getInstance().player;
+            if (player != null) {
+                player.displayClientMessage(
+                    Component.literal("§c无法打开班组管理界面，请查看日志。"), false);
+            }
+        }
     }
 
     // ---------- 职业选择（中上，滚轮列表）----------
@@ -781,13 +994,13 @@ public class UnifiedDeployScreen extends Screen {
 
             final int idx = i;
             EspButton btn = new EspButton(bx, by, btnW, btnH, label, () -> selectClass(idx));
-            btn.setIcon(RoleIconResources.resolve(cls.icon),
+            btn.setIcon(RoleIconResources.resolve(cls.iconImage, cls.icon),
                 RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
             btn.setIconSize(CLASS_ICON_SIZE);
             btn.setRightLabel(right);
             btn.setCenteredText(false);
             btn.setEnabled(!disabled);
-            if (disabled) { btn.hoverColor = 0xD0403050; btn.normalColor = 0xB0252035; }
+            if (disabled) { btn.hoverColor = 0xF0403050; btn.normalColor = 0xE0252035; }
             classScrollList.addChild(btn);
             classButtons.add(btn);
         }
@@ -984,6 +1197,9 @@ public class UnifiedDeployScreen extends Screen {
                 waitingForDeploySelection = false;
                 clearPendingDeploySelection();
                 refreshDeployButtonStates();
+                // 落地部署成功：关闭面板，避免 isPauseScreen=false 下继续跟镜头闪。
+                // 战斗中仍可按 J 重新打开。
+                Minecraft.getInstance().setScreen(null);
             } else {
                 // 仍在等待自动部署，只刷新确认按钮文案。
                 refreshConfirmDeployButton();
@@ -1090,6 +1306,15 @@ public class UnifiedDeployScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        structureRebuildQueued = false;
+        // 本地推进部署倒计时（服务端全量包不保证每秒到达）。
+        tickLocalDeployTimer();
+        // 动态文案（Rally 冷却 / 重新部署 / 治理倒计时）按整秒节流，避免每 tick 改 label。
+        int epochSec = (int) (System.currentTimeMillis() / 1000L);
+        if (epochSec == lastDynamicLabelEpochSec) {
+            return;
+        }
+        lastDynamicLabelEpochSec = epochSec;
         if (outpostRedeployButton != null) {
             outpostRedeployButton.setLabel(buildRedeployLabel());
             outpostRedeployButton.setEnabled(
@@ -1098,23 +1323,112 @@ public class UnifiedDeployScreen extends Screen {
         // 仅更新 Rally 个人冷却文案，不 rebuildGui，避免高度闪烁。
         refreshRallyWaveLabels();
         refreshConfirmDeployButton();
+        GovernanceStatePacket.TeamState governance = activeGovernance();
+        if (governanceTimerText != null && governance != null) {
+            int elapsed = (int) ((System.currentTimeMillis() - governanceReceivedAtMs) / 1000L);
+            governanceTimerText.setText("\u00a7e剩余 "
+                + Math.max(0, governance.remainingSeconds - elapsed) + "s");
+        }
+    }
+
+    private void tickLocalDeployTimer() {
+        if (deployTimerAnchorSeconds < 0) {
+            return;
+        }
+        int elapsed = (int) ((System.currentTimeMillis() - deployTimerAnchorMs) / 1000L);
+        int display = Math.max(0, deployTimerAnchorSeconds - elapsed);
+        if (display == deployTimeRemaining) {
+            return;
+        }
+        deployTimeRemaining = display;
+        if (statusTimerText != null) {
+            statusTimerText.setText(formatTime(display));
+        }
     }
 
     @Override
     public void removed() {
         clearPendingDeploySelection();
+        previewRenderer.clear();
         super.removed();
     }
 
     // ---------- 战术地图（右半屏，由 HCR AAD / ESPoints 绘制）----------
     private void buildMapPanel() {
-        // 地图内容在 render() 中通过反射调用 ESPoints 的 TacticalMapHUD 绘制。
+        int bx = mapX + 5;
+        int by = mapY + mapH - BTN_H - 4;
+        EspButton score = new EspButton(bx, by, 64, BTN_H, "\u00a76玩家分数板",
+            () -> Minecraft.getInstance().setScreen(new MatchScoreboardScreen(this)));
+        score.setTextScale(UI_TEXT_SCALE);
+        root.addChild(score);
+
+        GovernanceStatePacket.TeamState state = activeGovernance();
+        boolean battle = ClientGameState.getCurrentPhase() == GamePhase.BATTLE;
+        if (battle && (state == null || "IDLE".equals(state.state))) {
+            EspButton impeach = new EspButton(bx + 68, by, 56, BTN_H, "\u00a7c发起弹劾",
+                () -> NetworkManager.sendGovernanceAction(
+                    GovernanceActionPacket.Action.START_IMPEACHMENT, null));
+            impeach.setTextScale(UI_TEXT_SCALE);
+            root.addChild(impeach);
+            return;
+        }
+
+        if (state == null || "IDLE".equals(state.state)) {
+            return;
+        }
+
+        int governanceH = Math.max(20, mapH - MAP_FOOTER_H - 6);
+        root.addChild(new GuiRect(mapX + 3, mapY + 3, mapW - 6, governanceH, 0xE0181818));
+        root.addChild(new PlainText(mapX + 10, mapY + 30,
+            "\u00a76\u00a7l指挥官治理：" + state.state, 0xFFFFC766));
+        governanceTimerText = new PlainText(mapX + 10, mapY + 43,
+            "\u00a7e剩余 " + state.remainingSeconds + "s", 0xFFFFD27A);
+        root.addChild(governanceTimerText);
+        int rowY = mapY + 60;
+        if ("IMPEACHMENT_VOTE".equals(state.state)) {
+            addGovernanceVoteButton(state.commander, "原指挥官", rowY,
+                GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
+            addGovernanceVoteButton(state.challenger, "挑战者", rowY + 18,
+                GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
+        } else if ("VACANCY_VOLUNTEER".equals(state.state)) {
+            EspButton volunteer = new EspButton(mapX + 10, rowY, Math.max(80, mapW - 20), BTN_H,
+                "\u00a7a志愿补位", () -> NetworkManager.sendGovernanceAction(
+                    GovernanceActionPacket.Action.VOLUNTEER_VACANCY, null));
+            volunteer.setTextScale(UI_TEXT_SCALE);
+            root.addChild(volunteer);
+        } else if ("VACANCY_VOTE".equals(state.state)) {
+            int y = rowY;
+            for (UUID volunteer : state.volunteers) {
+                addGovernanceVoteButton(volunteer, "志愿者", y,
+                    GovernanceActionPacket.Action.VOTE_VACANCY);
+                y += 18;
+                if (y > mapY + mapH - MAP_FOOTER_H - 18) break;
+            }
+        }
+    }
+
+    private void addGovernanceVoteButton(UUID candidate, String prefix, int y,
+                                         GovernanceActionPacket.Action action) {
+        if (candidate == null) return;
+        String name = MatchScoreboardScreen.nameFor(candidate);
+        EspButton button = new EspButton(mapX + 10, y, Math.max(80, mapW - 20), BTN_H,
+            "\u00a7f" + prefix + "：\u00a7e" + name,
+            () -> NetworkManager.sendGovernanceAction(action, candidate));
+        button.setTextScale(UI_TEXT_SCALE);
+        root.addChild(button);
+    }
+
+    private GovernanceStatePacket.TeamState activeGovernance() {
+        for (GovernanceStatePacket.TeamState state : governanceState.teams) {
+            if (team.equals(state.team)) return state;
+        }
+        return null;
     }
 
     // ---------- 底部状态栏 ----------
     private void buildStatusBar() {
         int barY = this.height - STATUS_BAR_H;
-        root.addChild(new GuiRect(0, barY, this.width, STATUS_BAR_H, 0xF016191B));
+        root.addChild(new GuiRect(0, barY, this.width, STATUS_BAR_H, CHROME_BG));
 
         statusText = new PlainText(5, barY + 3, buildStatusText(), BTN_TEXT);
         root.addChild(statusText);
@@ -1207,26 +1521,246 @@ public class UnifiedDeployScreen extends Screen {
     // ==================== 渲染 ====================
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 始终铺不透明深黑灰，挡住世界与聊天。
+        graphics.fill(0, 0, this.width, this.height, SCREEN_SHADE);
         computeRegions();
-        root.updateFocusState(0, 0, mouseX, mouseY);
-        root.draw(graphics, 0, 0, this.width, this.height, mouseX, mouseY, partialTick);
-        renderTacticalMap(graphics, partialTick);
+        // 左/中列先铺实心，即使地图污染 GL 也不会露出世界。
+        graphics.fill(leftX, leftY, leftX + leftW, leftY + leftH, PANEL_LEFT_BG);
+        graphics.fill(centerX, centerY, centerX + centerW, centerY + centerH, PANEL_CENTER_BG);
+        UnifiedDeployScreenPacket.LoadoutPreview activePreview = getActivePreview();
+        if (activePreview != null) {
+            renderClassPreview(graphics, activePreview, mouseX, mouseY);
+        } else if (activeGovernance() == null || "IDLE".equals(activeGovernance().state)) {
+            renderTacticalMap(graphics, partialTick);
+        } else {
+            int viewportH = Math.max(1, mapH - MAP_FOOTER_H);
+            graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+        }
+        // 地图/预览可能改动全局 RenderSystem；复位后再画 MUtil 树，避免左栏整页闪。
+        resetGuiRenderState(graphics);
+        // 再盖一次左/中列，挡住地图 scissor 外溢。
+        graphics.fill(leftX, leftY, leftX + leftW, leftY + leftH, PANEL_LEFT_BG);
+        graphics.fill(centerX, centerY, centerX + centerW, centerY + centerH, PANEL_CENTER_BG);
+        graphics.fill(0, 0, this.width, TITLE_H, CHROME_BG);
+        int barY = this.height - STATUS_BAR_H;
+        if (barY > TITLE_H) {
+            graphics.fill(0, barY, this.width, this.height, CHROME_BG);
+        }
+    }
+
+    private static void resetGuiRenderState(GuiGraphics graphics) {
+        graphics.flush();
+        graphics.setColor(1f, 1f, 1f, 1f);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+        com.mojang.blaze3d.systems.RenderSystem.disableDepthTest();
+        com.mojang.blaze3d.systems.RenderSystem.depthMask(true);
+        com.mojang.blaze3d.systems.RenderSystem.disableCull();
+    }
+
+    @Override
+    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        computeRegions();
+
+        // 在 GUI 元素树绘制完成后解析悬停目标，此时 EspButton.hovered 已被更新。
+        updatePreviewTarget(mouseX, mouseY);
+        if (activeGovernance() != null && !"IDLE".equals(activeGovernance().state)) {
+            graphics.renderOutline(mapX, mapY, mapW, mapH, 0x805B6260);
+        }
+
         renderClassTooltip(graphics, mouseX, mouseY);
         renderVariantPopup(graphics, mouseX, mouseY);
     }
 
     private void renderTacticalMap(GuiGraphics graphics, float partialTick) {
+        int viewportH = Math.max(1, mapH - MAP_FOOTER_H);
+        // 实心底再画地图（每帧），避免限频导致地图空白闪烁。
+        graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+        graphics.flush();
         HcrTacticalMapBridge.renderEmbeddedMap(
             graphics,
             mapX,
             mapY,
             mapW,
-            mapH,
+            viewportH,
             partialTick
         );
+        resetGuiRenderState(graphics);
+        graphics.renderOutline(mapX, mapY, mapW, viewportH, 0xFF5B6260);
+    }
+
+    /**
+     * 在右侧地图区域绘制人物预览，替代战术地图。
+     * 使用 scissor 限制模型只能在 mapX/mapY/mapW/mapH 范围内显示。
+     */
+    private void renderClassPreview(GuiGraphics graphics,
+                                    UnifiedDeployScreenPacket.LoadoutPreview preview,
+                                    int mouseX, int mouseY) {
+        previewRenderer.update(preview);
+        if (!previewRenderer.isReady()) {
+            // 本地玩家不可用时回退到战术地图，避免右侧区域空白。
+            renderTacticalMap(graphics, 0.0f);
+            return;
+        }
+        // 预览背景与战术地图背景一致，避免视觉跳变。
+        int viewportH = Math.max(1, mapH - MAP_FOOTER_H);
+        graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+        int centerX = mapX + mapW / 2;
+        // 实体渲染锚点略低于区域中心，给头部留出空间并平衡面板下方留白。
+        int centerY = mapY + (viewportH * 11) / 16;
+        // 动态缩放：与较短边成比例，但限制在合理范围内。
+        int scale = Math.max(40, Math.min(mapW, viewportH) / 3);
+        // 注意符号必须与原版 InventoryScreen 保持一致：
+        //   原版调用为 (leftPos + 51) - xMouse 与 (topPos + 75 - 10) - yMouse，
+        //   即 center - mouse（减法）。若写成 mouse - center，人物朝向会左右反转。
+        float mouseDeltaX = (float) (centerX - mouseX);
+        float mouseDeltaY = (float) (centerY - mouseY);
+
+        graphics.enableScissor(mapX, mapY, mapX + mapW, mapY + viewportH);
+        try {
+            previewRenderer.render(graphics, centerX, centerY, scale, mouseDeltaX, mouseDeltaY);
+        } finally {
+            graphics.disableScissor();
+        }
+        resetGuiRenderState(graphics);
         graphics.renderOutline(mapX, mapY, mapW, mapH, 0x805B6260);
+    }
+
+    /**
+     * 解析当前鼠标悬停的预览目标，更新 activePreview* 状态。
+     * <p>
+     * 解析规则：
+     * <ol>
+     *   <li>有变体弹窗时：鼠标在变体行上 → 显示该变体；其他位置（标题、空白、关闭按钮）
+     *       → 显示父职业的 default 或首个变体预览。</li>
+     *   <li>无弹窗时：鼠标悬停任意职业按钮 → 显示该职业的 default 或首个变体预览。
+     *       不检查按钮 isEnabled()，禁用按钮也可预览。</li>
+     *   <li>鼠标离开所有目标后：进入宽限时间（约 100ms）；宽限期内进入新目标立即更新；
+     *       宽限期结束后清除预览，恢复战术地图。</li>
+     * </ol>
+     */
+    private void updatePreviewTarget(int mouseX, int mouseY) {
+        int newClassIndex = -1;
+        String newVariantId = null;
+
+        if (hasVariantPopup()) {
+            UnifiedDeployScreenPacket.ClassInfo cls = classes.get(variantPopupClassIndex);
+            int row = computeVariantPopupHoveredRow(mouseX, mouseY);
+            if (row >= 0) {
+                int variantIndex = variantPopupScroll + row;
+                if (variantIndex < cls.variants.size()) {
+                    newClassIndex = variantPopupClassIndex;
+                    newVariantId = cls.variants.get(variantIndex).variantId;
+                }
+            }
+            if (newClassIndex < 0) {
+                // 鼠标在弹窗标题/空白/关闭按钮上：保留父职业默认变体预览。
+                newClassIndex = variantPopupClassIndex;
+                newVariantId = resolveDefaultVariantId(cls);
+            }
+        } else {
+            for (int i = 0; i < classButtons.size() && i < classes.size(); i++) {
+                EspButton btn = classButtons.get(i);
+                if (btn.hovered) {
+                    newClassIndex = i;
+                    newVariantId = resolveDefaultVariantId(classes.get(i));
+                    break;
+                }
+            }
+        }
+
+        if (newClassIndex >= 0) {
+            activePreviewClassIndex = newClassIndex;
+            activePreviewVariantId = newVariantId;
+            previewGraceDeadlineMs = 0L;
+        } else if (activePreviewClassIndex >= 0 && previewGraceDeadlineMs == 0L) {
+            // 鼠标刚离开所有预览目标，开始宽限计时。
+            previewGraceDeadlineMs = System.currentTimeMillis() + PREVIEW_GRACE_MS;
+        }
+        // 若宽限已开始且未到期，保留当前预览；若已到期，则在 getActivePreview 中清除。
+    }
+
+    /**
+     * 计算变体弹窗中当前悬停的变体行索引（0-based，相对可见区域）。
+     * 返回 -1 表示鼠标不在任何变体行上（在标题、空白、关闭按钮或弹窗外）。
+     */
+    private int computeVariantPopupHoveredRow(int mouseX, int mouseY) {
+        if (!inside(mouseX, mouseY, variantPopupX, variantPopupY,
+            VARIANT_POPUP_W, variantPopupH)) {
+            return -1;
+        }
+        int closeX = variantPopupX + VARIANT_POPUP_W - 16;
+        int closeY = variantPopupY + 2;
+        if (inside(mouseX, mouseY, closeX, closeY, 13, 13)) {
+            return -1; // 关闭按钮
+        }
+        if (mouseY < variantPopupY + VARIANT_HEADER_H) {
+            return -1; // 标题区
+        }
+        int row = (mouseY - (variantPopupY + VARIANT_HEADER_H)) / VARIANT_ROW_H;
+        int visible = Math.min(VARIANT_MAX_VISIBLE,
+            classes.get(variantPopupClassIndex).variants.size());
+        if (row < 0 || row >= visible) {
+            return -1;
+        }
+        return row;
+    }
+
+    /**
+     * 解析职业的默认变体 ID：优先 variantId=="default"，否则取第一个变体。
+     * 没有任何变体时返回 null（仍可显示裸体人物模型）。
+     */
+    private String resolveDefaultVariantId(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (cls.variants.isEmpty()) return null;
+        for (UnifiedDeployScreenPacket.VariantInfo v : cls.variants) {
+            if ("default".equals(v.variantId)) return v.variantId;
+        }
+        return cls.variants.get(0).variantId;
+    }
+
+    /**
+     * 返回当前应显示的预览数据；返回 null 表示应恢复战术地图。
+     * <p>
+     * 处理以下情况：
+     * <ul>
+     *   <li>当前 class index 越界（例如数据刷新后职业消失）→ 返回 null，恢复地图。</li>
+     *   <li>当前 variantId 不存在 → 退回父职业默认/首个变体；若父职业也无变体，
+     *       返回空预览（仍显示裸体人物）。</li>
+     *   <li>宽限时间已过 → 返回 null，恢复地图。</li>
+     * </ul>
+     */
+    private UnifiedDeployScreenPacket.LoadoutPreview getActivePreview() {
+        if (activePreviewClassIndex < 0 || activePreviewClassIndex >= classes.size()) {
+            return null;
+        }
+        if (previewGraceDeadlineMs != 0L
+            && System.currentTimeMillis() >= previewGraceDeadlineMs) {
+            // 宽限到期：清除预览状态。
+            activePreviewClassIndex = -1;
+            activePreviewVariantId = null;
+            previewGraceDeadlineMs = 0L;
+            return null;
+        }
+        UnifiedDeployScreenPacket.ClassInfo cls = classes.get(activePreviewClassIndex);
+        if (cls.variants.isEmpty()) {
+            return UnifiedDeployScreenPacket.LoadoutPreview.empty();
+        }
+        // 先按 variantId 精确匹配。
+        for (UnifiedDeployScreenPacket.VariantInfo v : cls.variants) {
+            if (Objects.equals(v.variantId, activePreviewVariantId)) {
+                return v.preview;
+            }
+        }
+        // 变体已消失：退回 default，否则首个变体。
+        String fallbackId = resolveDefaultVariantId(cls);
+        for (UnifiedDeployScreenPacket.VariantInfo v : cls.variants) {
+            if (Objects.equals(v.variantId, fallbackId)) {
+                return v.preview;
+            }
+        }
+        return cls.variants.get(0).preview;
     }
 
     private void renderClassTooltip(GuiGraphics graphics, int mx, int my) {
@@ -1369,6 +1903,9 @@ public class UnifiedDeployScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (tutorialPreviewMode) {
+            return super.mouseClicked(mx, my, button);
+        }
         lastMouseX = (int) mx;
         lastMouseY = (int) my;
         if (hasVariantPopup()) {
@@ -1379,16 +1916,7 @@ public class UnifiedDeployScreen extends Screen {
             closeVariantPopup();
             return true;
         }
-        root.updateFocusState(0, 0, (int) mx, (int) my);
-        if (root.onMouseClick((int) mx, (int) my, button))
-            return true;
         return super.mouseClicked(mx, my, button);
-    }
-
-    @Override
-    public boolean mouseReleased(double mx, double my, int button) {
-        root.onMouseRelease((int) mx, (int) my, button);
-        return super.mouseReleased(mx, my, button);
     }
 
     @Override
@@ -1399,10 +1927,6 @@ public class UnifiedDeployScreen extends Screen {
                 classes.get(variantPopupClassIndex).variants.size() - VARIANT_MAX_VISIBLE);
             variantPopupScroll = Math.max(0, Math.min(maxScroll,
                 variantPopupScroll + (delta < 0 ? 1 : -1)));
-            return true;
-        }
-        root.updateFocusState(0, 0, (int) mx, (int) my);
-        if (root.onMouseScroll(mx, my, delta)) {
             return true;
         }
         return super.mouseScrolled(mx, my, delta);
@@ -1422,20 +1946,7 @@ public class UnifiedDeployScreen extends Screen {
             HcrTacticalMapBridge.decreaseRenderRange();
             return true;
         }
-        if (root.onKeyPress(keyCode, scanCode, modifiers)) return true;
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        if (root.onKeyRelease(keyCode, scanCode, modifiers)) return true;
-        return super.keyReleased(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (root.onCharType(codePoint, modifiers)) return true;
-        return super.charTyped(codePoint, modifiers);
     }
 
     // ==================== 业务逻辑 ====================
@@ -1527,8 +2038,8 @@ public class UnifiedDeployScreen extends Screen {
             classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed || disabled));
             classButtons.get(i).setEnabled(!disabled);
             if (disabled) {
-                classButtons.get(i).normalColor = 0xB0252035;
-                classButtons.get(i).hoverColor = 0xD0403050;
+                classButtons.get(i).normalColor = 0xE0252035;
+                classButtons.get(i).hoverColor = 0xF0403050;
             } else {
                 classButtons.get(i).normalColor = BTN_BG_NORMAL;
                 classButtons.get(i).hoverColor = BTN_BG_HOVER;
@@ -1612,9 +2123,21 @@ public class UnifiedDeployScreen extends Screen {
 
     @Override
     public boolean shouldCloseOnEsc() {
-        // 即使仍在等待选择部署点，也允许玩家暂时关闭面板查看游戏画面；
-        // 选择状态保存在服务端，之后可按 J 重新打开并继续。
-        return true;
+        return !isDeploymentSelectionRequired();
+    }
+
+    @Override
+    public void onClose() {
+        if (!isDeploymentSelectionRequired()) {
+            super.onClose();
+        }
+    }
+
+    private boolean isDeploymentSelectionRequired() {
+        // 只有尚未完成部署点选择时强制锁定主 GUI。
+        // 选完部署点后（waitingForDeploySelection=false）允许 Esc/关闭；
+        // 部署阶段内仍可按 J 再次打开以改职业或班组。
+        return waitingForDeploySelection;
     }
 
     @Override

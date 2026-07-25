@@ -1,4 +1,4 @@
-/home/shu/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.20_mapped_official_1.20.1/forge-1.20.1-47.4.20_mapped_official_1.20.1-recomp.jar
+/home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20_mapped_official_1.20.1/forge-1.20.1-47.4.20_mapped_official_1.20.1.jar
 /home/shu/.gradle/caches/forge_gradle/minecraft_repo/versions/1.20.1/client-extra.jar
 /home/shu/.gradle/caches/modules-2/files-2.1/net.minecraftforge/fmlearlydisplay/1.20.1-47.4.20/4dcdfb740aff35b40a3471708ca8a5f1e22a9504/fmlearlydisplay-1.20.1-47.4.20.jar
 /home/shu/.gradle/caches/modules-2/files-2.1/net.minecraftforge/javafmllanguage/1.20.1-47.4.20/c354b21002937b393c4f86163a98dccdf1d51e72/javafmllanguage-1.20.1-47.4.20.jar

@@ -2,12 +2,14 @@ package org.espetro.team;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -16,8 +18,19 @@ import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
 import org.espetro.network.NetworkManager;
 import org.espetro.vehicle.VehicleManager;
+import org.espetro.stats.PlayerMatchStatsManager;
+import org.espetro.mapconfig.ExternalConfigBootstrap;
+import org.espetro.mapconfig.BattlefieldContext;
+import org.espetro.mapconfig.ActiveMapConfig;
+import org.espetro.governance.CommanderGovernanceManager;
+import org.espetro.dimension.BattlefieldWorldManager;
+import org.espetro.logistics.SupplyManager;
+import org.espetro.stamina.StaminaManager;
+import net.minecraftforge.common.MinecraftForge;
+import org.espetro.api.event.GamePhaseChangedEvent;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * 游戏状态管理器
@@ -33,19 +46,19 @@ public class GameStateManager {
     private static GameStateManager INSTANCE;
 
     // 当前游戏阶段
-    private GamePhase currentPhase = GamePhase.WAITING_FOR_PLAYERS;
+    private GamePhase currentPhase = GamePhase.LOBBY;
 
     // 部署阶段计时器
     private int deployTickCounter = 0;
     // 双方编制揭示阶段计时器
     private int factionRevealTickCounter = 0;
     private static final int TICKS_PER_SECOND = 20;
-    private static final int FACTION_REVEAL_SECONDS = 5;
     private static final int ATTACK_WAITING_BARRIER_SIDE = 200;
     private static final int ATTACK_WAITING_BARRIER_HEIGHT = 20;
 
     // 攻方等待防守部署时临时放置的屏障，记录原方块以便开战后恢复
     private final Map<BlockPos, BlockState> attackWaitingBarrierBlocks = new HashMap<>();
+    private ResourceKey<Level> attackWaitingBarrierDimension;
 
     // 等待选择队伍的玩家
     private final Set<UUID> waitingForTeam = new HashSet<>();
@@ -55,6 +68,11 @@ public class GameStateManager {
     private final Set<UUID> midGameJoiners = new HashSet<>();
     // 已在部署阶段选择过职业的玩家（防止重复选择）
     private final Set<UUID> deployClassSelected = new HashSet<>();
+    private int teamSelectTickCounter = 0;
+    private int roundEndTickCounter = 0;
+    private String pendingRoundWinner = null;
+    private ActiveMapConfig pendingMap = null;
+    private boolean forceStopInProgress = false;
 
     private GameStateManager() {
         INSTANCE = this;
@@ -76,63 +94,297 @@ public class GameStateManager {
     }
 
     public void setPhase(GamePhase phase) {
+        GamePhase previous = this.currentPhase;
         this.currentPhase = phase;
         Espetro.LOGGER.info("游戏阶段切换: {}", phase.getDisplayName());
         NetworkManager.broadcastGamePhase(phase);
-        org.espetro.tutorial.TutorialManager.getInstance().onPhaseChanged(phase);
+        MinecraftForge.EVENT_BUS.post(new GamePhaseChangedEvent(previous, phase));
+    }
+
+    /**
+     * Administrator entry point for a new round. There is intentionally no
+     * ready-player gate: one online player is enough to begin the global map
+     * vote, while later joins are handled by the phase-specific join flow.
+     */
+    public boolean prestart(MinecraftServer server) {
+        if (server == null || !currentPhase.isLobbyLike()) {
+            return false;
+        }
+        if (server.getPlayerCount() < 1) {
+            return false;
+        }
+        if (ExternalConfigBootstrap.getUsableMaps().isEmpty()) {
+            Espetro.broadcastToAll("§c[Espetro] 没有通过校验的地图，无法开始。请查看服务端日志。");
+            return false;
+        }
+
+        clearRoundRuntime(false);
+        PlayerMatchStatsManager.getInstance().resetMatch(
+            server.getPlayerList().getPlayers());
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            TeamManager.removeFromAllTeams(server.getScoreboard(), player.getName().getString());
+            ClassEquipment.clearEquipment(player);
+        }
+
+        setPhase(GamePhase.MAP_VOTE);
+        if (!MapVoteManager.getInstance().start(server)) {
+            setPhase(GamePhase.LOBBY);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                applyHubState(player);
+            }
+            return false;
+        }
+        // 地图投票起即进入统一 MatchHold：旁观 + 失明 + 高空禁移（勿 applyHubState）。
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            applyMatchHoldState(player, HoldAnchor.HUB_HIGH);
+        }
+        Espetro.broadcastToAll("§6地图投票开始，所有在线玩家均可投票。");
+        return true;
+    }
+
+    /** Called by the global MapVoteManager on the server thread. */
+    public void onMapVoteFinished(ActiveMapConfig winner) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || currentPhase != GamePhase.MAP_VOTE || winner == null || !winner.usable) {
+            return;
+        }
+        pendingMap = winner;
+        setPhase(GamePhase.MAP_LOADING);
+        // 装载阶段保持 hold；禁止 applyHubState（会摘失明并允许活动）。
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            applyMatchHoldState(player, HoldAnchor.AUTO);
+            player.sendSystemMessage(Component.literal("§e正在装载战场地图：" + winner.displayName));
+        }
+        BattlefieldWorldManager.getInstance().importAndLoad(server, winner, result -> {
+            if (!result.success()) {
+                pendingMap = null;
+                setPhase(GamePhase.LOBBY);
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    applyHubState(player);
+                }
+                Espetro.broadcastToAll("§c地图装载失败：" + result.error());
+                broadcastHubStatus();
+                return;
+            }
+            startTeamSelect();
+        });
+    }
+
+    /**
+     * 统一阶段等待态：SPECTATOR + BLINDNESS + 零速度 + Bastion 位置锁。
+     * 从地图投票到部署落地前的禁锢路径应全部走此方法。
+     */
+    public enum HoldAnchor {
+        /** 战场高空等待点（要求 BattlefieldContext 已 active）。 */
+        BATTLEFIELD_WAIT,
+        /** 主城出生点上方 waitingY。 */
+        HUB_HIGH,
+        /** 仅维持旁观/失明/零速，位置锁沿用已有 lock（若无则按 AUTO 解析）。 */
+        CURRENT_LOCK,
+        /** 战场已 active 则战场等待点，否则主城高空。 */
+        AUTO
+    }
+
+    public void applyMatchHoldState(ServerPlayer player, HoldAnchor anchor) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        HoldAnchor resolved = anchor == null ? HoldAnchor.AUTO : anchor;
+        if (resolved == HoldAnchor.AUTO) {
+            resolved = BattlefieldContext.isActive()
+                ? HoldAnchor.BATTLEFIELD_WAIT : HoldAnchor.HUB_HIGH;
+        }
+        if (resolved == HoldAnchor.CURRENT_LOCK) {
+            Vec3 existing = BastionManager.getInstance().getPlayerLockPosition(player.getUUID());
+            if (existing == null) {
+                resolved = BattlefieldContext.isActive()
+                    ? HoldAnchor.BATTLEFIELD_WAIT : HoldAnchor.HUB_HIGH;
+            } else {
+                enforceSpectatorBlindness(player);
+                player.setDeltaMovement(0, 0, 0);
+                player.fallDistance = 0f;
+                if (player.distanceToSqr(existing) > 0.01) {
+                    player.teleportTo(player.serverLevel(),
+                        existing.x, existing.y, existing.z, 0f, 0f);
+                }
+                return;
+            }
+        }
+
+        enforceSpectatorBlindness(player);
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
+
+        if (resolved == HoldAnchor.BATTLEFIELD_WAIT) {
+            if (!BattlefieldContext.isActive()) {
+                resolved = HoldAnchor.HUB_HIGH;
+            } else {
+                ServerLevel battlefield = BattlefieldContext.requireBattlefield(player.server);
+                Vec3 waitingPosition = getWaitingPosition();
+                if (player.serverLevel() != battlefield
+                    || player.distanceToSqr(waitingPosition) > 0.01) {
+                    player.teleportTo(battlefield,
+                        waitingPosition.x, waitingPosition.y, waitingPosition.z, 0f, 0f);
+                }
+                BastionManager.getInstance().lockPlayerPosition(player.getUUID(), waitingPosition);
+                // 跨维 Respawn 后客户端丢药水：传送后再强制同步失明包。
+                enforceSpectatorBlindness(player, true);
+                return;
+            }
+        }
+
+        // HUB_HIGH：主城出生点 XZ，高度用 waitingY（高空黑底）。
+        ServerLevel hub = player.server.overworld();
+        BlockPos spawn = hub.getSharedSpawnPos();
+        double x = spawn.getX() + 0.5;
+        double y = GameConfig.getWaitingY();
+        double z = spawn.getZ() + 0.5;
+        Vec3 hold = new Vec3(x, y, z);
+        if (player.serverLevel() != hub || player.distanceToSqr(hold) > 0.25) {
+            player.teleportTo(hub, x, y, z, 0f, 0f);
+        }
+        BastionManager.getInstance().lockPlayerPosition(player.getUUID(), hold);
+        // 同维也可能需刷新；跨维到 hub 时同样必须重推失明。
+        enforceSpectatorBlindness(player, true);
+    }
+
+    /**
+     * MatchHold 强制旁观 + 失明。
+     * <p>跨维 {@code teleportTo} 会发 Respawn 包，客户端重建 LocalPlayer 且
+     * <b>不复制</b>药水效果；若服务端仍 {@code hasEffect(BLINDNESS)} 而只做
+     * {@code addEffect}，可能不发更新包，客户端无失明、透明阶段 UI 会透出世界。
+     * {@code forceClientResync=true} 时 remove 再 add 强制同步；tick 路径可 false 并节流。
+     */
+    public static void enforceSpectatorBlindness(ServerPlayer player) {
+        enforceSpectatorBlindness(player, true);
+    }
+
+    public static void enforceSpectatorBlindness(ServerPlayer player, boolean forceClientResync) {
+        if (player == null) {
+            return;
+        }
+        if (!player.isSpectator()) {
+            player.setGameMode(GameType.SPECTATOR);
+        }
+        if (forceClientResync) {
+            player.removeEffect(MobEffects.BLINDNESS);
+            player.addEffect(new MobEffectInstance(
+                MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+        } else if (!player.hasEffect(MobEffects.BLINDNESS)) {
+            player.addEffect(new MobEffectInstance(
+                MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+        }
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
+    }
+
+    /**
+     * @deprecated 使用 {@link #applyMatchHoldState(ServerPlayer, HoldAnchor)}；保留兼容旧调用。
+     */
+    @Deprecated
+    public void applyMatchLoadingHoldState(ServerPlayer player) {
+        applyMatchHoldState(player, HoldAnchor.AUTO);
+    }
+
+    private void startTeamSelect() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || pendingMap == null || !BattlefieldContext.isActive()) {
+            setPhase(GamePhase.LOBBY);
+            if (server != null) {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    applyHubState(player);
+                }
+            }
+            return;
+        }
+
+        waitingForTeam.clear();
+        teamSelectedPlayers.clear();
+        midGameJoiners.clear();
+        teamSelectTickCounter = 0;
+        setPhase(GamePhase.TEAM_SELECT);
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            clearPlayerRoundAssignment(player);
+            waitingForTeam.add(player.getUUID());
+            applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+            NetworkManager.sendOpenFactionScreen(player);
+        }
+        broadcastTeamSelectState();
     }
 
     // ========== 队伍选择阶段 ==========
 
     public void onTeamSelected(ServerPlayer player, String factionId) {
+        if (currentPhase != GamePhase.TEAM_SELECT) {
+            return;
+        }
+        String resolvedTeam = getTeamFromFactionStatic(factionId);
+        if (!"ATTACK".equals(resolvedTeam) && !"DEFEND".equals(resolvedTeam)) {
+            return;
+        }
+
         waitingForTeam.remove(player.getUUID());
         teamSelectedPlayers.add(player.getUUID());
 
-        // 记录玩家阵营
-        ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), factionId);
-        // 记录玩家的原始队伍（ATTACK/DEFEND）
-        String resolvedTeam = getTeamFromFactionStatic(factionId);
+        // TEAM_SELECT uses ATTACK / DEFEND as the temporary faction id. The
+        // winning formation replaces it after both formation votes finish.
+        ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), resolvedTeam);
         ClassCountManager.getInstance().setPlayerTeam(player.getUUID(), resolvedTeam);
-
-        Espetro.LOGGER.info("玩家 {} 选择了队伍 {}, 已选人数: {}/{}",
-            player.getName().getString(), factionId, teamSelectedPlayers.size(), GameConfig.getRequiredPlayers());
-
-        updateWaitingMessage(player);
-        checkStartCommanderVote();
-    }
-
-    private void updateWaitingMessage(ServerPlayer player) {
-        String message = "§6⏳ 等待玩家集结中 §e[" + teamSelectedPlayers.size() + "/" + GameConfig.getRequiredPlayers() + "]";
-        NetworkManager.sendWaitingStatus(player, message, true);
-    }
-
-    private void broadcastWaitingMessages() {
-        MinecraftServer server = Espetro.getServer();
-        if (server == null) {
-            return;
+        if ("ATTACK".equals(resolvedTeam)) {
+            TeamManager.joinAttackTeam(player.server, player.getName().getString());
+        } else {
+            TeamManager.joinDefendTeam(player.server, player.getName().getString());
         }
+        PlayerMatchStatsManager.getInstance().onTeamSelected(player, resolvedTeam);
 
-        String message = "§6⏳ 等待玩家集结中 §e[" + teamSelectedPlayers.size() + "/" + GameConfig.getRequiredPlayers() + "]";
-        for (UUID uuid : teamSelectedPlayers) {
-            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-            if (player != null) {
-                NetworkManager.sendWaitingStatus(player, message, true);
-            }
-        }
-    }
-
-    private void checkStartCommanderVote() {
-        if (teamSelectedPlayers.size() >= GameConfig.getRequiredPlayers()) {
-            startDefendCommanderVote();
-        }
+        Espetro.LOGGER.info("玩家 {} 选择了队伍 {}", player.getName().getString(), resolvedTeam);
+        broadcastTeamSelectState();
     }
 
     public void forceStartCommanderVote() {
-        if (teamSelectedPlayers.size() == 0) {
+        if (currentPhase == GamePhase.TEAM_SELECT && teamSelectedPlayers.isEmpty()) {
             Espetro.LOGGER.info("没有玩家选择队伍！");
             return;
         }
+        if (currentPhase == GamePhase.TEAM_SELECT) {
+            finishTeamSelect();
+            return;
+        }
         startDefendCommanderVote();
+    }
+
+    private void finishTeamSelect() {
+        if (currentPhase != GamePhase.TEAM_SELECT) {
+            return;
+        }
+        // Players who did not choose during the free-selection window remain
+        // in the battlefield waiting area and may still join later as
+        // reinforcements through the same server-authoritative side picker.
+        midGameJoiners.addAll(waitingForTeam);
+        waitingForTeam.clear();
+        broadcastTeamSelectState(false);
+        startDefendCommanderVote();
+    }
+
+    private void broadcastTeamSelectState() {
+        broadcastTeamSelectState(true);
+    }
+
+    private void broadcastTeamSelectState(boolean active) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        int attack = 0;
+        int defend = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
+            if ("ATTACK".equals(team)) attack++;
+            if ("DEFEND".equals(team)) defend++;
+        }
+        int remaining = Math.max(0,
+            GameConfig.getTeamSelectSeconds() - teamSelectTickCounter / TICKS_PER_SECOND);
+        long end = server.overworld().getGameTime() + remaining * 20L;
+        NetworkManager.broadcastTeamSelectState(attack, defend, remaining, end, active);
     }
 
     // ========== 阶段流转 ==========
@@ -213,10 +465,10 @@ public class GameStateManager {
         NetworkManager.broadcastFactionRevealScreen(
             selectManager.getFinalAttackClass(),
             selectManager.getFinalDefendClass(),
-            FACTION_REVEAL_SECONDS
+            GameConfig.getFactionRevealSeconds()
         );
 
-        Espetro.LOGGER.info("双方编制揭示开始，持续{}秒", FACTION_REVEAL_SECONDS);
+        Espetro.LOGGER.info("双方编制揭示开始，持续{}秒", GameConfig.getFactionRevealSeconds());
     }
 
     /**
@@ -243,7 +495,7 @@ public class GameStateManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
-        ServerLevel level = server.overworld();
+        ServerLevel level = BattlefieldContext.requireBattlefield(server);
         ClassSelectManager selectManager = ClassSelectManager.getInstance();
         int attackCount = deployInitialFactionVehiclesForTeam("ATTACK", selectManager.getFinalAttackClass(), level);
         int defendCount = deployInitialFactionVehiclesForTeam("DEFEND", selectManager.getFinalDefendClass(), level);
@@ -286,7 +538,7 @@ public class GameStateManager {
 
     private void saveTeamSpawnAsDeployPoint(ServerPlayer player, String team) {
         SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
-        ServerLevel overworld = player.server.overworld();
+        ServerLevel overworld = BattlefieldContext.requireBattlefield(player.server);
         BlockPos deployPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
         BastionManager.getInstance().savePlayerDeployPoint(player, deployPos, overworld);
     }
@@ -296,7 +548,7 @@ public class GameStateManager {
         BastionManager.getInstance().activatePlayerBastionSelection(player.getUUID());
         applyDeploymentWaitingState(player);
         if ("DEFEND".equals(team)) {
-            OutpostManager.getInstance().prepareDeployTargets(player.server.overworld());
+            OutpostManager.getInstance().prepareDeployTargets(BattlefieldContext.requireBattlefield(player.server));
         }
     }
 
@@ -349,7 +601,13 @@ public class GameStateManager {
 
         removeAttackWaitingBarrier();
 
-        ServerLevel level = server.overworld();
+        ServerLevel level = BattlefieldContext.requireBattlefield(server);
+        if (!BattlefieldContext.isActiveBattlefield(level)) {
+            Espetro.LOGGER.error("拒绝在非活动战场维度创建部署屏障: {}",
+                level.dimension().location());
+            return;
+        }
+        attackWaitingBarrierDimension = level.dimension();
         SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint("ATTACK");
         BlockPos center = new BlockPos((int) Math.floor(spawn.x), (int) Math.floor(spawn.y), (int) Math.floor(spawn.z));
 
@@ -359,8 +617,8 @@ public class GameStateManager {
         int minZ = center.getZ() - half;
         int maxZ = minZ + ATTACK_WAITING_BARRIER_SIDE - 1;
         int baseY = center.getY();
-        int roofY = baseY + ATTACK_WAITING_BARRIER_HEIGHT;
-
+        // Only build the perimeter. A full 200x200 roof previously forced
+        // tens of thousands of chunk/block updates and stalled all entities.
         for (int y = baseY; y < baseY + ATTACK_WAITING_BARRIER_HEIGHT; y++) {
             for (int x = minX; x <= maxX; x++) {
                 setTemporaryBarrier(level, new BlockPos(x, y, minZ));
@@ -369,12 +627,6 @@ public class GameStateManager {
             for (int z = minZ + 1; z < maxZ; z++) {
                 setTemporaryBarrier(level, new BlockPos(minX, y, z));
                 setTemporaryBarrier(level, new BlockPos(maxX, y, z));
-            }
-        }
-
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                setTemporaryBarrier(level, new BlockPos(x, roofY, z));
             }
         }
 
@@ -390,7 +642,7 @@ public class GameStateManager {
         if (!attackWaitingBarrierBlocks.containsKey(pos)) {
             attackWaitingBarrierBlocks.put(pos.immutable(), previous);
         }
-        level.setBlock(pos, Blocks.BARRIER.defaultBlockState(), 3);
+        level.setBlock(pos, Blocks.BARRIER.defaultBlockState(), 18);
     }
 
     private int removeAttackWaitingBarrier() {
@@ -408,10 +660,17 @@ public class GameStateManager {
     private int removeAttackWaitingBarrier(MinecraftServer server) {
         if (server == null) {
             attackWaitingBarrierBlocks.clear();
+            attackWaitingBarrierDimension = null;
             return 0;
         }
 
-        ServerLevel level = server.overworld();
+        ResourceKey<Level> dimension = attackWaitingBarrierDimension;
+        ServerLevel level = dimension == null ? null : server.getLevel(dimension);
+        if (level == null || Level.OVERWORLD.equals(level.dimension())) {
+            attackWaitingBarrierBlocks.clear();
+            attackWaitingBarrierDimension = null;
+            return 0;
+        }
         int restored = 0;
         for (Map.Entry<BlockPos, BlockState> entry : attackWaitingBarrierBlocks.entrySet()) {
             BlockPos pos = entry.getKey();
@@ -422,6 +681,7 @@ public class GameStateManager {
         }
         attackWaitingBarrierBlocks.clear();
         int orphaned = removeOrphanedAttackWaitingBarriers(level);
+        attackWaitingBarrierDimension = null;
         int total = restored + orphaned;
         if (total > 0) {
             Espetro.LOGGER.info("已清理攻方等待屏障: 恢复{}个记录方块, 删除{}个残留屏障",
@@ -440,10 +700,9 @@ public class GameStateManager {
         int minZ = center.getZ() - half;
         int maxZ = minZ + ATTACK_WAITING_BARRIER_SIDE - 1;
         int baseY = center.getY();
-        int roofY = baseY + ATTACK_WAITING_BARRIER_HEIGHT;
         int removed = 0;
 
-        for (int y = baseY; y < roofY; y++) {
+        for (int y = baseY; y < baseY + ATTACK_WAITING_BARRIER_HEIGHT; y++) {
             for (int x = minX; x <= maxX; x++) {
                 removed += removeBarrierAt(level, new BlockPos(x, y, minZ));
                 removed += removeBarrierAt(level, new BlockPos(x, y, maxZ));
@@ -454,11 +713,6 @@ public class GameStateManager {
             }
         }
 
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                removed += removeBarrierAt(level, new BlockPos(x, roofY, z));
-            }
-        }
         return removed;
     }
 
@@ -466,7 +720,7 @@ public class GameStateManager {
         if (!level.getBlockState(pos).is(Blocks.BARRIER)) {
             return 0;
         }
-        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 18);
         return 1;
     }
 
@@ -501,6 +755,7 @@ public class GameStateManager {
 
         // 初始化兵力统计
         TroopCountManager.getInstance().initializeTroops();
+        CommanderGovernanceManager.getInstance().syncCommandersFromVoteManager();
 
         // 扣除初始载具的 troopValue（初始载具占用兵力预算）
         VehicleManager vm = VehicleManager.getInstance();
@@ -530,7 +785,7 @@ public class GameStateManager {
 
     private void onFactionRevealTick() {
         factionRevealTickCounter++;
-        if (factionRevealTickCounter >= FACTION_REVEAL_SECONDS * TICKS_PER_SECOND) {
+        if (factionRevealTickCounter >= GameConfig.getFactionRevealSeconds() * TICKS_PER_SECOND) {
             startDeploying();
         }
     }
@@ -539,9 +794,26 @@ public class GameStateManager {
 
     public void onServerTick() {
         switch (currentPhase) {
-            case WAITING_FOR_PLAYERS:
-                if (!teamSelectedPlayers.isEmpty() && deployTickCounter % 20 == 0) {
-                    broadcastWaitingMessages();
+            case LOBBY, WAITING_FOR_PLAYERS:
+                if (deployTickCounter % TICKS_PER_SECOND == 0) {
+                    broadcastHubStatus();
+                }
+                break;
+            case MAP_VOTE:
+                MinecraftServer mapVoteServer = Espetro.getServer();
+                if (mapVoteServer != null) {
+                    MapVoteManager.getInstance().onServerTick(mapVoteServer);
+                }
+                break;
+            case MAP_LOADING:
+                break;
+            case TEAM_SELECT:
+                teamSelectTickCounter++;
+                if (teamSelectTickCounter % TICKS_PER_SECOND == 0) {
+                    broadcastTeamSelectState();
+                }
+                if (teamSelectTickCounter >= GameConfig.getTeamSelectSeconds() * TICKS_PER_SECOND) {
+                    finishTeamSelect();
                 }
                 break;
             case DEFEND_COMMANDER_VOTE:
@@ -578,6 +850,20 @@ public class GameStateManager {
             case DEPLOYING:
                 onDeployTick();
                 break;
+            case BATTLE:
+                MinecraftServer battleServer = Espetro.getServer();
+                if (battleServer != null) {
+                    CommanderGovernanceManager.getInstance().onServerTick(battleServer);
+                }
+                break;
+            case ROUND_END:
+                roundEndTickCounter++;
+                if (roundEndTickCounter >= GameConfig.getRoundEndSeconds() * TICKS_PER_SECOND) {
+                    beginCleanup();
+                }
+                break;
+            case CLEANUP:
+                break;
             default:
                 break;
         }
@@ -588,7 +874,7 @@ public class GameStateManager {
 
     private void teleportToTeamSpawn(ServerPlayer player, String team) {
         SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
-        ServerLevel overworld = player.server.overworld();
+        ServerLevel overworld = BattlefieldContext.requireBattlefield(player.server);
         player.teleportTo(overworld, spawn.x, spawn.y, spawn.z, spawn.yaw, 0f);
 
         BlockPos deployPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
@@ -628,47 +914,178 @@ public class GameStateManager {
     // ========== 重置 ==========
 
     public void resetGame() {
-        currentPhase = GamePhase.WAITING_FOR_PLAYERS;
+        MinecraftServer server = Espetro.getServer();
+        forceStopInProgress = false;
+        clearRoundRuntime(false);
+        pendingRoundWinner = null;
+        pendingMap = null;
+        currentPhase = GamePhase.LOBBY;
+
+        if (server != null) {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                clearPlayerRoundAssignment(player);
+                applyHubState(player);
+            }
+            if (BattlefieldContext.isActive()) {
+                BattlefieldWorldManager.getInstance().cleanupBattlefield(server, null, () -> {
+                    setPhase(GamePhase.LOBBY);
+                    broadcastHubStatus();
+                });
+            } else {
+                setPhase(GamePhase.LOBBY);
+                broadcastHubStatus();
+            }
+        }
+        Espetro.LOGGER.info("游戏状态已重置到主城");
+    }
+
+    /**
+     * Immediately aborts any phase and returns every online player to the
+     * overworld hub. Battlefield cleanup is serialized with an in-flight map
+     * activation, so an administrator can safely use this during MAP_LOADING.
+     *
+     * <p>The battlefield is detached from the server tick list, its storage
+     * handles are closed without saving match damage, and the entire save-side
+     * dimension copy is deleted. A later round imports a new copy from the
+     * read-only EsWorld template.</p>
+     *
+     * @return {@code false} only when there is no server or another forced stop
+     * is already waiting for battlefield cleanup
+     */
+    public boolean forceStopGame(
+        MinecraftServer server,
+        Consumer<BattlefieldWorldManager.Result> onComplete
+    ) {
+        if (server == null || forceStopInProgress) {
+            return false;
+        }
+
+        forceStopInProgress = true;
+        GamePhase stoppedPhase = currentPhase;
+        ActiveMapConfig stoppedMap = pendingMap != null ? pendingMap : BattlefieldContext.getOrNull();
+        int playerCount = server.getPlayerCount();
+
+        setPhase(GamePhase.CLEANUP);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            clearPlayerRoundAssignment(player);
+            player.removeAllEffects();
+            applyHubState(player);
+            StaminaManager.resetPlayer(player);
+        }
+
+        clearRoundRuntime(true);
+        pendingMap = null;
+        pendingRoundWinner = null;
+        SupplyManager.getInstance().reset();
+
+        Espetro.broadcastToAll("§6[Espetro] 管理员已强制结束本局，正在返回主城。");
+        BattlefieldWorldManager.getInstance().cleanupBattlefield(server, stoppedMap, cleanupResult -> {
+            forceStopInProgress = false;
+            setPhase(GamePhase.LOBBY);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                clearPlayerRoundAssignment(player);
+                player.removeAllEffects();
+                applyHubState(player);
+                StaminaManager.resetPlayer(player);
+                NetworkManager.sendOpenHubScreen(player, server.getPlayerCount(),
+                    "对局已结束，等待管理员开始下一局");
+            }
+            broadcastHubStatus();
+            if (cleanupResult.success()) {
+                Espetro.broadcastToAll(
+                    "§a[Espetro] 所有玩家已返回主城，战场存档副本已删除。");
+            } else {
+                Espetro.broadcastToAll(
+                    "§c[Espetro] 玩家已返回主城，但战场存档副本删除失败："
+                        + cleanupResult.error());
+            }
+            Espetro.LOGGER.info(
+                "管理员强制终止战局完成: previousPhase={}, map={}, players={}, terrainReset={}",
+                stoppedPhase, stoppedMap == null ? "none" : stoppedMap.dimensionId,
+                playerCount, cleanupResult.success());
+            if (onComplete != null) {
+                try {
+                    onComplete.accept(cleanupResult);
+                } catch (Exception e) {
+                    Espetro.LOGGER.error("强制终止战局完成回调执行失败", e);
+                }
+            }
+        });
+        return true;
+    }
+
+    private void clearRoundRuntime(boolean clearStats) {
         waitingForTeam.clear();
         teamSelectedPlayers.clear();
         midGameJoiners.clear();
         deployClassSelected.clear();
         deployTickCounter = 0;
         factionRevealTickCounter = 0;
+        teamSelectTickCounter = 0;
+        roundEndTickCounter = 0;
         removeAttackWaitingBarrier();
 
+        MapVoteManager.getInstance().reset();
         VoteManager.getInstance().reset();
         ClassSelectManager.getInstance().reset();
         SquadManager.getInstance().reset();
         TeamPackManager.getInstance().reset();
         OutpostManager.getInstance().reset();
         CommanderSkillManager.getInstance().reset();
-
-        MinecraftServer server = Espetro.getServer();
-        if (server != null) {
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                waitingForTeam.add(player.getUUID());
-                applyWaitingState(player);
-                NetworkManager.sendOpenFactionScreen(player);
-            }
+        CommanderGovernanceManager.getInstance().reset();
+        ClassCountManager.getInstance().resetAll();
+        VehicleManager.getInstance().reset();
+        TroopCountManager.getInstance().resetTroops();
+        BastionManager.getInstance().reset();
+        if (clearStats) {
+            PlayerMatchStatsManager.getInstance().resetMatch();
         }
-
-        Espetro.LOGGER.info("游戏状态已重置");
     }
 
     public void onPlayerJoin(ServerPlayer player) {
-        waitingForTeam.add(player.getUUID());
-        applyWaitingState(player);
-        NetworkManager.sendOpenFactionScreen(player);
+        PlayerMatchStatsManager.getInstance().onPlayerJoin(player);
         // 入服时主动推送指挥官技能数据，确保客户端轮盘可立即显示技能入口
         NetworkManager.sendCommanderSkillSync(player);
 
-        player.sendSystemMessage(Component.literal("§6========================================"));
-        player.sendSystemMessage(Component.literal("§e请选择你的阵营！按 §aK键 §e打开阵营选择界面"));
-        player.sendSystemMessage(Component.literal("§e攻击方 §7或 §9防守方"));
-        player.sendSystemMessage(Component.literal("§6========================================"));
+        switch (currentPhase) {
+            case LOBBY, WAITING_FOR_PLAYERS -> {
+                forcePlayerToHub(player);
+                NetworkManager.sendOpenHubScreen(player, player.server.getPlayerCount(),
+                    "等待管理员开始下一局");
+            }
+            case MAP_VOTE -> {
+                // 投票中途加入：直接 MatchHold，勿 hub（会摘失明）。
+                applyMatchHoldState(player, HoldAnchor.HUB_HIGH);
+                MapVoteManager.getInstance().syncToPlayer(player);
+            }
+            case MAP_LOADING -> {
+                applyMatchHoldState(player, HoldAnchor.AUTO);
+                player.sendSystemMessage(Component.literal("§e战场正在装载，请稍候。"));
+            }
+            case TEAM_SELECT -> {
+                clearPlayerRoundAssignment(player);
+                waitingForTeam.add(player.getUUID());
+                applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+                NetworkManager.sendOpenFactionScreen(player);
+                broadcastTeamSelectState();
+            }
+            case ROUND_END, CLEANUP -> {
+                forcePlayerToHub(player);
+                player.sendSystemMessage(Component.literal("§e本回合正在结算，请等待下一局。"));
+            }
+            default -> onMidGameJoin(player);
+        }
+    }
 
-        org.espetro.tutorial.TutorialManager.getInstance().onPlayerJoin(player, false);
+    /**
+     * 退服前强制写回主城位置/重生点（主城维度持久不重置）。
+     * 应在清空装备并保存 playerdata 之前调用。
+     */
+    public void onPlayerLeave(ServerPlayer player) {
+        if (player != null) {
+            forcePlayerToHub(player);
+            onPlayerLeave(player.getUUID());
+        }
     }
 
     public void onPlayerLeave(UUID uuid) {
@@ -676,7 +1093,12 @@ public class GameStateManager {
         teamSelectedPlayers.remove(uuid);
         midGameJoiners.remove(uuid);
         deployClassSelected.remove(uuid);
-        org.espetro.tutorial.TutorialManager.getInstance().onPlayerLeave(uuid);
+        MapVoteManager.getInstance().onPlayerLeave(uuid);
+        VoteManager.getInstance().removePlayer(uuid);
+        ClassSelectManager.getInstance().removePlayerVote(uuid);
+        PlayerMatchStatsManager.getInstance().onPlayerLeave(uuid);
+        BastionManager.getInstance().unlockPlayerPosition(uuid);
+        BastionManager.getInstance().clearWaiting(uuid);
     }
 
     public Vec3 getWaitingPosition() {
@@ -685,27 +1107,62 @@ public class GameStateManager {
 
     /** 强制玩家处于统一的高空等待点、旁观模式和失明状态。 */
     public void applyWaitingState(ServerPlayer player) {
-        if (!player.isSpectator()) {
-            player.setGameMode(GameType.SPECTATOR);
-        }
-        if (!player.hasEffect(MobEffects.BLINDNESS)) {
-            player.addEffect(new MobEffectInstance(
-                MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
-        }
-        player.setDeltaMovement(0, 0, 0);
-
-        ServerLevel overworld = player.server.overworld();
-        Vec3 waitingPosition = getWaitingPosition();
-        if (player.serverLevel() != overworld || player.distanceToSqr(waitingPosition) > 0.01) {
-            player.teleportTo(overworld,
-                waitingPosition.x, waitingPosition.y, waitingPosition.z, 0f, 0f);
-        }
+        applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
     }
 
-    /** 等待部署点选择时使用；除统一等待状态外还登记服务器位置锁。 */
+    public void applyBattlefieldWaitingState(ServerPlayer player) {
+        applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+    }
+
+    /**
+     * 主世界主城：持久维度，不随战场卸载重置。
+     * 强制玩家回到 overworld 出生点（维度或坐标不对都会传送）。
+     * 合法解除 MatchHold：解锁 + 去失明 + survival。
+     */
+    public void applyHubState(ServerPlayer player) {
+        forcePlayerToHub(player);
+    }
+
+    /**
+     * 进服/退服/回城共用：强制进入主城维度出生点，不销毁或重载主城世界。
+     */
+    public void forcePlayerToHub(ServerPlayer player) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        player.removeEffect(MobEffects.BLINDNESS);
+        BastionManager.getInstance().unlockPlayerPosition(player.getUUID());
+        BastionManager.getInstance().clearWaiting(player.getUUID());
+        if (player.isSpectator()) {
+            player.setGameMode(GameType.SURVIVAL);
+        }
+        // Natural regeneration is disabled globally by Espetro. Without an
+        // explicit hub reset, damage saved in playerdata survives reconnects
+        // and leaves players permanently below full health in the lobby.
+        if (player.isAlive()) {
+            player.setHealth(player.getMaxHealth());
+            player.clearFire();
+            player.setAirSupply(player.getMaxAirSupply());
+        }
+        ServerLevel hub = player.server.overworld();
+        BlockPos spawn = hub.getSharedSpawnPos();
+        double x = spawn.getX() + 0.5;
+        double y = spawn.getY();
+        double z = spawn.getZ() + 0.5;
+        // 始终写回重生点，避免下次登录落在已卸载的战场维度。
+        player.setRespawnPosition(Level.OVERWORLD, spawn, 0f, true, false);
+        boolean wrongDimension = player.serverLevel() != hub;
+        boolean farFromSpawn = player.distanceToSqr(x, y, z) > 2.0 * 2.0;
+        if (wrongDimension || farFromSpawn) {
+            player.teleportTo(hub, x, y, z, 0f, 0f);
+        }
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
+    }
+
+    /** 等待部署点选择时使用；统一 MatchHold（旁观/失明/战场等待点锁）。 */
     public void applyDeploymentWaitingState(ServerPlayer player) {
-        applyWaitingState(player);
-        BastionManager.getInstance().lockPlayerPosition(player.getUUID(), getWaitingPosition());
+        applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
     }
 
     // ========== 战局中加入 ==========
@@ -720,7 +1177,9 @@ public class GameStateManager {
 
     public void onMidGameJoin(ServerPlayer player) {
         midGameJoiners.add(player.getUUID());
-        applyWaitingState(player);
+        clearPlayerRoundAssignment(player);
+        // 中途加入先留在主城选边，选完队伍后再进入战场部署流程
+        forcePlayerToHub(player);
 
         // 只给该玩家同步阶段信息，避免全局广播
         org.espetro.network.NetworkManager.NET.send(
@@ -733,7 +1192,6 @@ public class GameStateManager {
         player.sendSystemMessage(Component.literal("§e按上方按钮选择 §c进攻方 §e或 §9防守方"));
         player.sendSystemMessage(Component.literal("§6========================================"));
 
-        org.espetro.tutorial.TutorialManager.getInstance().onPlayerJoin(player, true);
     }
 
     public void onMidGameTeamSelected(ServerPlayer player, String team) {
@@ -758,6 +1216,7 @@ public class GameStateManager {
 
         ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), factionId);
         ClassCountManager.getInstance().setPlayerTeam(player.getUUID(), team);
+        PlayerMatchStatsManager.getInstance().onTeamSelected(player, team);
 
         VoteManager voteManager = VoteManager.getInstance();
         if ("ATTACK".equals(team)) {
@@ -822,7 +1281,7 @@ public class GameStateManager {
 
                 BastionManager bastionManager = BastionManager.getInstance();
                 SpawnPointConfig.SpawnPoint spawnPoint = SpawnPointConfig.getSpawnPoint(team);
-                ServerLevel overworld = server.overworld();
+                ServerLevel overworld = BattlefieldContext.requireBattlefield(server);
                 bastionManager.savePlayerDeployPoint(player,
                     new BlockPos((int) spawnPoint.x, (int) spawnPoint.y, (int) spawnPoint.z),
                     overworld);
@@ -880,6 +1339,97 @@ public class GameStateManager {
     }
 
     /**
+     * End a battle from troop depletion, command, API or KubeJS. Winner is one
+     * of ATTACK / DEFEND / DRAW. The actual world detach happens after the
+     * configured result-screen delay.
+     */
+    public boolean endRound(String winner) {
+        if (currentPhase != GamePhase.BATTLE) {
+            return false;
+        }
+        String normalized = winner == null ? "" : winner.trim().toUpperCase(Locale.ROOT);
+        if (!"ATTACK".equals(normalized) && !"DEFEND".equals(normalized)
+            && !"DRAW".equals(normalized)) {
+            return false;
+        }
+        pendingRoundWinner = normalized;
+        BattlefieldContext.setLastRoundWinner(normalized);
+        roundEndTickCounter = 0;
+        removeAttackWaitingBarrier();
+        setPhase(GamePhase.ROUND_END);
+        NetworkManager.broadcastRoundEnd(normalized, GameConfig.getRoundEndSeconds());
+        String result = switch (normalized) {
+            case "ATTACK" -> "§c进攻方胜利";
+            case "DEFEND" -> "§9防守方胜利";
+            default -> "§e平局";
+        };
+        Espetro.broadcastToAll("§6===== " + result + " §6=====");
+        return true;
+    }
+
+    private void beginCleanup() {
+        if (currentPhase != GamePhase.ROUND_END) {
+            return;
+        }
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return;
+        }
+        setPhase(GamePhase.CLEANUP);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            applyHubState(player);
+            ClassEquipment.clearEquipment(player);
+            TeamManager.removeFromAllTeams(
+                server.getScoreboard(), player.getName().getString());
+        }
+
+        ActiveMapConfig completedMap = pendingMap != null ? pendingMap : BattlefieldContext.getOrNull();
+        clearRoundRuntime(false); // per-round scoreboard survives until next prestart
+        BattlefieldWorldManager.getInstance().cleanupBattlefield(server, completedMap, cleanupResult -> {
+            pendingMap = null;
+            pendingRoundWinner = null;
+            setPhase(GamePhase.LOBBY);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                applyHubState(player);
+                NetworkManager.sendOpenHubScreen(player, server.getPlayerCount(),
+                    "等待管理员开始下一局");
+            }
+            broadcastHubStatus();
+            if (!cleanupResult.success()) {
+                Espetro.broadcastToAll(
+                    "§c[Espetro] 战场存档副本删除失败，下次加载将重试："
+                        + cleanupResult.error());
+            }
+        });
+    }
+
+    private void clearPlayerRoundAssignment(ServerPlayer player) {
+        if (player == null) return;
+        String squadTeam = SquadManager.getInstance().removePlayer(player.getUUID());
+        ClassCountManager.getInstance().removePlayer(player);
+        ClassEquipment.clearEquipment(player);
+        TeamManager.removeFromAllTeams(player.server.getScoreboard(), player.getName().getString());
+        waitingForTeam.remove(player.getUUID());
+        teamSelectedPlayers.remove(player.getUUID());
+        deployClassSelected.remove(player.getUUID());
+        if (squadTeam != null) {
+            NetworkManager.syncSquadsToTeam(squadTeam);
+        }
+    }
+
+    private void broadcastHubStatus() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        String text = "§6主城 §7| §e在线人数: §f" + server.getPlayerCount()
+            + " §7| §e等待管理员开始下一局";
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.serverLevel() == server.overworld()) {
+                NetworkManager.sendWaitingStatus(player, text, true);
+            }
+        }
+    }
+
+    /**
      * 标记玩家在部署阶段已选择职业
      */
     public void markDeployClassSelected(UUID uuid) {
@@ -905,8 +1455,9 @@ public class GameStateManager {
     }
 
     public void forceStartGame() {
-        if (currentPhase == GamePhase.WAITING_FOR_PLAYERS) {
-            forceStartCommanderVote();
+        MinecraftServer server = Espetro.getServer();
+        if (server != null && currentPhase.isLobbyLike()) {
+            prestart(server);
         }
     }
 
@@ -920,7 +1471,7 @@ public class GameStateManager {
         BlockPos newPos = new BlockPos((int) x, (int) y, (int) z);
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
-            ServerLevel overworld = server.overworld();
+            ServerLevel overworld = BattlefieldContext.requireBattlefield(server);
             org.espetro.bastion.BastionManager bastionMgr = org.espetro.bastion.BastionManager.getInstance();
 
             for (UUID uuid : teamSelectedPlayers) {
@@ -938,6 +1489,8 @@ public class GameStateManager {
         }
     }
 
+    /** @deprecated Readiness no longer exists; this is the selected-side count. */
+    @Deprecated
     public int getReadyCount() {
         return teamSelectedPlayers.size();
     }

@@ -11,10 +11,12 @@ import java.util.regex.Pattern;
 
 final class EspetroMutilWidgets {
 
-    static final int BACKDROP = 0xB0121517;
-    static final int PANEL = 0xE0191C1E;
-    static final int PANEL_SOFT = 0xB0212527;
-    static final int BORDER = 0xA05B6260;
+    // 阶段 UI 默认透明：玩家在高空旁观+失明时背后已近似全黑，不再铺不透明遮罩防闪。
+    // BACKDROP 仍保留常量供主城等少数 opt-in 场景使用，但 drawScreenShade 默认不绘制。
+    static final int BACKDROP = 0xFF121517;
+    static final int PANEL = 0x00191C1E;
+    static final int PANEL_SOFT = 0x00212527;
+    static final int BORDER = 0xFF5B6260;
     static final int BORDER_ACTIVE = 0xFFE8B85C;
     static final int TEXT = 0xFFFFFFFF;
     static final int MUTED = 0xFFD4D8E0;
@@ -42,8 +44,9 @@ final class EspetroMutilWidgets {
         return new GuiRect(x, y, width, height, color);
     }
 
+    /** 默认不绘制全屏遮罩；个别 Screen 需要暗角时自行 opt-in fill。 */
     static void drawScreenShade(GuiGraphics graphics, int width, int height) {
-        graphics.fill(0, 0, width, height, BACKDROP);
+        // no-op: MatchHold 失明黑底替代全屏 BACKDROP
     }
 
     static Panel panel(int x, int y, int width, int height) {
@@ -104,14 +107,10 @@ final class EspetroMutilWidgets {
     /**
      * Adds a phase header whose strings can be refreshed in place.  Periodic phase
      * packets should update this object instead of replacing the whole GUI tree.
+     * 无灰底、无左侧色条、无底部分割线——仅三行居中文字。
      */
     static PhaseHeader addMutablePhaseHeader(GuiElement root, int screenWidth, String title,
                                              String status, String detail, int accentColor) {
-        // 阶段标题栏在所有 MUtil 界面中共用。使用不透明底色，避免它在
-        // 外部 HUD 或着色器修改混合状态时产生帧间闪烁。
-        root.addChild(rect(0, 0, screenWidth, PHASE_HEADER_HEIGHT, 0xFF15181A));
-        root.addChild(rect(0, 0, 3, PHASE_HEADER_HEIGHT, accentColor));
-        root.addChild(rect(0, PHASE_HEADER_HEIGHT - 1, screenWidth, 1, 0xFF5B6260));
         Text titleText = centeredText(6, 4, Math.max(1, screenWidth - 12),
             title == null ? "" : title, TEXT);
         Text statusText = centeredText(6, 16, Math.max(1, screenWidth - 12),
@@ -128,6 +127,9 @@ final class EspetroMutilWidgets {
         private final Text title;
         private final Text status;
         private final Text detail;
+        private String lastTitle;
+        private String lastStatus;
+        private String lastDetail;
 
         private PhaseHeader(Text title, Text status, Text detail) {
             this.title = title;
@@ -136,15 +138,30 @@ final class EspetroMutilWidgets {
         }
 
         void setTitle(String value) {
-            title.setText(value);
+            String next = value == null ? "" : value;
+            if (java.util.Objects.equals(lastTitle, next)) {
+                return;
+            }
+            lastTitle = next;
+            title.setText(next);
         }
 
         void setStatus(String value) {
-            status.setText(value);
+            String next = value == null ? "" : value;
+            if (java.util.Objects.equals(lastStatus, next)) {
+                return;
+            }
+            lastStatus = next;
+            status.setText(next);
         }
 
         void setDetail(String value) {
-            detail.setText(value);
+            String next = value == null ? "" : value;
+            if (java.util.Objects.equals(lastDetail, next)) {
+                return;
+            }
+            lastDetail = next;
+            detail.setText(next);
         }
     }
 
@@ -308,10 +325,11 @@ final class EspetroMutilWidgets {
         private String label;
         private boolean enabled = true;
         private boolean selected = false;
-        private int normalColor = 0xB01B1E20;
-        private int hoverColor = 0xD0435145;
-        private int selectedColor = 0xD04A4329;
-        private int disabledColor = 0x70181B1D;
+        // 默认透明底 + 边框区分 hover/selected，避免大面积半透明 fill 当「背景墙」。
+        private int normalColor = 0x00000000;
+        private int hoverColor = 0x4027353A;
+        private int selectedColor = 0x403A3420;
+        private int disabledColor = 0x00000000;
         private int borderColor = 0x805B6260;
         private int textColor = TEXT;
         private float textScale = 1.0f;
@@ -464,6 +482,8 @@ final class EspetroMutilWidgets {
         private final int texW, texH;
         private int borderColor = 0x00000000;
         private int hoverBorderColor = 0x80FFFFFF;
+        /** 选中态边框；非 0 时优先于普通 border，且 hover 时仍保留。 */
+        private int selectedBorderColor = 0x00000000;
 
         ImageButton(int x, int y, int maxWidth, int maxHeight, ResourceLocation texture, Runnable action) {
             super(x, y, maxWidth, maxHeight);
@@ -487,6 +507,7 @@ final class EspetroMutilWidgets {
 
         ImageButton setBorderColor(int color) { this.borderColor = color; return this; }
         ImageButton setHoverBorderColor(int color) { this.hoverBorderColor = color; return this; }
+        ImageButton setSelectedBorderColor(int color) { this.selectedBorderColor = color; return this; }
 
         @Override
         public boolean onMouseClick(int mouseX, int mouseY, int button) {
@@ -511,10 +532,18 @@ final class EspetroMutilWidgets {
             int drawX = bx + (maxW - drawW) / 2;
             int drawY = by + (maxH - drawH) / 2;
 
-            // hover 高亮
-            int outlineColor = hasFocus() ? hoverBorderColor : borderColor;
+            // 选中边框常驻；hover 时用更亮的 hover 色但仍框住整张图。
+            int outlineColor;
+            if (hasAlpha(selectedBorderColor)) {
+                outlineColor = hasFocus() && hasAlpha(hoverBorderColor)
+                    ? hoverBorderColor : selectedBorderColor;
+            } else {
+                outlineColor = hasFocus() ? hoverBorderColor : borderColor;
+            }
             if (hasAlpha(outlineColor)) {
-                graphics.renderOutline(drawX - 1, drawY - 1, drawW + 2, drawH + 2, outlineColor);
+                // 外扩 2px，选中态更明显
+                int pad = hasAlpha(selectedBorderColor) ? 2 : 1;
+                graphics.renderOutline(drawX - pad, drawY - pad, drawW + pad * 2, drawH + pad * 2, outlineColor);
             }
 
             // 目标区域与源纹理尺寸必须分别传入。将 drawW/drawH 当成

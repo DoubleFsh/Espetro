@@ -3,6 +3,7 @@ package org.espetro.team;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.espetro.Espetro;
+import org.espetro.governance.CommanderGovernanceManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,6 +47,10 @@ public class SquadManager {
     }
 
     public ActionResult createSquad(ServerPlayer player, String requestedName) {
+        return createSquad(player, requestedName, org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID);
+    }
+
+    public ActionResult createSquad(ServerPlayer player, String requestedName, String categoryId) {
         String team = Espetro.getPlayerTeam(player);
         if (team == null) {
             return ActionResult.failure(null, "你尚未加入阵营，无法创建小队。");
@@ -59,12 +64,127 @@ public class SquadManager {
             name = player.getName().getString() + "的小队";
         }
 
+        String catId = categoryId == null || categoryId.isBlank()
+            ? org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID
+            : categoryId;
+        String catDisplay = org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY;
+        var active = org.espetro.mapconfig.BattlefieldContext.getOrNull();
+        if (active != null && active.squadTypes != null) {
+            var cat = active.squadTypes.find(catId);
+            if (cat != null) {
+                catId = cat.id();
+                catDisplay = cat.displayName();
+            } else if (!org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID.equals(catId)) {
+                return ActionResult.failure(team, "无效的小队类别。");
+            }
+        } else {
+            var defaults = org.espetro.mapconfig.SquadTypesSnapshot.defaults().find(catId);
+            if (defaults != null) {
+                catId = defaults.id();
+                catDisplay = defaults.displayName();
+            }
+        }
+
         Squad squad = new Squad(nextSquadId++, team, name, player.getUUID());
+        squad.categoryId = catId;
+        squad.categoryDisplayName = catDisplay;
         squad.members.add(player.getUUID());
         squadsByTeam.computeIfAbsent(team, ignored -> new LinkedHashMap<>()).put(squad.id, squad);
         playerSquads.put(player.getUUID(), squad.id);
 
         return ActionResult.success(team, "已创建小队 " + name + "，你是队长。");
+    }
+
+    /**
+     * Force-add target into leader's squad (no confirmation). Server re-validates all rules.
+     */
+    public ActionResult forceJoinSquad(ServerPlayer leader, UUID targetUuid) {
+        if (!isSquadLeader(leader.getUUID())) {
+            return ActionResult.failure(Espetro.getPlayerTeam(leader), "只有队长可以拉人入队。");
+        }
+        String team = Espetro.getPlayerTeam(leader);
+        if (team == null) {
+            return ActionResult.failure(null, "你尚未加入阵营。");
+        }
+        int squadId = getPlayerSquadId(leader.getUUID());
+        Squad squad = getSquad(team, squadId);
+        if (squad == null) {
+            return ActionResult.failure(team, "小队不存在。");
+        }
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return ActionResult.failure(team, "服务器不可用。");
+        }
+        ServerPlayer target = server.getPlayerList().getPlayer(targetUuid);
+        if (target == null) {
+            return ActionResult.failure(team, "目标玩家不在线。");
+        }
+        if (!team.equals(Espetro.getPlayerTeam(target))) {
+            return ActionResult.failure(team, "只能拉同阵营玩家。");
+        }
+        if (getPlayerSquadId(targetUuid) != NO_SQUAD) {
+            return ActionResult.failure(team, "目标已在小队中。");
+        }
+        if (squad.members.size() >= MAX_MEMBERS) {
+            return ActionResult.failure(team, "小队人数已满。");
+        }
+        squad.members.add(targetUuid);
+        playerSquads.put(targetUuid, squad.id);
+        return ActionResult.success(team, "已将 " + target.getName().getString() + " 拉进小队。");
+    }
+
+    /**
+     * Kick a member from leader's squad.
+     */
+    public ActionResult kickMember(ServerPlayer leader, UUID targetUuid) {
+        if (!isSquadLeader(leader.getUUID())) {
+            return ActionResult.failure(Espetro.getPlayerTeam(leader), "只有队长可以踢人。");
+        }
+        if (leader.getUUID().equals(targetUuid)) {
+            return ActionResult.failure(Espetro.getPlayerTeam(leader), "不能踢出自己。");
+        }
+        String team = Espetro.getPlayerTeam(leader);
+        int squadId = getPlayerSquadId(leader.getUUID());
+        if (squadId == NO_SQUAD || getPlayerSquadId(targetUuid) != squadId) {
+            return ActionResult.failure(team, "目标不在你的小队中。");
+        }
+        String affected = removePlayerFromCurrentSquad(targetUuid);
+        MinecraftServer server = Espetro.getServer();
+        if (server != null) {
+            ServerPlayer target = server.getPlayerList().getPlayer(targetUuid);
+            if (target != null) {
+                ClassCountManager.getInstance().onPlayerLeftSquad(target);
+            } else {
+                ClassCountManager.getInstance().onPlayerLeftSquadOffline(targetUuid);
+            }
+        } else {
+            ClassCountManager.getInstance().onPlayerLeftSquadOffline(targetUuid);
+        }
+        return ActionResult.success(affected != null ? affected : team, "已踢出队员。");
+    }
+
+    public long getLeaderSinceTick(UUID uuid) {
+        Integer squadId = playerSquads.get(uuid);
+        if (squadId == null) return Long.MAX_VALUE;
+        for (LinkedHashMap<Integer, Squad> squads : squadsByTeam.values()) {
+            Squad squad = squads.get(squadId);
+            if (squad != null && uuid.equals(squad.leader)) {
+                return squad.leaderSinceTick;
+            }
+        }
+        return Long.MAX_VALUE;
+    }
+
+    public String getPlayerCategoryId(UUID uuid) {
+        Integer squadId = playerSquads.get(uuid);
+        if (squadId == null) return null;
+        for (LinkedHashMap<Integer, Squad> squads : squadsByTeam.values()) {
+            Squad squad = squads.get(squadId);
+            if (squad != null) {
+                return squad.categoryId;
+            }
+        }
+        return null;
     }
 
     public ActionResult joinSquad(ServerPlayer player, int squadId) {
@@ -89,7 +209,7 @@ public class SquadManager {
         int previousSquadId = getPlayerSquadId(player.getUUID());
         removePlayerFromCurrentSquad(player.getUUID());
         if (previousSquadId != NO_SQUAD) {
-            // 切换小队：先按离队规则处理 team_count 职业。
+            // 切换小队也属于离队：职业记录与装备必须先撤销。
             ClassCountManager.getInstance().onPlayerLeftSquad(player);
         }
         squad.members.add(player.getUUID());
@@ -124,12 +244,13 @@ public class SquadManager {
         }
 
         List<UUID> formerMembers = new ArrayList<>(squad.members);
+        CommanderGovernanceManager.getInstance().onSquadLeaderLost(squad.leader);
         for (UUID memberUuid : formerMembers) {
             playerSquads.remove(memberUuid);
         }
         squads.remove(squad.id);
 
-        // 删除小队等同于所有成员离队：小队限定职业需清除。
+        // 删除小队等同于所有成员离队：职业记录与装备需清除。
         MinecraftServer server = Espetro.getServer();
         ClassCountManager countManager = ClassCountManager.getInstance();
         for (UUID memberUuid : formerMembers) {
@@ -223,7 +344,7 @@ public class SquadManager {
                 members.add(new MemberSnapshot(memberUuid, playerName, className, memberUuid.equals(squad.leader)));
             }
             result.add(new SquadSnapshot(squad.id, squad.name, getPlayerName(server, squad.leader),
-                MAX_MEMBERS, false, members));
+                squad.leader, MAX_MEMBERS, false, squad.categoryId, squad.categoryDisplayName, members));
         }
         return result;
     }
@@ -248,9 +369,14 @@ public class SquadManager {
                 if (squad.members.remove(uuid)) {
                     affectedTeam = teamEntry.getKey();
                     if (squad.members.isEmpty()) {
+                        if (uuid.equals(squad.leader)) {
+                            CommanderGovernanceManager.getInstance().onSquadLeaderLost(uuid);
+                        }
                         iterator.remove();
                     } else if (uuid.equals(squad.leader)) {
+                        CommanderGovernanceManager.getInstance().onSquadLeaderLost(uuid);
                         squad.leader = squad.members.get(0);
+                        squad.leaderSinceTick = currentGameTime();
                     }
                     return affectedTeam;
                 }
@@ -303,30 +429,56 @@ public class SquadManager {
         private final String name;
         private UUID leader;
         private final List<UUID> members = new ArrayList<>();
+        private String categoryId = org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID;
+        private String categoryDisplayName = org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY;
+        private long leaderSinceTick;
 
         private Squad(int id, String team, String name, UUID leader) {
             this.id = id;
             this.team = team;
             this.name = name;
             this.leader = leader;
+            this.leaderSinceTick = currentGameTime();
         }
+    }
+
+    private static long currentGameTime() {
+        MinecraftServer server = Espetro.getServer();
+        return server != null ? server.overworld().getGameTime() : 0L;
     }
 
     public static class SquadSnapshot {
         public final int id;
         public final String name;
         public final String leaderName;
+        public final UUID leaderUuid;
         public final int maxMembers;
         public final boolean locked;
+        public final String categoryId;
+        public final String categoryDisplayName;
         public final List<MemberSnapshot> members;
 
         public SquadSnapshot(int id, String name, String leaderName, int maxMembers, boolean locked,
                              List<MemberSnapshot> members) {
+            this(id, name, leaderName, null, maxMembers, locked,
+                org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID,
+                org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY,
+                members);
+        }
+
+        public SquadSnapshot(int id, String name, String leaderName, UUID leaderUuid, int maxMembers, boolean locked,
+                             String categoryId, String categoryDisplayName,
+                             List<MemberSnapshot> members) {
             this.id = id;
             this.name = name;
             this.leaderName = leaderName;
+            this.leaderUuid = leaderUuid;
             this.maxMembers = maxMembers;
             this.locked = locked;
+            this.categoryId = categoryId != null ? categoryId : org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID;
+            this.categoryDisplayName = categoryDisplayName != null
+                ? categoryDisplayName
+                : org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY;
             this.members = members != null ? members : new ArrayList<>();
         }
     }

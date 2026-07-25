@@ -158,10 +158,21 @@ public class ClientPacketHandlers {
             GamePhase phase = GamePhase.valueOf(phaseName);
             org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
 
+            net.minecraft.client.Minecraft phaseMc = net.minecraft.client.Minecraft.getInstance();
+            if (phase == GamePhase.MAP_LOADING
+                && phaseMc.screen instanceof org.espetro.client.gui.MapVoteScreen) {
+                phaseMc.setScreen(null);
+            }
+            if (phase.isLobbyLike()
+                && phaseMc.screen instanceof org.espetro.client.gui.RoundEndScreen) {
+                phaseMc.setScreen(null);
+            }
+
             // 攻方开始进攻时前哨已销毁，关闭仍包含旧前哨按钮的布防面板。
             if (phase == GamePhase.BATTLE) {
                 net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-                if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen) {
+                if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen
+                    && !screen.isWaitingForDeploySelection()) {
                     mc.setScreen(null);
                 }
             }
@@ -263,6 +274,24 @@ public class ClientPacketHandlers {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null) return;
 
+        if ("LOBBY".equals(phaseName) || "WAITING_FOR_PLAYERS".equals(phaseName)) {
+            mc.setScreen(new org.espetro.client.gui.HubScreen(0,
+                "等待管理员开始下一局"));
+            return;
+        }
+        if ("MAP_VOTE".equals(phaseName)) {
+            if (!(mc.screen instanceof org.espetro.client.gui.MapVoteScreen)) {
+                mc.setScreen(new org.espetro.client.gui.MapVoteScreen());
+            }
+            return;
+        }
+        if ("TEAM_SELECT".equals(phaseName)) {
+            if (!(mc.screen instanceof org.espetro.client.gui.TeamSelectionScreen)) {
+                mc.setScreen(new org.espetro.client.gui.TeamSelectionScreen());
+            }
+            return;
+        }
+
         // 如果是投票阶段且是当前投票方，打开投票界面
         if (("DEFEND_COMMANDER_VOTE".equals(phaseName) && "DEFEND".equals(myTeam)) ||
             ("ATTACK_COMMANDER_VOTE".equals(phaseName) && "ATTACK".equals(myTeam))) {
@@ -293,13 +322,73 @@ public class ClientPacketHandlers {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // 更新轮盘技能缓存（技能已迁移到 Alt 轮盘）
+        // 更新 MUtil 轮盘技能缓存。
         org.espetro.client.gui.AuraTipRadialController.updateSkills(
             packet.isCommander(), packet.getCooldowns(), packet.getSkills());
 
         // 如果 CommanderSkillScreen 恰好已打开，同步更新数据
         if (mc.screen instanceof org.espetro.client.gui.CommanderSkillScreen screen) {
             screen.updateData(packet.isCommander(), packet.getCooldowns(), packet.getSkills());
+        }
+    }
+
+    // ==================== Multi-dimension flow ====================
+
+    public static void handleOpenHubScreen(OpenHubScreenPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return;
+        org.espetro.client.gui.ClientGameState.setPlayerTeam(null);
+        org.espetro.client.gui.ClientGameState.setPlayerFactionId(null);
+        // 已打开主城菜单时只更新文案，避免 setScreen 整页重建闪烁。
+        if (mc.screen instanceof org.espetro.client.gui.HubScreen hub) {
+            hub.updateStatus(packet.onlineCount, packet.statusMessage);
+            return;
+        }
+        mc.setScreen(new org.espetro.client.gui.HubScreen(packet.onlineCount, packet.statusMessage));
+    }
+
+    public static void handleClassSelectTimer(ClassSelectTimerPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.screen instanceof org.espetro.client.gui.ClassSelectScreen screen) {
+            screen.updateTimer(
+                packet.getTimeRemaining(),
+                packet.getOpponentTimeRemaining(),
+                packet.getSelectedFactionId(),
+                packet.isCommander());
+        }
+    }
+
+    public static void handleMapVoteState(MapVoteStatePacket packet) {
+        org.espetro.client.gui.MapVoteScreen.update(packet);
+    }
+
+    public static void handleOpenMapVoteScreen() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null && !(mc.screen instanceof org.espetro.client.gui.MapVoteScreen)) {
+            mc.setScreen(new org.espetro.client.gui.MapVoteScreen());
+        }
+    }
+
+    public static void handleTeamSelectState(TeamSelectStatePacket packet) {
+        org.espetro.client.gui.TeamSelectionScreen.updateTeamState(packet);
+    }
+
+    public static void handleMatchStats(MatchStatsSyncPacket packet) {
+        org.espetro.client.gui.MatchScoreboardScreen.updateStats(packet);
+    }
+
+    public static void handleGovernanceState(GovernanceStatePacket packet) {
+        org.espetro.client.gui.MatchScoreboardScreen.updateGovernance(packet);
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            screen.updateGovernance(packet);
+        }
+    }
+
+    public static void handleRoundEnd(RoundEndPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.setScreen(new org.espetro.client.gui.RoundEndScreen(packet.winner, packet.displaySeconds));
         }
     }
 
@@ -312,4 +401,5 @@ public class ClientPacketHandlers {
         }
         org.espetro.client.gui.TutorialOverlay.show(stepId, index, total, allowSkip);
     }
+
 }

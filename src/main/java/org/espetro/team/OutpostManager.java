@@ -18,6 +18,7 @@ import net.minecraft.world.level.ChunkPos;
 import org.espetro.Espetro;
 import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
+import org.espetro.mapconfig.BattlefieldContext;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,27 +94,9 @@ public class OutpostManager {
     /**
      * 从数据包加载前哨基地配置
      */
+    /** @deprecated 不从 datapack 加载；战场激活时 applyExternalJson。 */
     public void loadConfig(MinecraftServer server) {
-        outposts.clear();
-        redeployCooldownSeconds = 60;
-        try {
-            ResourceManager resourceManager = server.getResourceManager();
-            ResourceLocation location = ResourceLocation.fromNamespaceAndPath("espetro", "config/outposts.json");
-
-            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(resourceManager, location);
-            if (resourceOptional.isEmpty()) {
-                Espetro.LOGGER.info("未找到 outposts.json 配置文件，前哨基地功能不启用");
-                return;
-            }
-
-            String json = org.espetro.data.EspetroDataResources.readUtf8(resourceOptional.get());
-            parseAndApply(json);
-            Espetro.LOGGER.info("成功从 {} 加载前哨基地配置: {} 个前哨，重新部署冷却{}秒",
-                org.espetro.data.EspetroDataResources.describeSource(resourceOptional.get()),
-                outposts.size(), redeployCooldownSeconds);
-        } catch (Exception e) {
-            Espetro.LOGGER.error("加载前哨基地配置失败", e);
-        }
+        // 有意留空
     }
 
     private void parseAndApply(String json) {
@@ -136,6 +119,15 @@ public class OutpostManager {
             float yaw = obj.has("yaw") ? (float) obj.get("yaw").getAsDouble() : 0f;
             outposts.add(new Outpost(name, x, y, z, yaw));
         }
+    }
+
+    /** Apply the frozen outposts.json belonging to the active map. */
+    public void applyExternalJson(String json) {
+        outposts.clear();
+        redeployCooldownSeconds = 60;
+        parseAndApply(json);
+        active = false;
+        redeployCooldowns.clear();
     }
 
     /**
@@ -198,11 +190,11 @@ public class OutpostManager {
         }
 
         Outpost outpost = outposts.get(outpostIndex);
-        ServerLevel overworld = player.server.overworld();
+        ServerLevel battlefield = BattlefieldContext.requireBattlefield(player.server);
         // 改选前哨：取消未完成的 Rally 波次队列。
         TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
         BastionManager.getInstance().clearWaiting(player.getUUID());
-        player.teleportTo(overworld, outpost.x, outpost.y, outpost.z, outpost.yaw, 0f);
+        player.teleportTo(battlefield, outpost.x, outpost.y, outpost.z, outpost.yaw, 0f);
         player.setGameMode(GameType.SURVIVAL);
         player.removeAllEffects();
         player.addEffect(new MobEffectInstance(
@@ -237,7 +229,7 @@ public class OutpostManager {
         }
 
         redeployCooldowns.put(player.getUUID(), System.currentTimeMillis());
-        prepareDeployTargets(player.server.overworld());
+        prepareDeployTargets(BattlefieldContext.requireBattlefield(player.server));
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
             "§e正在重新部署，请在复活后选择部署点。"));
         player.kill();

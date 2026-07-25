@@ -120,6 +120,19 @@ public class FactionSelectionScreen extends MutilScreen {
         return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
+    @Override
+    public void onClose() {
+        if (shouldCloseOnEsc()) {
+            super.onClose();
+        }
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        org.espetro.team.GamePhase phase = ClientGameState.getCurrentPhase();
+        return !phase.isMatchActive() || phase == org.espetro.team.GamePhase.BATTLE;
+    }
+
     public static void open() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen == null) {

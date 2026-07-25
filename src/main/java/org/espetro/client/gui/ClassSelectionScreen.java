@@ -2,13 +2,12 @@ package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.OpenClassSelectionPacket;
 import org.lwjgl.glfw.GLFW;
+import se.mickelus.mutil.gui.GuiElement;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -21,7 +20,7 @@ import java.util.Map;
  * 1. 服务端通过网络包发送的完整数据（局域网联机客户端）
  * 2. 本地 FactionDataLoader 加载（J键手动打开时的回退）
  */
-public class ClassSelectionScreen extends Screen {
+public class ClassSelectionScreen extends MutilScreen {
 
     private final String factionId;
     // 服务端发来的数据（优先使用）
@@ -40,7 +39,7 @@ public class ClassSelectionScreen extends Screen {
 
     private final Map<String, Integer> classCounts = new HashMap<>();
     private final Map<String, Map<String, Integer>> variantCounts = new HashMap<>();
-    private final List<Button> classButtons = new java.util.ArrayList<>();
+    private final List<EspetroMutilWidgets.ActionButton> classButtons = new java.util.ArrayList<>();
 
     // 错误消息
     private String errorMessage = null;
@@ -86,17 +85,18 @@ public class ClassSelectionScreen extends Screen {
     }
 
     @Override
-    protected void init() {
-        super.init();
-
-        if (serverClasses != null && !serverClasses.isEmpty()) {
-            // 使用服务端数据
-            initFromServerData();
-        } else {
-            // 回退：从本地加载
-            initFromLocalData();
+    protected void buildMutilRoot(GuiElement root) {
+        if (displayClasses == null) {
+            if (serverClasses != null && !serverClasses.isEmpty()) {
+                // 使用服务端数据
+                initFromServerData();
+            } else {
+                // 回退：从本地加载
+                initFromLocalData();
+            }
+            NetworkManager.requestClassCounts(factionId);
         }
-        NetworkManager.requestClassCounts(factionId);
+        createButtons(root);
     }
 
     private void initFromServerData() {
@@ -111,7 +111,6 @@ public class ClassSelectionScreen extends Screen {
             classCounts.put(ci.classId, 0);
         }
 
-        createButtons();
     }
 
     private void initFromLocalData() {
@@ -136,10 +135,9 @@ public class ClassSelectionScreen extends Screen {
             displayClasses = new ClassDisplay[0];
         }
 
-        createButtons();
     }
 
-    private void createButtons() {
+    private void createButtons(GuiElement root) {
         startX = 10;
         startY = 50;
 
@@ -157,16 +155,13 @@ public class ClassSelectionScreen extends Screen {
             int currentCount = classCounts.getOrDefault(displayClasses[i].classId, 0);
             boolean full = currentCount >= displayClasses[i].maxPlayers;
             String roleColor = full ? "§c" : getRoleColor(displayClasses[i].role);
-            Component buttonText = Component.literal(
-                "    " + roleColor + displayClasses[i].name + " §7[" + currentCount + "/" + displayClasses[i].maxPlayers + "]");
-
-            Button.OnPress onPress = btn -> selectClass(classIndex);
-
-            Button button = Button.builder(buttonText, onPress)
-                .bounds(x, y, buttonWidth, buttonHeight)
-                .build();
-            button.active = !full;
-            this.addRenderableWidget(button);
+            String buttonText =
+                "    " + roleColor + displayClasses[i].name + " §7[" + currentCount
+                    + "/" + displayClasses[i].maxPlayers + "]";
+            EspetroMutilWidgets.ActionButton button = EspetroMutilWidgets.button(
+                x, y, buttonWidth, buttonHeight, buttonText, () -> selectClass(classIndex))
+                .setEnabled(!full);
+            root.addChild(button);
             classButtons.add(button);
         }
     }
@@ -178,9 +173,9 @@ public class ClassSelectionScreen extends Screen {
             int currentCount = classCounts.getOrDefault(cls.classId, 0);
             boolean full = currentCount >= cls.maxPlayers;
             String roleColor = full ? "§c" : getRoleColor(cls.role);
-            classButtons.get(i).setMessage(Component.literal(
-                "    " + roleColor + cls.name + " §7[" + currentCount + "/" + cls.maxPlayers + "]"));
-            classButtons.get(i).active = !full;
+            classButtons.get(i).setLabel(
+                "    " + roleColor + cls.name + " §7[" + currentCount + "/" + cls.maxPlayers + "]")
+                .setEnabled(!full);
         }
     }
 
@@ -307,7 +302,7 @@ public class ClassSelectionScreen extends Screen {
         for (int i = 0; i < displayClasses.length && i < classButtons.size(); i++) {
             ResourceLocation icon = displayClasses[i].iconResource;
             if (icon == null) continue;
-            Button button = classButtons.get(i);
+            EspetroMutilWidgets.ActionButton button = classButtons.get(i);
             int iconSize = 16;
             graphics.blit(icon, button.getX() + 4,
                 button.getY() + (button.getHeight() - iconSize) / 2,
@@ -318,15 +313,10 @@ public class ClassSelectionScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics graphics) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
-    }
-
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         lastMouseX = mouseX;
         lastMouseY = mouseY;
-        this.renderBackground(graphics);
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
         if (!hasVariantPopup()) {
             updateHoveredButton(mouseX, mouseY);
         }
@@ -363,8 +353,10 @@ public class ClassSelectionScreen extends Screen {
         if (hoveredClassIndex >= 0 && displayClasses != null && hoveredClassIndex < displayClasses.length) {
             renderEquipmentPanel(graphics, displayClasses[hoveredClassIndex]);
         }
+    }
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+    @Override
+    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderClassIcons(graphics);
         renderVariantPopup(graphics, mouseX, mouseY);
     }

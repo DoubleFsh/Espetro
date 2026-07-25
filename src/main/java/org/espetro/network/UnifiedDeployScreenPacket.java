@@ -1,6 +1,7 @@
 package org.espetro.network;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.UUID;
 
 /**
  * 统一部署/复活主界面包（S→C）
@@ -36,6 +38,7 @@ public class UnifiedDeployScreenPacket {
 
     // === 小队选择数据 ===
     private final List<SquadInfo> squads;
+    private final List<SquadCategoryInfo> squadCategories;
     private final int mySquadId;
     private final List<String> commanderNames;
     private final double teammateNameTagDistance;
@@ -56,7 +59,7 @@ public class UnifiedDeployScreenPacket {
         this(factionId, factionName, factionDescription, factionIcon,
             classes, classCounts, hasDeployPoint, deployPointPos, bastions,
             isCommander, vehicles, squads, mySquadId, deployTimeRemaining, team,
-            new ArrayList<>(), 10.0, false, 0);
+            new ArrayList<>(), 10.0, false, 0, new ArrayList<>());
     }
 
     public UnifiedDeployScreenPacket(
@@ -67,7 +70,8 @@ public class UnifiedDeployScreenPacket {
             List<SquadInfo> squads, int mySquadId,
             int deployTimeRemaining, String team,
             List<String> commanderNames, double teammateNameTagDistance,
-            boolean waitingForDeploySelection, int outpostRedeployCooldownRemaining) {
+            boolean waitingForDeploySelection, int outpostRedeployCooldownRemaining,
+            List<SquadCategoryInfo> squadCategories) {
         this.factionId = factionId;
         this.factionName = factionName;
         this.factionDescription = factionDescription;
@@ -80,6 +84,7 @@ public class UnifiedDeployScreenPacket {
         this.isCommander = isCommander;
         this.vehicles = vehicles != null ? vehicles : new ArrayList<>();
         this.squads = squads != null ? squads : new ArrayList<>();
+        this.squadCategories = squadCategories != null ? squadCategories : new ArrayList<>();
         this.mySquadId = mySquadId;
         this.deployTimeRemaining = deployTimeRemaining;
         this.team = team;
@@ -129,6 +134,11 @@ public class UnifiedDeployScreenPacket {
         for (int i = 0; i < squadSize; i++) {
             this.squads.add(new SquadInfo(buf));
         }
+        int categorySize = buf.readVarInt();
+        this.squadCategories = new ArrayList<>();
+        for (int i = 0; i < categorySize; i++) {
+            this.squadCategories.add(new SquadCategoryInfo(buf.readUtf(), buf.readUtf()));
+        }
 
         this.mySquadId = buf.readVarInt();
         this.deployTimeRemaining = buf.readVarInt();
@@ -176,6 +186,11 @@ public class UnifiedDeployScreenPacket {
 
         buf.writeVarInt(squads.size());
         for (SquadInfo s : squads) s.write(buf);
+        buf.writeVarInt(squadCategories.size());
+        for (SquadCategoryInfo category : squadCategories) {
+            buf.writeUtf(category.id);
+            buf.writeUtf(category.displayName);
+        }
 
         buf.writeVarInt(mySquadId);
         buf.writeVarInt(deployTimeRemaining);
@@ -226,6 +241,7 @@ public class UnifiedDeployScreenPacket {
     public boolean isCommander() { return isCommander; }
     public List<VehicleInfo> getVehicles() { return vehicles; }
     public List<SquadInfo> getSquads() { return squads; }
+    public List<SquadCategoryInfo> getSquadCategories() { return squadCategories; }
     public int getMySquadId() { return mySquadId; }
     public int getDeployTimeRemaining() { return deployTimeRemaining; }
     public String getTeam() { return team; }
@@ -242,6 +258,8 @@ public class UnifiedDeployScreenPacket {
         public final String description;
         public final String role;
         public final String icon;
+        /** 磁盘完整路径 IconImage；可空。 */
+        public final String iconImage;
         public final int maxPlayers;
         public final boolean strictCount;
         public final int currentCount;
@@ -256,11 +274,19 @@ public class UnifiedDeployScreenPacket {
         public ClassInfo(String classId, String name, String description, String role, String icon,
                          int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
                          List<VariantInfo> variants) {
-            this(classId, name, description, role, icon, maxPlayers, strictCount, currentCount,
+            this(classId, name, description, role, icon, null, maxPlayers, strictCount, currentCount,
                 troopValue, healthBonus, speedBonus, false, 0, 0, variants);
         }
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
+                         int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         boolean teamCount, int maxPerSquad, int squadCurrentCount,
+                         List<VariantInfo> variants) {
+            this(classId, name, description, role, icon, null, maxPlayers, strictCount, currentCount,
+                troopValue, healthBonus, speedBonus, teamCount, maxPerSquad, squadCurrentCount, variants);
+        }
+
+        public ClassInfo(String classId, String name, String description, String role, String icon, String iconImage,
                          int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
                          boolean teamCount, int maxPerSquad, int squadCurrentCount,
                          List<VariantInfo> variants) {
@@ -269,6 +295,7 @@ public class UnifiedDeployScreenPacket {
             this.description = description;
             this.role = role;
             this.icon = icon;
+            this.iconImage = iconImage == null ? "" : iconImage;
             this.maxPlayers = maxPlayers;
             this.strictCount = strictCount;
             this.currentCount = currentCount;
@@ -287,6 +314,7 @@ public class UnifiedDeployScreenPacket {
             this.description = buf.readUtf();
             this.role = buf.readUtf();
             this.icon = buf.readUtf();
+            this.iconImage = buf.readUtf();
             this.maxPlayers = buf.readVarInt();
             this.strictCount = buf.readBoolean();
             this.currentCount = buf.readVarInt();
@@ -309,6 +337,7 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(description);
             buf.writeUtf(role);
             buf.writeUtf(icon == null ? "" : icon);
+            buf.writeUtf(iconImage == null ? "" : iconImage);
             buf.writeVarInt(maxPlayers);
             buf.writeBoolean(strictCount);
             buf.writeVarInt(currentCount);
@@ -329,18 +358,31 @@ public class UnifiedDeployScreenPacket {
         public final String description;
         public final int maxPlayers;
         public int currentCount;
+        /** 服务端权威装备预览，客户端无需解析命令即可渲染人物模型。 */
+        public final LoadoutPreview preview;
 
         public VariantInfo(String variantId, String name, String description,
                            int maxPlayers, int currentCount) {
+            this(variantId, name, description, maxPlayers, currentCount, LoadoutPreview.empty());
+        }
+
+        public VariantInfo(String variantId, String name, String description,
+                           int maxPlayers, int currentCount, LoadoutPreview preview) {
             this.variantId = variantId;
             this.name = name;
             this.description = description;
             this.maxPlayers = maxPlayers;
             this.currentCount = currentCount;
+            this.preview = preview != null ? preview : LoadoutPreview.empty();
         }
 
         public VariantInfo(FriendlyByteBuf buf) {
-            this(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readVarInt());
+            this.variantId = buf.readUtf();
+            this.name = buf.readUtf();
+            this.description = buf.readUtf();
+            this.maxPlayers = buf.readVarInt();
+            this.currentCount = buf.readVarInt();
+            this.preview = new LoadoutPreview(buf);
         }
 
         public void write(FriendlyByteBuf buf) {
@@ -349,6 +391,66 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(description != null ? description : "");
             buf.writeVarInt(maxPlayers);
             buf.writeVarInt(currentCount);
+            preview.write(buf);
+        }
+    }
+
+    /**
+     * 6 槽位装备预览。所有 ItemStack 在构造时被复制，
+     * 调用方持有的原始 ItemStack 不会被后续渲染修改。
+     * <p>
+     * 序列化使用 {@link FriendlyByteBuf#writeItem} / {@link FriendlyByteBuf#readItem}，
+     * 空物品、带 NBT 物品、带数量物品均能保持一致。
+     */
+    public static class LoadoutPreview {
+        public final ItemStack head;
+        public final ItemStack chest;
+        public final ItemStack legs;
+        public final ItemStack feet;
+        public final ItemStack mainHand;
+        public final ItemStack offHand;
+
+        public LoadoutPreview(ItemStack head, ItemStack chest, ItemStack legs, ItemStack feet,
+                              ItemStack mainHand, ItemStack offHand) {
+            this.head = copySafe(head);
+            this.chest = copySafe(chest);
+            this.legs = copySafe(legs);
+            this.feet = copySafe(feet);
+            this.mainHand = copySafe(mainHand);
+            this.offHand = copySafe(offHand);
+        }
+
+        public static LoadoutPreview empty() {
+            return new LoadoutPreview(
+                ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY,
+                ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY);
+        }
+
+        public LoadoutPreview(FriendlyByteBuf buf) {
+            this.head = buf.readItem();
+            this.chest = buf.readItem();
+            this.legs = buf.readItem();
+            this.feet = buf.readItem();
+            this.mainHand = buf.readItem();
+            this.offHand = buf.readItem();
+        }
+
+        public void write(FriendlyByteBuf buf) {
+            buf.writeItem(head);
+            buf.writeItem(chest);
+            buf.writeItem(legs);
+            buf.writeItem(feet);
+            buf.writeItem(mainHand);
+            buf.writeItem(offHand);
+        }
+
+        public boolean isEmpty() {
+            return head.isEmpty() && chest.isEmpty() && legs.isEmpty()
+                && feet.isEmpty() && mainHand.isEmpty() && offHand.isEmpty();
+        }
+
+        private static ItemStack copySafe(ItemStack stack) {
+            return stack == null ? ItemStack.EMPTY : stack.copy();
         }
     }
 
@@ -475,20 +577,25 @@ public class UnifiedDeployScreenPacket {
         public final int maxMembers;
         public final boolean isLocked;
         public final String leaderName;
+        public final String categoryId;
+        public final String categoryDisplayName;
         public final List<SquadMemberInfo> members;
 
         public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked) {
-            this(id, name, memberCount, maxMembers, isLocked, "", new ArrayList<>());
+            this(id, name, memberCount, maxMembers, isLocked, "", "none", "无", new ArrayList<>());
         }
 
         public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked,
-                         String leaderName, List<SquadMemberInfo> members) {
+                         String leaderName, String categoryId, String categoryDisplayName,
+                         List<SquadMemberInfo> members) {
             this.id = id;
             this.name = name;
             this.memberCount = memberCount;
             this.maxMembers = maxMembers;
             this.isLocked = isLocked;
             this.leaderName = leaderName == null ? "" : leaderName;
+            this.categoryId = categoryId == null ? "none" : categoryId;
+            this.categoryDisplayName = categoryDisplayName == null ? "无" : categoryDisplayName;
             this.members = members != null ? members : new ArrayList<>();
         }
 
@@ -499,6 +606,8 @@ public class UnifiedDeployScreenPacket {
             this.maxMembers = buf.readVarInt();
             this.isLocked = buf.readBoolean();
             this.leaderName = buf.readUtf();
+            this.categoryId = buf.readUtf();
+            this.categoryDisplayName = buf.readUtf();
 
             int memberSize = buf.readVarInt();
             this.members = new ArrayList<>();
@@ -514,6 +623,8 @@ public class UnifiedDeployScreenPacket {
             buf.writeVarInt(maxMembers);
             buf.writeBoolean(isLocked);
             buf.writeUtf(leaderName);
+            buf.writeUtf(categoryId);
+            buf.writeUtf(categoryDisplayName);
             buf.writeVarInt(members.size());
             for (SquadMemberInfo member : members) {
                 member.write(buf);
@@ -530,26 +641,36 @@ public class UnifiedDeployScreenPacket {
                 && isLocked == that.isLocked
                 && Objects.equals(name, that.name)
                 && Objects.equals(leaderName, that.leaderName)
+                && Objects.equals(categoryId, that.categoryId)
+                && Objects.equals(categoryDisplayName, that.categoryDisplayName)
                 && Objects.equals(members, that.members);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, name, memberCount, maxMembers, isLocked, leaderName, members);
+            return Objects.hash(id, name, memberCount, maxMembers, isLocked, leaderName,
+                categoryId, categoryDisplayName, members);
         }
     }
 
     public static class SquadMemberInfo {
+        public final UUID uuid;
         public final String playerName;
         public final String className;
         public final boolean leader;
         public final boolean commander;
 
         public SquadMemberInfo(String playerName, String className, boolean leader) {
-            this(playerName, className, leader, false);
+            this(new UUID(0L, 0L), playerName, className, leader, false);
         }
 
         public SquadMemberInfo(String playerName, String className, boolean leader, boolean commander) {
+            this(new UUID(0L, 0L), playerName, className, leader, commander);
+        }
+
+        public SquadMemberInfo(UUID uuid, String playerName, String className,
+                               boolean leader, boolean commander) {
+            this.uuid = uuid == null ? new UUID(0L, 0L) : uuid;
             this.playerName = playerName == null ? "" : playerName;
             this.className = className == null ? "" : className;
             this.leader = leader;
@@ -557,6 +678,7 @@ public class UnifiedDeployScreenPacket {
         }
 
         public SquadMemberInfo(FriendlyByteBuf buf) {
+            this.uuid = buf.readUUID();
             this.playerName = buf.readUtf();
             this.className = buf.readUtf();
             this.leader = buf.readBoolean();
@@ -564,6 +686,7 @@ public class UnifiedDeployScreenPacket {
         }
 
         public void write(FriendlyByteBuf buf) {
+            buf.writeUUID(uuid);
             buf.writeUtf(playerName);
             buf.writeUtf(className);
             buf.writeBoolean(leader);
@@ -574,7 +697,8 @@ public class UnifiedDeployScreenPacket {
         public boolean equals(Object other) {
             if (this == other) return true;
             if (!(other instanceof SquadMemberInfo that)) return false;
-            return leader == that.leader
+            return uuid.equals(that.uuid)
+                && leader == that.leader
                 && commander == that.commander
                 && Objects.equals(playerName, that.playerName)
                 && Objects.equals(className, that.className);
@@ -582,7 +706,17 @@ public class UnifiedDeployScreenPacket {
 
         @Override
         public int hashCode() {
-            return Objects.hash(playerName, className, leader, commander);
+            return Objects.hash(uuid, playerName, className, leader, commander);
+        }
+    }
+
+    public static class SquadCategoryInfo {
+        public final String id;
+        public final String displayName;
+
+        public SquadCategoryInfo(String id, String displayName) {
+            this.id = id == null ? "none" : id;
+            this.displayName = displayName == null ? "无" : displayName;
         }
     }
 }

@@ -78,7 +78,17 @@ public class TeamPackManager {
         INSTANCE = new TeamPackManager();
     }
 
+    /** @deprecated 不从 datapack 加载；战场激活时 applyExternalJson。 */
     private void loadConfig() {
+        // 默认字段已在声明/构造中初始化
+    }
+
+    public void reloadConfig() {
+        // no-op
+    }
+
+    /** Apply the frozen team_pack.json belonging to the active map. */
+    public void applyExternalJson(String rawJson) {
         cooldownSeconds = 120;
         durability = 1;
         breakSpeedMultiplier = 8.0f;
@@ -88,70 +98,18 @@ public class TeamPackManager {
         enemyBurnRadius = 30.0;
         waveSeconds = 60;
         minimumRespawnSeconds = 20;
-        try {
-            MinecraftServer server = Espetro.getServer();
-            if (server == null) {
-                Espetro.LOGGER.warn("服务器未初始化，队包使用默认配置");
-                return;
-            }
-
-            ResourceLocation location = ResourceLocation.parse("espetro:config/team_pack.json");
-            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(server.getResourceManager(), location);
-            if (!resourceOptional.isPresent()) {
-                Espetro.LOGGER.warn("未找到 team_pack.json 配置文件，使用默认值");
-                return;
-            }
-
-            InputStream inputStream = resourceOptional.get().open();
-            if (inputStream == null) {
-                Espetro.LOGGER.warn("无法打开 team_pack.json 配置文件，使用默认值");
-                return;
-            }
-
-            JsonObject json = GSON.fromJson(new InputStreamReader(inputStream, StandardCharsets.UTF_8), JsonObject.class);
-            inputStream.close();
-
-            if (json != null && json.has("team_pack")) {
-                JsonObject teamPack = json.getAsJsonObject("team_pack");
-                if (teamPack.has("cooldown_seconds")) {
-                    cooldownSeconds = Math.max(0, teamPack.get("cooldown_seconds").getAsInt());
-                }
-                if (teamPack.has("durability")) {
-                    durability = Math.max(1, teamPack.get("durability").getAsInt());
-                }
-                if (teamPack.has("break_speed_multiplier")) {
-                    breakSpeedMultiplier = Math.max(1.0f, teamPack.get("break_speed_multiplier").getAsFloat());
-                }
-                if (teamPack.has("teammate_count")) {
-                    teammateCount = Math.max(0, teamPack.get("teammate_count").getAsInt());
-                }
-                if (teamPack.has("teammate_radius")) {
-                    teammateRadius = Math.max(0.0, teamPack.get("teammate_radius").getAsDouble());
-                }
-                if (teamPack.has("enemy_placement_radius")) {
-                    enemyPlacementRadius = Math.max(0.0, teamPack.get("enemy_placement_radius").getAsDouble());
-                }
-                if (teamPack.has("enemy_burn_radius")) {
-                    enemyBurnRadius = Math.max(0.0, teamPack.get("enemy_burn_radius").getAsDouble());
-                }
-                if (teamPack.has("wave_seconds")) {
-                    waveSeconds = Math.max(1, teamPack.get("wave_seconds").getAsInt());
-                }
-                if (teamPack.has("minimum_respawn_seconds")) {
-                    minimumRespawnSeconds = Math.max(0, teamPack.get("minimum_respawn_seconds").getAsInt());
-                }
-            }
-
-            Espetro.LOGGER.info("Rally配置已加载: 冷却{}秒, 附近队员{}人/{}格, 波次{}秒, 最短等待{}秒, 烧毁半径{}",
-                cooldownSeconds, teammateCount, teammateRadius, waveSeconds,
-                minimumRespawnSeconds, enemyBurnRadius);
-        } catch (Exception e) {
-            Espetro.LOGGER.error("加载队包配置失败: {}", e.getMessage());
-        }
-    }
-
-    public void reloadConfig() {
-        loadConfig();
+        JsonObject json = GSON.fromJson(rawJson, JsonObject.class);
+        if (json == null || !json.has("team_pack")) return;
+        JsonObject teamPack = json.getAsJsonObject("team_pack");
+        if (teamPack.has("cooldown_seconds")) cooldownSeconds = Math.max(0, teamPack.get("cooldown_seconds").getAsInt());
+        if (teamPack.has("durability")) durability = Math.max(1, teamPack.get("durability").getAsInt());
+        if (teamPack.has("break_speed_multiplier")) breakSpeedMultiplier = Math.max(1.0f, teamPack.get("break_speed_multiplier").getAsFloat());
+        if (teamPack.has("teammate_count")) teammateCount = Math.max(0, teamPack.get("teammate_count").getAsInt());
+        if (teamPack.has("teammate_radius")) teammateRadius = Math.max(0.0, teamPack.get("teammate_radius").getAsDouble());
+        if (teamPack.has("enemy_placement_radius")) enemyPlacementRadius = Math.max(0.0, teamPack.get("enemy_placement_radius").getAsDouble());
+        if (teamPack.has("enemy_burn_radius")) enemyBurnRadius = Math.max(0.0, teamPack.get("enemy_burn_radius").getAsDouble());
+        if (teamPack.has("wave_seconds")) waveSeconds = Math.max(1, teamPack.get("wave_seconds").getAsInt());
+        if (teamPack.has("minimum_respawn_seconds")) minimumRespawnSeconds = Math.max(0, teamPack.get("minimum_respawn_seconds").getAsInt());
     }
 
     public int getCooldownSeconds() {
@@ -516,8 +474,6 @@ public class TeamPackManager {
         setSquadCooldown(squadKey);
 
         pendingItemSyncs.add(player.getUUID());
-        org.espetro.tutorial.TutorialManager.getInstance().tryShow(
-            player, org.espetro.tutorial.TutorialStep.TEAM_PACK);
 
         player.sendSystemMessage(Component.literal(
             "§aRally 已部署！小队员个人复活冷却 " + waveSeconds + " 秒。"));
@@ -632,9 +588,9 @@ public class TeamPackManager {
             false, false, false
         ));
         player.sendSystemMessage(Component.literal("§a已随 Rally 部署复活！"));
-        // 战局中加入：真正落地后补职业选择；并同步部署界面。
+        // 战局中加入：真正落地后补职业选择。
+        // 不再 sendUnifiedDeployScreen：落地后重开 J 面板会整页闪且一直挡视线；需要时按 J。
         org.espetro.team.GameStateManager.getInstance().onMidGameDeployComplete(player);
-        org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
     }
 
     private void burnEnemyProxiedRallies() {

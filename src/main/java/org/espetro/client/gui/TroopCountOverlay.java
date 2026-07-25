@@ -45,7 +45,7 @@ public class TroopCountOverlay {
     /**
      * 渲染叠加层
      */
-    public static void render(GuiGraphics graphics, Minecraft mc) {
+    static void drawElement(GuiGraphics graphics, Minecraft mc) {
         if (!visible || mc.level == null) return;
 
         PoseStack poseStack = graphics.pose();

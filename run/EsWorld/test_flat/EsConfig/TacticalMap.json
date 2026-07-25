@@ -1,0 +1,16 @@
+
+{
+  "topLeftX": -512,
+  "topLeftZ": -512,
+  "bottomRightX": 512,
+  "bottomRightZ": 512,
+  "initialRange": 512,
+  "minimumRange": 64,
+  "backgroundImage": "",
+  "backgroundImageWidth": 0,
+  "backgroundImageHeight": 0,
+  "showGrid": true,
+  "showLabels": true,
+  "tacticalMarkerDurationSeconds": 120,
+  "tacticalMarkerFadeSeconds": 120
+}

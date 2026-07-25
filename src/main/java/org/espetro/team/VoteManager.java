@@ -4,6 +4,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.espetro.Espetro;
 import org.espetro.config.GameConfig;
+import org.espetro.governance.CommanderGovernanceManager;
 
 import java.util.*;
 
@@ -237,7 +238,8 @@ public class VoteManager {
                 org.espetro.network.NetworkManager.sendCommanderSkillSync(cmd);
             }
             Espetro.LOGGER.info("守方指挥官投票结束！指挥官: {}", name);
-            org.espetro.network.NetworkManager.syncSquadsToTeam("DEFEND");
+            CommanderGovernanceManager.getInstance()
+                .acceptElectionResult("DEFEND", defendCommander);
         } else {
             attackCommander = getWinningCandidate(attackPlayers, attackVotes);
             String name = getPlayerName(server, attackCommander);
@@ -249,7 +251,8 @@ public class VoteManager {
                 org.espetro.network.NetworkManager.sendCommanderSkillSync(cmd);
             }
             Espetro.LOGGER.info("攻方指挥官投票结束！指挥官: {}", name);
-            org.espetro.network.NetworkManager.syncSquadsToTeam("ATTACK");
+            CommanderGovernanceManager.getInstance()
+                .acceptElectionResult("ATTACK", attackCommander);
         }
 
         return finishedTeam;
@@ -387,6 +390,14 @@ public class VoteManager {
         return attackCommander;
     }
 
+    public void setAttackCommander(UUID uuid) {
+        this.attackCommander = uuid;
+    }
+
+    public void setDefendCommander(UUID uuid) {
+        this.defendCommander = uuid;
+    }
+
     /**
      * 获取守方指挥官
      */
@@ -417,13 +428,32 @@ public class VoteManager {
      * 添加攻方玩家（战局中加入）
      */
     public void addAttackPlayer(UUID uuid) {
+        defendPlayers.remove(uuid);
         attackPlayers.add(uuid);
+    }
+
+    /**
+     * Disconnect/reselection cleanup. Commander result fields intentionally
+     * remain so battle-start governance can detect an offline incumbent.
+     */
+    public void removePlayer(UUID uuid) {
+        if (uuid == null) return;
+        attackPlayers.remove(uuid);
+        defendPlayers.remove(uuid);
+        attackVotes.remove(uuid);
+        defendVotes.remove(uuid);
+        attackVotes.entrySet().removeIf(entry -> uuid.equals(entry.getValue()));
+        defendVotes.entrySet().removeIf(entry -> uuid.equals(entry.getValue()));
+        if (votingActive) {
+            broadcastVoteUpdate();
+        }
     }
 
     /**
      * 添加守方玩家（战局中加入）
      */
     public void addDefendPlayer(UUID uuid) {
+        attackPlayers.remove(uuid);
         defendPlayers.add(uuid);
     }
 

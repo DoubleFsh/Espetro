@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.mapconfig.ExampleContentInstallerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-07-25T07:08:49" hostname="cachyos-x8664" time="0.039">
+  <properties/>
+  <testcase name="exportsCompleteBundleWithoutOverwritingOperatorFiles(Path)" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.038"/>
+  <testcase name="rejectsTraversalAndAbsoluteManifestPaths()" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.0"/>
+  <system-out><![CDATA[[15:08:49] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

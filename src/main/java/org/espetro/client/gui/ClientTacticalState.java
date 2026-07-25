@@ -85,6 +85,15 @@ public final class ClientTacticalState {
         return mySquadId != NO_SQUAD;
     }
 
+    public static int getMySquadId() {
+        return mySquadId;
+    }
+
+    public static boolean isLocalSquadLeader(String playerName) {
+        MarkerInfo info = markersByName.get(key(playerName));
+        return info != null && info.squadId == mySquadId && mySquadId != NO_SQUAD && info.leader;
+    }
+
     private static String key(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT);
     }

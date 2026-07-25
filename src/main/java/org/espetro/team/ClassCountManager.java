@@ -9,6 +9,7 @@ import net.minecraft.world.scores.Score;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.espetro.Espetro;
+import org.espetro.stats.PlayerMatchStatsManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -229,6 +230,8 @@ public class ClassCountManager {
 
         // 完全相同的职业与变体不重复清空/发放装备。
         if (classId.equals(oldClassId) && variantId.equals(oldVariantId)) {
+            PlayerMatchStatsManager.getInstance().onClassSelected(player, classId,
+                (kit.iconImage != null && !kit.iconImage.isBlank()) ? kit.iconImage : kit.icon);
             return SelectionResult.SUCCESS;
         }
 
@@ -318,6 +321,8 @@ public class ClassCountManager {
             player.getName().getString(), team, classId, variantId,
             kit.teamCount, kit.strictCount, getCount(team, classId), getMaxCount(classId));
 
+        PlayerMatchStatsManager.getInstance().onClassSelected(player, classId,
+                (kit.iconImage != null && !kit.iconImage.isBlank()) ? kit.iconImage : kit.icon);
         return SelectionResult.SUCCESS;
     }
 
@@ -384,35 +389,44 @@ public class ClassCountManager {
     }
 
     /**
-     * 离开班组小队：若当前职业启用 team_count，清除职业并扣队伍记分板。
+     * 离开班组小队时撤销当前职业。
+     *
+     * 所有职业都要求玩家属于小队；因此离开、换队或小队解散后，不能保留职业记录或装备。
+     * 非 {@code team_count} 职业还须归还其占用的队伍/变体人数名额。
      */
     public void onPlayerLeftSquad(ServerPlayer player) {
         if (player == null) {
             return;
         }
-        clearTeamCountClassIfNeeded(player.getUUID(), player, true);
+        clearClassOnSquadExit(player.getUUID(), player, true);
     }
 
     public void onPlayerLeftSquadOffline(UUID uuid) {
-        clearTeamCountClassIfNeeded(uuid, null, false);
+        clearClassOnSquadExit(uuid, null, false);
     }
 
-    private void clearTeamCountClassIfNeeded(UUID uuid, ServerPlayer onlinePlayer, boolean notify) {
-        String classId = playerClasses.get(uuid);
-        if (classId == null) {
-            return;
-        }
-        FactionDataLoader.ClassKitData kit = FactionDataProvider.getOrCreateLoader().getClassKit(classId);
-        if (kit == null || !kit.teamCount) {
-            return;
-        }
+    private void clearClassOnSquadExit(UUID uuid, ServerPlayer onlinePlayer, boolean notify) {
         String team = getEffectivePlayerTeam(uuid);
         String variantId = playerVariants.remove(uuid);
-        playerClasses.remove(uuid);
-        // team_count 职业从未写入队伍记分板，离队时无需（也不应）扣队伍分数。
+        String classId = playerClasses.remove(uuid);
+        FactionDataLoader.ClassKitData kit = classId != null
+            ? FactionDataProvider.getOrCreateLoader().getClassKit(classId) : null;
+
+        if (team != null && classId != null && (kit == null || !kit.teamCount)) {
+            incrementScore(team, classId, -1);
+            if (variantId != null && (kit == null || kit.strictCount)) {
+                incrementVariantScore(team, classId, variantId, -1);
+            }
+        }
+
+        // 在线玩家必须立刻清空，不能在离队后携带职业物品或沿用职业状态。
+        if (onlinePlayer != null) {
+            ClassEquipment.clearEquipment(onlinePlayer);
+        }
+        PlayerMatchStatsManager.getInstance().onClassCleared(uuid);
         if (notify && onlinePlayer != null) {
             onlinePlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§e已离开班组小队，小队限定职业已取消。请重新选择职业。"));
+                "§e已离开班组小队，背包和职业已清空。请重新选择职业。"));
         }
     }
 
@@ -437,6 +451,7 @@ public class ClassCountManager {
         }
         playerFactions.remove(uuid);
         playerTeams.remove(uuid);
+        PlayerMatchStatsManager.getInstance().onClassCleared(uuid);
     }
 
     /**

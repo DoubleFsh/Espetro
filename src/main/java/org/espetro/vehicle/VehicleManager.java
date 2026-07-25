@@ -38,10 +38,10 @@ public class VehicleManager {
     // factionId -> (vehicleType -> spawnTimeMillis) 刷新冷却
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
 
-    private record ActiveVehicleData(String factionId, String vehicleType, String team, boolean initial,
+    private record ActiveVehicleData(String factionId, String vehicleType, int slotIndex, String team, boolean initial,
                                      ResourceKey<Level> dimension, BlockPos lastKnownPosition) {
         ActiveVehicleData withLocation(Entity entity) {
-            return new ActiveVehicleData(factionId, vehicleType, team, initial,
+            return new ActiveVehicleData(factionId, vehicleType, slotIndex, team, initial,
                 entity.level().dimension(), entity.blockPosition().immutable());
         }
     }
@@ -102,6 +102,19 @@ public class VehicleManager {
      */
     @Nullable
     public String deployVehicle(ServerPlayer commander, String vehicleType) {
+        if (commander == null) {
+            return "§c无效的部署者！";
+        }
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) {
+            return "§c只能在部署或战斗阶段部署载具！";
+        }
+        if (!org.espetro.mapconfig.BattlefieldContext.isActiveBattlefield(commander.serverLevel())) {
+            return "§c你不在当前战场维度！";
+        }
+        if (!org.espetro.team.VoteManager.getInstance().isCommander(commander.getUUID())) {
+            return "§c只有当前指挥官可以部署载具！";
+        }
         // 获取指挥官编制
         String factionId = ClassCountManager.getInstance().getPlayerFaction(commander.getUUID());
         if (factionId == null) {
@@ -132,23 +145,34 @@ public class VehicleManager {
             return "§c" + getDisplayName(factionId, vehicleType) + " 刷新冷却中！剩余 " + seconds + " 秒。";
         }
 
+        int slotIndex = findAvailableSlot(factionId, vehicleType, cfg);
+        if (slotIndex < 0) {
+            return "§c" + getDisplayName(factionId, vehicleType) + " 的每个载具槽位均已达到上限！";
+        }
         ServerLevel level = resolveDeployLevel(commander);
-        VehicleConfig.DeploymentPointConfig deployment = resolveDeploymentPoint(cfg, team);
+        VehicleConfig.VehicleSlotConfig slot = cfg.slots.isEmpty() ? null : cfg.slots.get(slotIndex);
+        VehicleConfig.DeploymentPointConfig deployment =
+            slot != null ? slot.forTeam(team) : resolveDeploymentPoint(cfg, team);
         BlockPos spawnPos = resolveSpawnPosition(deployment);
         if (spawnPos == null) {
             return "§c该载具未在编制 JSON 中配置当前阵营的 deployment." + team + ".position 坐标！";
         }
 
         // 创建载具实体
-        Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg, deployment.yaw);
+        Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg,
+            slot, deployment.yaw);
         if (vehicleEntity == null) {
             return "§c创建载具实体失败！";
         }
 
-        level.addFreshEntity(vehicleEntity);
+        level.getChunk(spawnPos);
+        if (!level.addFreshEntity(vehicleEntity)) {
+            vehicleEntity.discard();
+            return "§c载具实体未能加入战场！";
+        }
 
         // 记录
-        trackVehicle(vehicleEntity, factionId, vehicleType, team, false);
+        trackVehicle(vehicleEntity, factionId, vehicleType, slotIndex, team, false);
 
         // 设置冷却
         cooldowns.computeIfAbsent(factionId, k -> new HashMap<>()).put(vehicleType, System.currentTimeMillis());
@@ -180,32 +204,35 @@ public class VehicleManager {
             String vehicleType = entry.getKey();
             VehicleConfig.VehicleTypeConfig cfg = entry.getValue();
 
-            int current = getActiveCount(factionId, vehicleType);
-            if (current >= cfg.max) {
-                Espetro.LOGGER.debug("初始载具预部署跳过: {} / {} 已达上限 ({}/{})",
-                    factionId, vehicleType, current, cfg.max);
-                continue;
+            int slotCount = cfg.slots.isEmpty() ? 1 : cfg.slots.size();
+            for (int slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+                VehicleConfig.VehicleSlotConfig slot =
+                    cfg.slots.isEmpty() ? null : cfg.slots.get(slotIndex);
+                VehicleConfig.DeploymentPointConfig deployment =
+                    slot != null ? slot.forTeam(team) : resolveDeploymentPoint(cfg, team);
+                BlockPos spawnPos = resolveSpawnPosition(deployment);
+                if (spawnPos == null) {
+                    Espetro.LOGGER.warn("初始载具预部署失败: {} / {} 槽位{}缺少 {} 坐标",
+                        factionId, vehicleType, slotIndex, team);
+                    continue;
+                }
+                Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId,
+                    cfg, slot, deployment.yaw);
+                if (vehicleEntity == null) {
+                    Espetro.LOGGER.warn("初始载具预部署失败: 无法创建 {} / {} 槽位{}的实体",
+                        factionId, vehicleType, slotIndex);
+                    continue;
+                }
+                level.getChunk(spawnPos);
+                if (!level.addFreshEntity(vehicleEntity)) {
+                    vehicleEntity.discard();
+                    Espetro.LOGGER.warn("初始载具预部署失败: {} / {} 槽位{}未能加入战场",
+                        factionId, vehicleType, slotIndex);
+                    continue;
+                }
+                trackVehicle(vehicleEntity, factionId, vehicleType, slotIndex, team, true);
+                deployed++;
             }
-
-            VehicleConfig.DeploymentPointConfig deployment = resolveDeploymentPoint(cfg, team);
-            BlockPos spawnPos = resolveSpawnPosition(deployment);
-            if (spawnPos == null) {
-                Espetro.LOGGER.warn("初始载具预部署失败: {} / {} 未配置有效 deployment.{}.position 坐标", factionId, vehicleType, team);
-                continue;
-            }
-
-            Entity vehicleEntity = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg, deployment.yaw);
-            if (vehicleEntity == null) {
-                Espetro.LOGGER.warn("初始载具预部署失败: 无法创建 {} / {} 的实体", factionId, vehicleType);
-                continue;
-            }
-
-            level.addFreshEntity(vehicleEntity);
-            trackVehicle(vehicleEntity, factionId, vehicleType, team, true);
-            deployed++;
-
-            Espetro.LOGGER.info("初始载具已预部署: {} / {} 队伍: {} 位置: {} ({}/{})",
-                factionId, vehicleType, team, spawnPos, current + 1, cfg.max);
         }
 
         return deployed;
@@ -253,12 +280,13 @@ public class VehicleManager {
         return null;
     }
 
-    private void trackVehicle(Entity vehicle, String factionId, String vehicleType, String team, boolean initial) {
+    private void trackVehicle(Entity vehicle, String factionId, String vehicleType, int slotIndex,
+                              String team, boolean initial) {
         UUID vehicleId = vehicle.getUUID();
         getList(factionId, vehicleType).add(vehicleId);
         activeVehicleIds.add(vehicleId);
         activeVehicleData.put(vehicleId, new ActiveVehicleData(
-            factionId, vehicleType, team, initial,
+            factionId, vehicleType, slotIndex, team, initial,
             vehicle.level().dimension(), vehicle.blockPosition().immutable()));
     }
 
@@ -450,7 +478,24 @@ public class VehicleManager {
     // ========== 辅助方法 ==========
 
     private ServerLevel resolveDeployLevel(ServerPlayer commander) {
-        return commander.server.overworld();
+        return org.espetro.mapconfig.BattlefieldContext.requireBattlefield(commander.server);
+    }
+
+    private int findAvailableSlot(String factionId, String vehicleType,
+                                  VehicleConfig.VehicleTypeConfig cfg) {
+        int slotCount = cfg.slots.isEmpty() ? 1 : cfg.slots.size();
+        for (int i = 0; i < slotCount; i++) {
+            int count = 0;
+            for (ActiveVehicleData data : activeVehicleData.values()) {
+                if (factionId.equals(data.factionId())
+                    && vehicleType.equals(data.vehicleType())
+                    && data.slotIndex() == i) {
+                    count++;
+                }
+            }
+            if (count < cfg.perMaxCount) return i;
+        }
+        return -1;
     }
 
     @Nullable
@@ -475,8 +520,10 @@ public class VehicleManager {
      * 创建载具实体（从配置读取 entity_type）
      */
     @Nullable
-    private Entity createVehicleEntity(ServerLevel level, String vehicleType, BlockPos pos, String factionId, VehicleConfig.VehicleTypeConfig config, float yaw) {
-        EntityType<?> entityTypeObj = config.getEntityType();
+    private Entity createVehicleEntity(ServerLevel level, String vehicleType, BlockPos pos,
+                                       String factionId, VehicleConfig.VehicleTypeConfig config,
+                                       @Nullable VehicleConfig.VehicleSlotConfig slot, float yaw) {
+        EntityType<?> entityTypeObj = slot != null ? slot.getEntityType() : config.getEntityType();
         if (entityTypeObj == null) {
             Espetro.LOGGER.warn("载具 {} 未配置 entity_type 或注册名无效", vehicleType);
             return null;

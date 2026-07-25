@@ -34,6 +34,7 @@ import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TeamPackManager;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.logistics.SupplyManager;
+import org.espetro.mapconfig.BattlefieldContext;
 
 import javax.annotation.Nullable;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -70,10 +71,14 @@ public class BastionEventHandler {
         if (phase != GamePhase.BATTLE && phase != GamePhase.DEPLOYING) {
             return;
         }
+        ServerLevel battlefield = player.serverLevel();
+        if (!BattlefieldContext.isActiveBattlefield(battlefield)) {
+            return;
+        }
 
         if (phase == GamePhase.DEPLOYING) {
             org.espetro.team.OutpostManager.getInstance()
-                .prepareDeployTargets(player.server.overworld());
+                .prepareDeployTargets(battlefield);
         }
 
         // 检查玩家是否选择了职业
@@ -91,11 +96,11 @@ public class BastionEventHandler {
             BastionManager bastionManager = BastionManager.getInstance();
             bastionManager.savePlayerDeployPoint(player,
                 new BlockPos((int) spawnPoint.x, (int) spawnPoint.y, (int) spawnPoint.z),
-                player.server.overworld());
+                battlefield);
         }
 
         // 记录死亡状态
-        BastionManager.getInstance().onPlayerDeath(player.server.overworld(), player.getUUID());
+        BastionManager.getInstance().onPlayerDeath(battlefield, player.getUUID());
         TeamPackManager.getInstance().onPlayerDeath(player.getUUID());
 
         Espetro.LOGGER.info("玩家 {} 死亡，进入兵站选择状态", player.getName().getString());
@@ -389,9 +394,6 @@ public class BastionEventHandler {
             return;
         }
 
-        org.espetro.tutorial.TutorialManager.getInstance()
-            .tryShow(player, org.espetro.tutorial.TutorialStep.RESUPPLY);
-
         // 智能补给：检查背包已有数量，补充到上限
         int givenItems = 0;
         StringBuilder detail = new StringBuilder();
@@ -505,18 +507,39 @@ public class BastionEventHandler {
     }
 
     /**
-     * 每 tick 检查等待复活选择的玩家，锁定其位置
+     * 每 tick：位置锁内的玩家强制固定；等待部署点选择的玩家刷新失明/旁观等待态。
+     * 失明客户端同步：每秒 force resync 一次（跨维后客户端可能丢效果）。
      */
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         if (!(event.player instanceof ServerPlayer player)) return;
 
-        if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+        BastionManager bastionManager = BastionManager.getInstance();
+        net.minecraft.world.phys.Vec3 lock = bastionManager.getPlayerLockPosition(player.getUUID());
+        if (lock != null) {
+            enforceLockedPosition(player, lock);
+            // 每秒强制向客户端重推失明，避免跨维 Respawn 后客户端无效果。
+            boolean forceBlindPacket = (player.tickCount % 20) == 0;
+            GameStateManager.enforceSpectatorBlindness(player, forceBlindPacket);
+            if (bastionManager.isWaitingForBastion(player.getUUID())) {
+                applyWaitingDeployState(player);
+            }
             return;
         }
 
-        applyWaitingDeployState(player);
+        if (bastionManager.isWaitingForBastion(player.getUUID())) {
+            applyWaitingDeployState(player);
+        }
+    }
+
+    private static void enforceLockedPosition(ServerPlayer player, net.minecraft.world.phys.Vec3 lock) {
+        if (player.distanceToSqr(lock) > 0.04) {
+            player.teleportTo(player.serverLevel(), lock.x, lock.y, lock.z,
+                player.getYRot(), player.getXRot());
+        }
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
     }
 
     private static void applyWaitingDeployState(ServerPlayer player) {

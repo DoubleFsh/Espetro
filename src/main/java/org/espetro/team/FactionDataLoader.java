@@ -3,6 +3,8 @@ package org.espetro.team;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.annotations.SerializedName;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -11,11 +13,15 @@ import org.espetro.Espetro;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import org.espetro.mapconfig.ActiveMapConfig;
 
 /**
- * 阵营数据包加载器
- * 从 data/espetro/factions/ 目录加载阵营和职业配置
+ * 阵营/编制加载器。权威源为游戏根目录 {@code EsFactions/*.json}
+ *（{@link #loadExternalFrozen}）。不再从 datapack 加载运行时编制。
  */
 public class FactionDataLoader {
 
@@ -29,6 +35,8 @@ public class FactionDataLoader {
     private Map<String, ClassKitData> classKits = new HashMap<>();
     /** factionId -> (vehicleType -> VehicleData) 来自编制JSON的载具配置 */
     private final Map<String, Map<String, VehicleData>> factionVehicles = new LinkedHashMap<>();
+    /** factionId -> ordered vehicle type declarations from VehTypes. */
+    private final Map<String, List<String>> factionVehicleTypes = new LinkedHashMap<>();
     private final Map<String, ClassKitData[]> classesByFaction = new HashMap<>();
     private final Map<String, String[]> classIdsByFaction = new HashMap<>();
     private String[] factionIdArray = EMPTY_STRING_ARRAY;
@@ -44,84 +52,191 @@ public class FactionDataLoader {
     }
 
     /**
-     * 从资源管理器加载所有配置
+     * @deprecated 不再从 datapack 加载编制。请使用 {@link #loadExternalFrozen}。
+     * 空实现，避免 ensureLoaded/reload 清空 EsFactions 冻结数据。
      */
+    @Deprecated
     public void load(ResourceManager resourceManager) {
+        Espetro.LOGGER.debug("忽略 datapack FactionDataLoader.load；编制仅来自 EsFactions");
+    }
+
+    /**
+     * Startup-only external formation load. EsFactions is deliberately not
+     * connected to the datapack reload listener.
+     */
+    public void loadExternalFrozen(Map<String, Path> files) {
         this.factions.clear();
         this.classKits.clear();
         this.factionVehicles.clear();
+        this.factionVehicleTypes.clear();
         this.classesByFaction.clear();
         this.classIdsByFaction.clear();
         this.factionIdArray = EMPTY_STRING_ARRAY;
         this.factionArray = EMPTY_FACTION_ARRAY;
-        
-        String namespace = Espetro.MOD_ID;
-        String path = "factions";
 
-        // 优先使用存档内 datapacks 数据包，再回退模组内置
-        Map<ResourceLocation, Resource> resources = org.espetro.data.EspetroDataResources.listPreferred(
-            resourceManager, path, loc -> loc.getNamespace().equals(namespace)
-        );
-
-        for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
-            ResourceLocation id = entry.getKey();
-            Resource resource = entry.getValue();
-            
-            if (!id.getPath().endsWith(".json")) continue;
-            
-            // 先读取原始文本用于出错时报错
-            String rawJson = "";
-            try (BufferedReader reader = resource.openAsReader()) {
-                StringBuilder sb = new StringBuilder();
-                char[] buf = new char[4096];
-                int len;
-                while ((len = reader.read(buf)) != -1) {
-                    sb.append(buf, 0, len);
-                }
-                rawJson = sb.toString();
-            } catch (IOException e) {
-                Espetro.LOGGER.error("读取配置文件失败: {}", id, e);
+        for (Map.Entry<String, Path> entry : files.entrySet()) {
+            String factionId = entry.getKey();
+            Path file = entry.getValue();
+            ResourceLocation id = ResourceLocation.tryBuild(
+                Espetro.MOD_ID, "external_factions/" + factionId + ".json");
+            if (id == null) {
+                Espetro.LOGGER.error("[编制拒载] {}: 文件名只能使用小写英文字母、数字、_、-、.", file);
                 continue;
             }
-
             try {
-                FactionJsonData data = GSON.fromJson(rawJson, FactionJsonData.class);
-                if (data != null) {
-                    String factionId = id.getPath().replace(".json", "").replace("factions/", "");
-
-                    // 必须先校验整份文件；任一职业变体无效时，编制头、职业和载具都不提交。
-                    if (!prepareAndValidateFaction(id, factionId, data)) {
-                        continue;
-                    }
-
-                    this.factions.put(factionId, data.faction);
-                    if (data.classes != null) {
-                        for (Map.Entry<String, ClassKitData> classEntry : data.classes.entrySet()) {
-                            this.classKits.put(classEntry.getKey(), classEntry.getValue());
-                        }
-                    }
-                    if (data.vehicles != null) {
-                        this.factionVehicles.put(factionId, new LinkedHashMap<>(data.vehicles));
-                    }
-                    Espetro.LOGGER.info("加载阵营数据: {} ({})", id, 
-                        data.faction != null ? data.faction.name : "无faction节点");
+                String rawJson = Files.readString(file, StandardCharsets.UTF_8);
+                JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
+                int aliasCount = 0;
+                if (root.has("VehTypes")) aliasCount++;
+                if (root.has("vehtypes")) aliasCount++;
+                if (root.has("vehicle_types")) aliasCount++;
+                if (aliasCount > 1) {
+                    warnRejected(id, "同时出现 VehTypes/vehtypes/vehicle_types 多个别名");
+                    continue;
                 }
-            } catch (JsonSyntaxException e) {
-                Espetro.LOGGER.error("==============================");
-                Espetro.LOGGER.error("[!] 阵营JSON语法错误: {}", id);
-                Espetro.LOGGER.error("[!] 该阵营将不会被加载！请检查以下JSON内容:");
-                Espetro.LOGGER.error("[{}] 内容预览:\n{}", id, 
-                    rawJson.length() > 500 ? rawJson.substring(0, 500) + "\n... (截断)" : rawJson);
-                Espetro.LOGGER.error("[!] 错误详情: {}", e.getMessage());
-                Espetro.LOGGER.error("==============================");
+                FactionJsonData data = GSON.fromJson(root, FactionJsonData.class);
+                if (data == null || !prepareAndValidateFaction(id, factionId, data)) {
+                    continue;
+                }
+                if (!validateVehicleDeclaration(id, data)) {
+                    continue;
+                }
+                commitFaction(factionId, data);
+                Espetro.LOGGER.info("加载外部编制: {} ({})", file,
+                    data.faction != null ? data.faction.name : factionId);
             } catch (Exception e) {
-                Espetro.LOGGER.error("[!] 阵营加载异常: {} - {}", id, e.getMessage(), e);
+                Espetro.LOGGER.error("[编制拒载] {}: {}", file, e.getMessage(), e);
             }
         }
-
         rebuildLookupCaches();
         this.loaded = true;
-        Espetro.LOGGER.info("已加载 {} 个阵营, {} 个职业配置", this.factions.size(), this.classKits.size());
+        Espetro.LOGGER.info("EsFactions 已冻结: {} 个编制, {} 个职业", factions.size(), classKits.size());
+    }
+
+    private void commitFaction(String factionId, FactionJsonData data) {
+        this.factions.put(factionId, data.faction);
+        if (data.classes != null) {
+            for (Map.Entry<String, ClassKitData> classEntry : data.classes.entrySet()) {
+                this.classKits.put(classEntry.getKey(), classEntry.getValue());
+            }
+        }
+        if (data.vehicles != null) {
+            this.factionVehicles.put(factionId, new LinkedHashMap<>(data.vehicles));
+        }
+        this.factionVehicleTypes.put(factionId,
+            data.vehicleTypes == null ? List.of() : List.copyOf(data.vehicleTypes));
+    }
+
+    private boolean validateVehicleDeclaration(ResourceLocation id, FactionJsonData data) {
+        if (data.vehicleTypes == null) {
+            warnRejected(id, "缺少 VehTypes 数组");
+            return false;
+        }
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<String> normalizedTypes = new ArrayList<>();
+        for (String rawType : data.vehicleTypes) {
+            String type = rawType == null ? "" : rawType.trim().toLowerCase(Locale.ROOT);
+            if (type.isBlank() || !seen.add(type)) {
+                warnRejected(id, "VehTypes 含空值或重复类型");
+                return false;
+            }
+            normalizedTypes.add(type);
+        }
+        data.vehicleTypes = normalizedTypes;
+        if (data.vehicles == null) {
+            data.vehicles = new LinkedHashMap<>();
+        }
+        Map<String, VehicleData> normalizedVehicles = new LinkedHashMap<>();
+        for (Map.Entry<String, VehicleData> entry : data.vehicles.entrySet()) {
+            String type = entry.getKey() == null
+                ? "" : entry.getKey().trim().toLowerCase(Locale.ROOT);
+            if (type.isBlank() || normalizedVehicles.containsKey(type)) {
+                warnRejected(id, "vehicles 含空类型或大小写归一化后重复的类型");
+                return false;
+            }
+            if (!seen.contains(type)) {
+                warnRejected(id, "vehicles." + entry.getKey() + " 未在 VehTypes 中声明");
+                return false;
+            }
+            VehicleData vehicle = entry.getValue();
+            if (vehicle == null) {
+                warnRejected(id, "vehicles." + entry.getKey() + " 为空");
+                return false;
+            }
+            if ((vehicle.entities == null || vehicle.entities.isEmpty())
+                && vehicle.entityTypeStr != null && !vehicle.entityTypeStr.isBlank()) {
+                vehicle.entities = new ArrayList<>(List.of(vehicle.entityTypeStr));
+            }
+            if (vehicle.entities == null || vehicle.entities.isEmpty()) {
+                warnRejected(id, "vehicles." + entry.getKey() + ".entity 必须是非空数组");
+                return false;
+            }
+            List<String> normalizedEntities = new ArrayList<>();
+            for (String entity : vehicle.entities) {
+                if (entity == null || entity.isBlank()) {
+                    warnRejected(id, "vehicles." + entry.getKey() + ".entity 含空实体 ID");
+                    return false;
+                }
+                normalizedEntities.add(entity.trim());
+            }
+            vehicle.entities = normalizedEntities;
+            vehicle.perMaxCount = Math.max(1, vehicle.perMaxCount);
+            normalizedVehicles.put(type, vehicle);
+        }
+        data.vehicles = normalizedVehicles;
+        return true;
+    }
+
+    /** Whether one external formation can run on the selected map. */
+    public boolean isCompatibleWithMap(String factionId, ActiveMapConfig map) {
+        if (map == null || !map.usable || !factions.containsKey(factionId)) return false;
+        List<String> declared = factionVehicleTypes.get(factionId);
+        if (declared == null) return false;
+        for (String type : declared) {
+            if (!map.vehSpawn.vehicleTypes.contains(type)) return false;
+        }
+        Map<String, VehicleData> vehicles = factionVehicles.getOrDefault(factionId, Map.of());
+        for (Map.Entry<String, VehicleData> entry : vehicles.entrySet()) {
+            String type = entry.getKey();
+            VehicleData data = entry.getValue();
+            List<org.espetro.mapconfig.VehSpawnSnapshot.SpawnPoint> points =
+                map.vehSpawn.spawnPointsByType.get(type);
+            if (points == null || data.entities == null || data.entities.size() > points.size()) {
+                return false;
+            }
+            for (String entityId : data.entities) {
+                ResourceLocation rl = ResourceLocation.tryParse(entityId);
+                if (rl == null || !net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    public boolean isMapPlayable(ActiveMapConfig map) {
+        Set<String> affiliations = new HashSet<>();
+        int compatible = 0;
+        for (FactionData faction : factionArray) {
+            if (faction == null || faction.id == null || faction.factionId == null) {
+                continue;
+            }
+            if (getClassesForFaction(faction.id).length == 0) {
+                continue;
+            }
+            if (!isCompatibleWithMap(faction.id, map)) {
+                continue;
+            }
+            compatible++;
+            affiliations.add(faction.factionId);
+        }
+        boolean ok = affiliations.size() >= 2;
+        if (!ok && map != null) {
+            Espetro.LOGGER.warn(
+                "地图 {} 编制兼容性不足: 兼容编制 {} 个, 不同 faction_id {} 个 {}（需要至少 2 个不同 faction_id）",
+                map.displayName, compatible, affiliations.size(), affiliations);
+        }
+        return ok;
     }
 
     private boolean prepareAndValidateFaction(ResourceLocation resourceId, String factionId, FactionJsonData data) {
@@ -226,21 +341,18 @@ public class FactionDataLoader {
     }
 
     public void ensureLoaded(ResourceManager resourceManager) {
+        // 编制仅由 loadExternalFrozen 在启动时加载；此处不得再扫 datapack。
         if (!loaded) {
-            load(resourceManager);
+            Espetro.LOGGER.debug("FactionDataLoader 尚未外部冻结加载（ensureLoaded 忽略 datapack）");
         }
     }
 
     /**
-     * 强制重新加载所有阵营/职业数据（数据包热重载）
+     * @deprecated 不支持热重载 EsFactions；请重启服务端。
      */
+    @Deprecated
     public void reload(ResourceManager resourceManager) {
-        this.factions.clear();
-        this.classKits.clear();
-        this.factionVehicles.clear();
-        this.loaded = false;
-        load(resourceManager);
-        Espetro.LOGGER.info("阵营数据已热重载: {} 个阵营, {} 个职业", this.factions.size(), this.classKits.size());
+        Espetro.LOGGER.warn("编制不支持热重载；请重启以重新读取 EsFactions/");
     }
 
     // ==================== 阵营方法 ====================
@@ -331,6 +443,8 @@ public class FactionDataLoader {
      * JSON根对象
      */
     public static class FactionJsonData {
+        @SerializedName(value = "VehTypes", alternate = {"vehtypes", "vehicle_types"})
+        public List<String> vehicleTypes;
         public FactionData faction;
         public Map<String, ClassKitData> classes;
         /** 编制自定义载具配置: vehicleType -> VehicleData */
@@ -368,6 +482,12 @@ public class FactionDataLoader {
         public String role;
         /** 职业选择界面使用的图标资源短名（assets/espetro/textures/gui/roles）。 */
         public String icon;
+        /**
+         * 完整文件系统路径的职业图标（优先于 {@link #icon}）。
+         * 例：{@code /home/shu/图片/Icon/rifleman.png}，不是 jar 内 ResourceLocation。
+         */
+        @com.google.gson.annotations.SerializedName(value = "IconImage", alternate = {"icon_image", "iconImage"})
+        public String iconImage;
 
         /**
          * 装备分发命令数组 —— 每个元素是 /give 命令的参数部分（不含 /give 和玩家名）
@@ -535,11 +655,17 @@ public class FactionDataLoader {
         /** Minecraft实体注册名，如 "minecraft:minecart" 或任意模组实体ID。 */
         @SerializedName("entity_type")
         public String entityTypeStr;
+        /** Ordered entity slots; slot N uses VehSpawn point N. */
+        @SerializedName("entity")
+        public List<String> entities;
         /** 显示名，含颜色代码，如 "§6运输卡车" */
         @SerializedName("display_name")
         public String displayName;
         /** 该类型同时部署上限 */
         public int max = 0;
+        /** Simultaneous maximum for each individual entity slot. */
+        @SerializedName(value = "per_max_count", alternate = {"perMaxCount"})
+        public int perMaxCount = 1;
         /** 单辆刷新冷却时间(分钟) */
         @SerializedName("respawn_minutes")
         public int respawnMinutes = 0;

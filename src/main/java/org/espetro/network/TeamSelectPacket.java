@@ -5,7 +5,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import org.espetro.Espetro;
 import org.espetro.team.GameStateManager;
-import org.espetro.team.TeamManager;
 
 import java.util.function.Supplier;
 
@@ -34,23 +33,31 @@ public class TeamSelectPacket {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) return;
+            if (!"ATTACK".equals(team) && !"DEFEND".equals(team)) {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c无效的阵营选择。"));
+                return;
+            }
 
             GameStateManager gsm = GameStateManager.getInstance();
 
             // 战局中加入 vs 正常流程
             if (gsm.isMidGameJoiner(player.getUUID())) {
+                if (org.espetro.team.ClassCountManager.getInstance()
+                    .getPlayerTeam(player.getUUID()) != null) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c增援阵营已经确定，不能再次选择。"));
+                    return;
+                }
                 // 战局中加入：自动分配编制、沿用现有指挥官
                 gsm.onMidGameTeamSelected(player, team);
                 NetworkManager.sendSquadSync(player);
                 Espetro.LOGGER.info("玩家 {} 战局加入 {} 阵营", player.getName().getString(), team);
             } else {
-                // 正常流程：根据阵营添加到对应的Minecraft队伍
-                if ("ATTACK".equals(team)) {
-                    TeamManager.joinAttackTeam(player.getServer(), player.getName().getString());
-                } else {
-                    TeamManager.joinDefendTeam(player.getServer(), player.getName().getString());
+                if (gsm.getCurrentPhase() != org.espetro.team.GamePhase.TEAM_SELECT) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c当前不能选择阵营。"));
+                    return;
                 }
-
                 // 通知游戏状态管理器玩家已选择队伍
                 gsm.onTeamSelected(player, team);
                 NetworkManager.sendSquadSync(player);

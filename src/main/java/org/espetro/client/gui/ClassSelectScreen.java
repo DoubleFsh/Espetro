@@ -20,6 +20,14 @@ import java.util.Objects;
  */
 public class ClassSelectScreen extends MutilScreen {
 
+    /** 图片下方：名称行 + 票数行，避免与图片重叠。 */
+    private static final int CARD_FOOTER_PAD = 4;
+    private static final int CARD_NAME_LINE = 11;
+    private static final int CARD_VOTE_LINE = 10;
+    private static final int CARD_FOOTER_H = CARD_FOOTER_PAD + CARD_NAME_LINE + CARD_VOTE_LINE;
+    /** 约 12 逻辑像素观感的小字（相对默认字号缩小）。 */
+    private static final float CARD_NAME_SCALE = 0.85f;
+
     private String team;
     private boolean isCommander;
     private List<ClassSelectScreenPacket.FactionInfo> factions;
@@ -65,8 +73,8 @@ public class ClassSelectScreen extends MutilScreen {
         int availableH = Math.max(2 * 67 + cardGap, this.height - startY - 18);
         int maxCardH = Math.max(67, (availableH - cardGap) / visibleRows);
         int imageH = Math.max(36, Math.min(
-            Math.min(140, Math.round(cardW * 270.0f / 512.0f)), maxCardH - 31));
-        int cardH = imageH + 31;
+            Math.min(140, Math.round(cardW * 270.0f / 512.0f)), maxCardH - CARD_FOOTER_H));
+        int cardH = imageH + CARD_FOOTER_H;
         int panelX = (this.width - panelW) / 2;
 
         boolean selectingOpen = timeRemaining > 0;
@@ -160,18 +168,20 @@ public class ClassSelectScreen extends MutilScreen {
             int bw = getWidth();
             int bh = getHeight();
 
-            int fill = !enabled ? 0xA0121517 : selected ? 0xE02E3529
-                : hasFocus() ? 0xE0273038 : 0xD0191D20;
+            // 透明卡片：选中/hover 用细边框与极低 alpha，无大面积面板底。
             int border = selected ? 0xFFE8B85C
                 : hasFocus() && enabled ? 0xFFC2C8D5 : 0x805B6260;
-            graphics.fill(bx, by, bx + bw, by + bh, fill);
+            if (selected) {
+                graphics.fill(bx, by, bx + bw, by + bh, 0x302E3529);
+            } else if (hasFocus() && enabled) {
+                graphics.fill(bx, by, bx + bw, by + bh, 0x20273038);
+            }
             graphics.renderOutline(bx, by, bw, bh, border);
 
             int imageX = bx + 3;
             int imageY = by + 3;
             int imageW = Math.max(1, bw - 6);
             int imageH = Math.max(1, imageHeight - 6);
-            graphics.fill(imageX, imageY, imageX + imageW, imageY + imageH, 0xD0101214);
 
             if (texture != null) {
                 graphics.setColor(1f, 1f, 1f, enabled ? 1f : 0.55f);
@@ -180,25 +190,35 @@ public class ClassSelectScreen extends MutilScreen {
                 graphics.blit(texture, imageX, imageY, imageW, imageH,
                     0f, 0f, imageW, imageH, imageW, imageH);
                 graphics.setColor(1f, 1f, 1f, 1f);
-            }
-
-            String prefix = selected ? "\u00a7a✓ " : enabled ? "\u00a7f" : "\u00a78";
-            String label = prefix + faction.name + " \u00a7e[" + faction.voteCount + "]";
-            String drawn = EspetroMutilWidgets.trimToWidth(label, Math.max(8, bw - 8));
-            int labelW = Minecraft.getInstance().font.width(
-                EspetroMutilWidgets.stripFormatting(drawn));
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(drawn),
-                bx + Math.max(4, (bw - labelW) / 2), by + imageHeight + 2,
-                enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM, false);
-
-            if (texture == null) {
-                String missing = "\u00a77还没配置图片喵";
+            } else {
+                String missing = "§7还没配置图片喵";
                 int missingW = Minecraft.getInstance().font.width(
                     EspetroMutilWidgets.stripFormatting(missing));
                 graphics.drawString(Minecraft.getInstance().font, Component.literal(missing),
-                    bx + Math.max(4, (bw - missingW) / 2), by + imageHeight + 14,
+                    bx + Math.max(4, (bw - missingW) / 2), by + Math.max(8, imageH / 2),
                     EspetroMutilWidgets.DIM, false);
             }
+
+            // 图片下方：编制名一行小字；其下为选中/票数，避免与名称重叠。
+            int nameY = by + imageHeight + 2;
+            String nameOnly = faction.name == null ? "" : faction.name;
+            String drawnName = EspetroMutilWidgets.trimToWidth(nameOnly, Math.max(8,
+                (int) ((bw - 8) / CARD_NAME_SCALE)));
+            int nameColor = enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM;
+            int nameW = Math.round(Minecraft.getInstance().font.width(
+                EspetroMutilWidgets.stripFormatting(drawnName)) * CARD_NAME_SCALE);
+            EspetroMutilWidgets.drawScaledString(graphics, drawnName,
+                bx + Math.max(0, (bw - nameW) / 2), nameY, nameColor, CARD_NAME_SCALE);
+
+            int voteY = nameY + CARD_NAME_LINE;
+            String vote = (selected ? "§a✓ " : "") + "§e票 " + faction.voteCount;
+            String drawnVote = EspetroMutilWidgets.trimToWidth(vote, Math.max(8, bw - 8));
+            int voteW = Minecraft.getInstance().font.width(
+                EspetroMutilWidgets.stripFormatting(drawnVote));
+            graphics.drawString(Minecraft.getInstance().font, Component.literal(drawnVote),
+                bx + Math.max(4, (bw - voteW) / 2), voteY,
+                enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM, false);
+
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
 
@@ -213,7 +233,7 @@ public class ClassSelectScreen extends MutilScreen {
     }
 
     private void selectFaction(String factionId) {
-        if (timeRemaining <= 0 || factionId == null || factionId.isEmpty()) {
+        if (tutorialPreviewMode || timeRemaining <= 0 || factionId == null || factionId.isEmpty()) {
             return;
         }
 
@@ -247,6 +267,19 @@ public class ClassSelectScreen extends MutilScreen {
             } else {
                 refreshDynamicElements();
             }
+        }
+    }
+
+    /** 轻量倒计时包：只改时间/选中态，绝不 rebuild。 */
+    public void updateTimer(int timeRemaining, int opponentTimeRemaining,
+                            String selectedFactionId, boolean isCommander) {
+        this.timeRemaining = timeRemaining;
+        this.opponentTimeRemaining = opponentTimeRemaining;
+        this.isCommander = isCommander;
+        this.lastSelectedFaction = selectedFactionId == null || selectedFactionId.isEmpty()
+            ? null : selectedFactionId;
+        if (root != null) {
+            refreshDynamicElements();
         }
     }
 
@@ -315,6 +348,11 @@ public class ClassSelectScreen extends MutilScreen {
     @Override
     public boolean shouldCloseOnEsc() {
         return false;
+    }
+
+    @Override
+    public void onClose() {
+        // 编制界面由服务端阶段推进后替换，玩家不能手动跳过选择流程。
     }
 
     @Override

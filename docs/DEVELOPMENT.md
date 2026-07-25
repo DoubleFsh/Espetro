@@ -321,7 +321,11 @@ GUI 基类是 `MutilScreen`，常用组件在 `EspetroMutilWidgets`。`Scrollabl
 
 ## HCR AAD 源码边界
 
-仓库中的 `com.example.hcrpoints` 是旧副本且已从构建排除；独立项目 `/home/shushu/IdeaProjects/ds` 才是当前 ESPoints 源码。ESPoints 1.0.6-final 的模组 ID 是 `espoints`，包名是 `com.example.espoints`，并强制依赖 Espetro。Espetro 将其声明为可选依赖，通过 `HcrTacticalMapBridge` 反射调用战术地图，以避免循环编译依赖。
+仓库中的 `com.example.hcrpoints` 是旧副本且已从构建排除；独立项目
+`/home/shu/IdeaProjects/espetro-HCR` 才是当前 ESPoints 源码。其模组 ID 是 `espoints`，
+包名是 `com.example.espoints`，并依赖 Espetro 1.0.9-alpha 的公开地图快照和生命周期事件。
+Espetro 将 ESPoints 声明为可选依赖，通过 `HcrTacticalMapBridge` 打开客户端战术地图，避免把
+ESPoints 变成 Espetro 的强制运行依赖。
 
 本地存在 `../ds/build/libs/espoints-${espoints_version}.jar` 时，Gradle 会自动把它加入 Espetro 开发运行环境。开发规则：
 

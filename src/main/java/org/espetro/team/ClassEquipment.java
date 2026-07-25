@@ -292,7 +292,7 @@ public class ClassEquipment {
         return equipment;
     }
 
-    private static String normalizeEquipmentSlotName(String slotName) {
+    static String normalizeEquipmentSlotName(String slotName) {
         if (slotName == null) return null;
 
         String key = slotName.trim()
@@ -310,7 +310,7 @@ public class ClassEquipment {
         };
     }
 
-    private static String toCommandSlotName(EquipmentSlot slot) {
+    static String toCommandSlotName(EquipmentSlot slot) {
         return switch (slot) {
             case HEAD -> "armor.head";
             case CHEST -> "armor.chest";
@@ -321,7 +321,25 @@ public class ClassEquipment {
         };
     }
 
-    private static EquipmentSlot getWearableSlotFromItemArgs(String itemArgs) {
+    /**
+     * 根据 equipment/wearable_equipment 中的槽位别名解析出对应的装备槽位。
+     * 返回 null 表示槽位名无效。
+     */
+    static EquipmentSlot resolveEquipmentSlot(String slotName) {
+        String normalized = normalizeEquipmentSlotName(slotName);
+        if (normalized == null) return null;
+        return switch (normalized) {
+            case "armor.head" -> EquipmentSlot.HEAD;
+            case "armor.chest" -> EquipmentSlot.CHEST;
+            case "armor.legs" -> EquipmentSlot.LEGS;
+            case "armor.feet" -> EquipmentSlot.FEET;
+            case "weapon.mainhand" -> EquipmentSlot.MAINHAND;
+            case "weapon.offhand" -> EquipmentSlot.OFFHAND;
+            default -> null;
+        };
+    }
+
+    static EquipmentSlot getWearableSlotFromItemArgs(String itemArgs) {
         if (itemArgs == null || itemArgs.isBlank()) {
             return null;
         }
@@ -346,7 +364,7 @@ public class ClassEquipment {
         return slot.isArmor() ? slot : null;
     }
 
-    private static String extractItemId(String itemArgs) {
+    static String extractItemId(String itemArgs) {
         String trimmed = itemArgs.trim();
         int end = trimmed.length();
 
@@ -360,7 +378,7 @@ public class ClassEquipment {
         return trimmed.substring(0, end);
     }
 
-    private static String normalizeItemArgs(String args) {
+    static String normalizeItemArgs(String args) {
         if (args == null) return "";
 
         String trimmed = args.trim();

@@ -28,10 +28,14 @@ public class TeamSelectionGui {
         if (mc.screen != null) {
             // 发送阵营选择包到服务器
             NetworkManager.sendFactionSelect(team);
-            // 客户端本地记录已选攻守方
+            // 客户端本地记录已选攻守方，并立刻刷新选中边框（不等下一秒广播）。
             ClientGameState.setPlayerTeam(team);
-            // 关闭界面
-            mc.setScreen(null);
+            if (mc.screen instanceof TeamSelectionScreen screen) {
+                TeamSelectionScreen.markLocalSelection(team);
+                screen.refreshSelectionBordersPublic();
+            }
+            // 队伍选择阶段允许重新选择。界面必须由服务端的阶段切换替换，
+            // 不能在一次点击后回到游戏画面。
         }
     }
 }

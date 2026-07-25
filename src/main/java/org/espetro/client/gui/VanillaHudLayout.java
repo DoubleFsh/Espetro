@@ -13,6 +13,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
+import se.mickelus.mutil.gui.GuiElement;
 
 public final class VanillaHudLayout {
     private static final ResourceLocation WIDGETS_LOCATION = ResourceLocation.withDefaultNamespace("textures/gui/widgets.png");
@@ -211,6 +212,21 @@ public final class VanillaHudLayout {
 
     private static boolean renderRightHotbar(GuiGraphics graphics, Minecraft mc, float partialTick,
                                              int screenWidth, int screenHeight) {
+        boolean[] rendered = {false};
+        GuiElement element = new GuiElement(0, 0, screenWidth, screenHeight) {
+            @Override
+            public void draw(GuiGraphics gui, int x, int y, int width, int height,
+                             int mouseX, int mouseY, float tick) {
+                rendered[0] = drawRightHotbar(gui, mc, partialTick, screenWidth, screenHeight);
+                super.draw(gui, x, y, width, height, mouseX, mouseY, tick);
+            }
+        };
+        element.draw(graphics, 0, 0, screenWidth, screenHeight, -1, -1, partialTick);
+        return rendered[0];
+    }
+
+    private static boolean drawRightHotbar(GuiGraphics graphics, Minecraft mc, float partialTick,
+                                           int screenWidth, int screenHeight) {
         LocalPlayer player = mc.player;
         if (player == null || mc.gameMode == null || mc.options.hideGui) {
             return false;
@@ -311,7 +327,21 @@ public final class VanillaHudLayout {
         graphics.blit(GUI_ICONS_LOCATION, x, y + 18 - filled, 18, 112 - filled, 18, filled);
     }
 
-    private static void renderHealthLine(GuiGraphics graphics, Minecraft mc, int screenWidth, int screenHeight) {
+    private static void renderHealthLine(GuiGraphics graphics, Minecraft mc,
+                                         int screenWidth, int screenHeight) {
+        GuiElement element = new GuiElement(0, 0, screenWidth, screenHeight) {
+            @Override
+            public void draw(GuiGraphics gui, int x, int y, int width, int height,
+                             int mouseX, int mouseY, float partialTick) {
+                drawHealthLine(gui, mc, screenWidth, screenHeight);
+                super.draw(gui, x, y, width, height, mouseX, mouseY, partialTick);
+            }
+        };
+        element.draw(graphics, 0, 0, screenWidth, screenHeight, -1, -1, 0.0F);
+    }
+
+    private static void drawHealthLine(GuiGraphics graphics, Minecraft mc,
+                                       int screenWidth, int screenHeight) {
         if (!shouldReplaceSurvivalBars(mc) || !(mc.getCameraEntity() instanceof Player player)) {
             return;
         }

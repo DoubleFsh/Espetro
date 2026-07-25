@@ -8,7 +8,7 @@ import org.espetro.team.GamePhase;
  */
 public class ClientGameState {
 
-    private static GamePhase currentPhase = GamePhase.WAITING_FOR_PLAYERS;
+    private static GamePhase currentPhase = GamePhase.LOBBY;
     // 玩家当前选择的编制/阵营ID（用于职业选择）
     private static String playerFactionId = null;
     // 玩家当前选择的攻守方：ATTACK 或 DEFEND
@@ -43,9 +43,12 @@ public class ClientGameState {
      * 在等待阶段或战局中加入时允许
      */
     public static boolean canOpenTeamSelection() {
-        return currentPhase == GamePhase.WAITING_FOR_PLAYERS
+        return currentPhase == GamePhase.TEAM_SELECT
             || currentPhase == GamePhase.DEPLOYING
-            || currentPhase == GamePhase.BATTLE;
+            || currentPhase == GamePhase.BATTLE
+            || currentPhase.isCommanderVotePhase()
+            || currentPhase.isFactionSelectPhase()
+            || currentPhase == GamePhase.FACTION_REVEAL;
     }
 
     /**

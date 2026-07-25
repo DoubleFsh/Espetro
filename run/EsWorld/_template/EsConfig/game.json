@@ -1,0 +1,34 @@
+{
+  "game": {
+    "team_select_seconds": 60,
+    "deploy_timeout_seconds": 3,
+    "deploy_warning_seconds": 0,
+    "defend_commander_vote_seconds": 1,
+    "attack_commander_vote_seconds": 1,
+    "defend_faction_select_seconds": 1,
+    "attack_faction_select_seconds": 1,
+    "faction_pool_size": 6,
+    "faction_reveal_seconds": 3,
+    "round_end_seconds": 10,
+    "respawn_invincibility_ticks": 60,
+    "teammate_name_tag_distance": 10.0,
+    "waiting_y": 200
+  },
+  "troops": {
+    "initial_attack": 280,
+    "initial_defend": 1200,
+    "commander_death_penalty": 2
+  },
+  "stamina": {
+    "player_stamina": 100,
+    "sprint_cost_per_second": 5,
+    "jump_cost": 15,
+    "regen_delay_seconds": 4,
+    "regen_per_second": 2
+  },
+  "governance": {
+    "impeachment_vote_seconds": 60,
+    "impeachment_cooldown_seconds": 600,
+    "commander_vacancy_seconds": 180
+  }
+}

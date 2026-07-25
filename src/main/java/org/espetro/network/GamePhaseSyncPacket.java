@@ -24,7 +24,7 @@ public class GamePhaseSyncPacket {
         try {
             return new GamePhaseSyncPacket(GamePhase.valueOf(phaseName));
         } catch (IllegalArgumentException e) {
-            return new GamePhaseSyncPacket(GamePhase.WAITING_FOR_PLAYERS);
+            return new GamePhaseSyncPacket(GamePhase.LOBBY);
         }
     }
 

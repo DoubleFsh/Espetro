@@ -1,11 +1,9 @@
 package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.DeployPointSelectPacket;
+import se.mickelus.mutil.gui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +13,7 @@ import java.util.UUID;
  * 复活点选择界面
  * 玩家死亡后打开，选择在原部署点或兵站复活
  */
-public class DeployPointSelectScreen extends Screen {
+public class DeployPointSelectScreen extends MutilScreen {
 
     private final boolean hasDeployPoint;
     private final String deployPointPos;
@@ -36,66 +34,54 @@ public class DeployPointSelectScreen extends Screen {
     }
 
     @Override
-    protected void init() {
-        super.init();
+    protected void buildMutilRoot(GuiElement root) {
         startX = (this.width - BUTTON_WIDTH) / 2;
+        EspetroMutilWidgets.addPhaseHeader(root, this.width,
+            "§6§l选择复活位置", "§e请选择你要复活的位置", "",
+            EspetroMutilWidgets.GOLD);
 
         int y = START_Y;
 
         // 原部署点按钮
         if (hasDeployPoint) {
             String label = "§e原部署点 §7(" + deployPointPos + ")";
-            Button deployBtn = Button.builder(Component.literal(label), btn -> {
+            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
+                label, () -> {
                 if (Minecraft.getInstance().player != null) {
                     Minecraft.getInstance().player.connection.sendCommand("bastion deploy");
                 }
-            }).bounds(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
-            this.addRenderableWidget(deployBtn);
+            }));
             y += BUTTON_HEIGHT + VERTICAL_SPACING;
         }
 
         // 兵站按钮
         for (DeployPointSelectPacket.BastionItem b : bastions) {
             String label = "§a" + b.name + " §7(" + b.pos + ")";
-            Button btn = Button.builder(Component.literal(label), button -> {
+            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
+                label, () -> {
                 if (Minecraft.getInstance().player != null) {
                     Minecraft.getInstance().player.connection.sendCommand(
                         "bastion select " + b.id.toString());
                 }
-            }).bounds(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
-            this.addRenderableWidget(btn);
+            }));
             y += BUTTON_HEIGHT + VERTICAL_SPACING;
         }
 
         // 没有可选复活点
         if (!hasDeployPoint && bastions.isEmpty()) {
-            this.addRenderableWidget(
-                Button.builder(Component.literal("§c没有可用的复活点！"), btn -> {})
-                    .bounds(startX, y, BUTTON_WIDTH, 30)
-                    .build()
-            );
+            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, 30,
+                "§c没有可用的复活点！", null).setEnabled(false));
         }
-    }
-
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
-
-        // 标题
-        graphics.drawCenteredString(this.font,
-            Component.literal("§6§l选择复活位置"),
-            this.width / 2, 15, 0xFFFFFF);
-
-        graphics.drawCenteredString(this.font,
-            Component.literal("§e请选择你要复活的位置"),
-            this.width / 2, 32, EspetroMutilWidgets.MUTED);
-
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
     public boolean shouldCloseOnEsc() {
         return false; // 死亡时不可关闭
+    }
+
+    @Override
+    public void onClose() {
+        // 兼容旧复活点包：成功选择复活点前始终保持本界面。
     }
 
     @Override

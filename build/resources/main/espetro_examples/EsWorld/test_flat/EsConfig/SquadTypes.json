@@ -1,0 +1,8 @@
+{
+  "types": [
+    {"id": "infantry", "display_name": "步兵队"},
+    {"id": "support", "display_name": "支援队"},
+    {"id": "vehicle", "display_name": "载具队"},
+    {"id": "recon", "display_name": "侦查队"}
+  ]
+}

@@ -53,7 +53,7 @@ public class VehicleDeployScreen extends MutilScreen {
         root.addChild(EspetroMutilWidgets.centeredText(
             panelX, panelY + 12, panelW, "\u00a76\u00a7l载具部署面板", EspetroMutilWidgets.GOLD));
         root.addChild(EspetroMutilWidgets.centeredText(
-            panelX, panelY + 29, panelW, "\u00a77载具将按 JSON 配置的位置部署", EspetroMutilWidgets.MUTED));
+            panelX, panelY + 29, panelW, "\u00a77载具将在预设位置出现", EspetroMutilWidgets.MUTED));
         root.addChild(EspetroMutilWidgets.rect(
             panelX + PANEL_PADDING, panelY + HEADER_H - 3, panelW - PANEL_PADDING * 2, 1, 0x35FFFFFF));
 

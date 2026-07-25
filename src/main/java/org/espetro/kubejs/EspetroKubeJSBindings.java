@@ -24,6 +24,8 @@ import org.espetro.team.TroopCountManager;
 import org.espetro.team.VoteManager;
 import org.espetro.vehicle.VehicleConfig;
 import org.espetro.vehicle.VehicleManager;
+import org.espetro.mapconfig.BattlefieldContext;
+import org.espetro.stats.PlayerMatchStatsManager;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -36,6 +38,38 @@ public final class EspetroKubeJSBindings {
 
     public static String modId() {
         return Espetro.MOD_ID;
+    }
+
+    @Nullable
+    public static String getActiveMapId() {
+        return BattlefieldContext.get().map(map -> map.mapFolder).orElse(null);
+    }
+
+    @Nullable
+    public static String getActiveMapName() {
+        return BattlefieldContext.get().map(map -> map.displayName).orElse(null);
+    }
+
+    @Nullable
+    public static String getActiveBattlefieldDimension() {
+        return BattlefieldContext.getActiveDimensionKey()
+            .map(key -> key.location().toString()).orElse(null);
+    }
+
+    public static boolean endRound(String winner) {
+        return GameStateManager.getInstance().endRound(winner);
+    }
+
+    @Nullable
+    public static PlayerMatchStatsManager.PlayerMatchStats getPlayerMatchStats(Object playerRef) {
+        UUID id = uuidOrNull(playerRef);
+        return id == null ? null : PlayerMatchStatsManager.getInstance().get(id).orElse(null);
+    }
+
+    @Nullable
+    public static String getSquadCategory(Object playerRef) {
+        UUID id = uuidOrNull(playerRef);
+        return id == null ? null : SquadManager.getInstance().getPlayerCategoryId(id);
     }
 
     @Nullable

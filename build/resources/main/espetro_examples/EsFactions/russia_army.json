@@ -1,0 +1,453 @@
+{
+  "faction": {
+    "name": "俄罗斯陆上部队",
+    "description": "正规陆军编制，重型火力配置",
+    "icon": "🔴",
+    "team": "ATTACK",
+    "color": "AA3333",
+    "faction_id": "RUSSIA"
+  },
+  "vehicles": {
+    "transport_truck": {
+      "display_name": "§6运输卡车",
+      "respawn_minutes": 5,
+      "troop_value": 5,
+      "entity": [
+        "minecraft:minecart"
+      ],
+      "per_max_count": 2,
+      "entity_tags": []
+    },
+    "apc": {
+      "display_name": "§a装甲运兵车",
+      "respawn_minutes": 8,
+      "troop_value": 8,
+      "entity": [
+        "minecraft:camel"
+      ],
+      "per_max_count": 1,
+      "entity_tags": []
+    },
+    "attack_helicopter": {
+      "display_name": "§c武装直升机",
+      "respawn_minutes": 10,
+      "troop_value": 12,
+      "entity": [
+        "minecraft:ghast"
+      ],
+      "per_max_count": 1,
+      "entity_tags": []
+    },
+    "recon_mount": {
+      "display_name": "§e侦察机动载具",
+      "respawn_minutes": 5,
+      "troop_value": 3,
+      "entity": [
+        "minecraft:horse"
+      ],
+      "per_max_count": 3,
+      "entity_tags": []
+    }
+  },
+  "classes": {
+    "RUS_ARMY_COMMANDER": {
+      "strict_count": true,
+      "name": "队长",
+      "icon": "leader",
+      "description": "指挥全队作战",
+      "role": "指挥",
+      "maxPlayers": 1,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "指挥全队作战",
+          "maxPlayers": 1,
+          "commands": [
+            "minecraft:diamond_helmet 1",
+            "minecraft:diamond_chestplate 1",
+            "minecraft:diamond_leggings 1",
+            "minecraft:diamond_boots 1",
+            "minecraft:diamond_sword 1",
+            "minecraft:shield 1",
+            "minecraft:bread 20",
+            "minecraft:ender_pearl 8"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 20
+              },
+              {
+                "id": "minecraft:ender_pearl",
+                "count": 4,
+                "max": 8
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/leader.png"
+    },
+    "RUS_ARMY_MARKSMAN": {
+      "strict_count": true,
+      "name": "精确射手",
+      "icon": "marksman",
+      "description": "远程精确打击",
+      "role": "精确射击",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "远程精确打击",
+          "maxPlayers": 2,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:bow 1",
+            "minecraft:arrow 64",
+            "minecraft:bread 16"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "minecraft:arrow",
+                "count": 16,
+                "max": 64
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 16
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/marksman.png"
+    },
+    "RUS_ARMY_SQUADMG": {
+      "strict_count": true,
+      "name": "班组机枪",
+      "icon": "automatic_rifleman",
+      "description": "班组压制火力",
+      "role": "火力压制",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "班组压制火力",
+          "maxPlayers": 2,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:crossbow 1",
+            "minecraft:shield 1",
+            "minecraft:arrow 48",
+            "minecraft:bread 16"
+          ],
+          "resupply": {
+            "ammo_cost": 60,
+            "items": [
+              {
+                "id": "minecraft:arrow",
+                "count": 16,
+                "max": 64
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 16
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/automatic_rifleman.png"
+    },
+    "RUS_ARMY_HEAVYMG": {
+      "strict_count": true,
+      "name": "重机枪手",
+      "icon": "machine_gunner",
+      "description": "重型火力支援",
+      "role": "重型火力",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "重型火力支援",
+          "maxPlayers": 2,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:diamond_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:crossbow 1",
+            "minecraft:shield 1",
+            "minecraft:arrow 64",
+            "minecraft:bread 20"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "minecraft:arrow",
+                "count": 16,
+                "max": 64
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 20
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/machineGunner.png"
+    },
+    "RUS_ARMY_GRENADIER": {
+      "strict_count": true,
+      "name": "榴弹兵",
+      "icon": "grenadier",
+      "description": "榴弹远程压制",
+      "role": "榴弹支援",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "榴弹远程压制",
+          "maxPlayers": 2,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:bow 1",
+            "minecraft:fire_charge 32",
+            "minecraft:bread 16"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "minecraft:fire_charge",
+                "count": 8,
+                "max": 32
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 6,
+                "max": 16
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/grenadier.png"
+    },
+    "RUS_ARMY_ANTITANK": {
+      "strict_count": true,
+      "name": "反坦克兵",
+      "icon": "light_at",
+      "description": "反装甲作战",
+      "role": "反装甲",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "反装甲作战",
+          "maxPlayers": 2,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:diamond_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:diamond_sword 1",
+            "minecraft:fire_charge 32",
+            "minecraft:bread 14",
+            "minecraft:tnt 4"
+          ],
+          "resupply": {
+            "ammo_cost": 100,
+            "items": [
+              {
+                "id": "minecraft:fire_charge",
+                "count": 8,
+                "max": 32
+              },
+              {
+                "id": "minecraft:tnt",
+                "count": 2,
+                "max": 4
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 6,
+                "max": 14
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/lightAT.png"
+    },
+    "RUS_ARMY_ASSAULT": {
+      "strict_count": true,
+      "name": "自动步枪",
+      "icon": "rifleman",
+      "description": "标准突击步兵",
+      "role": "突击",
+      "maxPlayers": 6,
+      "team_count": false,
+      "max_per_squad": 4,
+      "troopValue": 1,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "标准突击步兵",
+          "maxPlayers": 6,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:iron_sword 1",
+            "minecraft:shield 1",
+            "minecraft:bread 20"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 20
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/rifleman.png"
+    },
+    "RUS_ARMY_CREW": {
+      "strict_count": true,
+      "name": "载具组员",
+      "icon": "crewman",
+      "description": "装甲载具驾驶员与炮手",
+      "role": "载具操作",
+      "maxPlayers": 8,
+      "team_count": false,
+      "max_per_squad": 2,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "装甲载具驾驶员与炮手",
+          "maxPlayers": 8,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:iron_sword 1",
+            "minecraft:shield 1",
+            "minecraft:bread 20",
+            "minecraft:ender_pearl 4"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 20
+              },
+              {
+                "id": "minecraft:ender_pearl",
+                "count": 2,
+                "max": 4
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/crewman.png"
+    },
+    "A": {
+      "strict_count": true,
+      "name": "载员",
+      "icon": "crewman",
+      "description": "装甲载具驾驶员与炮手",
+      "role": "载具",
+      "maxPlayers": 8,
+      "team_count": false,
+      "max_per_squad": 2,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "装甲载具驾驶员与炮手",
+          "maxPlayers": 8,
+          "commands": [
+            "minecraft:iron_helmet 1",
+            "minecraft:iron_chestplate 1",
+            "minecraft:iron_leggings 1",
+            "minecraft:iron_boots 1",
+            "minecraft:iron_sword 1",
+            "minecraft:shield 1",
+            "minecraft:bread 20",
+            "minecraft:ender_pearl 4"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "minecraft:bread",
+                "count": 8,
+                "max": 20
+              },
+              {
+                "id": "minecraft:ender_pearl",
+                "count": 2,
+                "max": 4
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/crewman.png"
+    }
+  },
+  "VehTypes": [
+    "transport_truck",
+    "apc",
+    "attack_helicopter",
+    "recon_mount"
+  ]
+}

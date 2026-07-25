@@ -82,61 +82,28 @@ public class BastionManager {
     /**
      * 从 JSON 文件加载配置
      */
+    /** @deprecated 不从 datapack 加载；战场激活时 applyExternalJson。 */
     private void loadConfig() {
-        try {
-            MinecraftServer server = Espetro.getServer();
-            if (server == null) {
-                Espetro.LOGGER.warn("服务器未初始化，使用默认配置");
-                return;
-            }
-
-            net.minecraft.resources.ResourceLocation location = net.minecraft.resources.ResourceLocation.parse("espetro:config/bastion.json");
-            var resourceOptional = org.espetro.data.EspetroDataResources.getPreferred(server.getResourceManager(), location);
-
-            if (!resourceOptional.isPresent()) {
-                Espetro.LOGGER.warn("未找到 bastion.json 配置文件，使用默认值");
-                return;
-            }
-
-            InputStream inputStream = resourceOptional.get().open();
-            if (inputStream == null) {
-                Espetro.LOGGER.warn("无法打开 bastion.json 配置文件，使用默认值");
-                return;
-            }
-
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(new InputStreamReader(inputStream, StandardCharsets.UTF_8), JsonObject.class);
-            inputStream.close();
-
-            if (json.has("bastion")) {
-                JsonObject bastion = json.getAsJsonObject("bastion");
-                if (bastion.has("cooldown_seconds")) {
-                    cooldownSeconds = bastion.get("cooldown_seconds").getAsInt();
-                }
-                if (bastion.has("required_planks")) {
-                    requiredPlanks = bastion.get("required_planks").getAsInt();
-                }
-                if (bastion.has("armor_stand_health")) {
-                    armorStandHealth = Math.max(1, bastion.get("armor_stand_health").getAsInt());
-                }
-                if (bastion.has("destroy_troop_penalty")) {
-                    destroyTroopPenalty = bastion.get("destroy_troop_penalty").getAsInt();
-                }
-            }
-
-            Espetro.LOGGER.info("兵站配置已加载: 冷却{}秒, 需要{}木板, 盔甲架{}血, 摧毁扣除{}兵力",
-                cooldownSeconds, requiredPlanks, armorStandHealth, destroyTroopPenalty);
-
-        } catch (Exception e) {
-            Espetro.LOGGER.error("加载兵站配置失败: {}", e.getMessage());
-        }
+        // 有意留空：默认字段已在声明处初始化
     }
 
-    /**
-     * 重新加载配置
-     */
     public void reloadConfig() {
-        loadConfig();
+        // no-op: EsConfig 经 applyExternalJson 应用
+    }
+
+    /** Apply the frozen bastion.json belonging to the active map. */
+    public void applyExternalJson(String rawJson) {
+        cooldownSeconds = 800;
+        requiredPlanks = 640;
+        armorStandHealth = 5;
+        destroyTroopPenalty = 20;
+        JsonObject json = new Gson().fromJson(rawJson, JsonObject.class);
+        if (json == null || !json.has("bastion")) return;
+        JsonObject bastion = json.getAsJsonObject("bastion");
+        if (bastion.has("cooldown_seconds")) cooldownSeconds = Math.max(0, bastion.get("cooldown_seconds").getAsInt());
+        if (bastion.has("required_planks")) requiredPlanks = Math.max(0, bastion.get("required_planks").getAsInt());
+        if (bastion.has("armor_stand_health")) armorStandHealth = Math.max(1, bastion.get("armor_stand_health").getAsInt());
+        if (bastion.has("destroy_troop_penalty")) destroyTroopPenalty = Math.max(0, bastion.get("destroy_troop_penalty").getAsInt());
     }
 
     /**
@@ -923,7 +890,8 @@ public class BastionManager {
      */
     public void savePlayerDeployPoint(ServerPlayer player) {
         BlockPos bedPos = player.getRespawnPosition();
-        BlockPos spawnPos = player.server.overworld().getSharedSpawnPos();
+        ServerLevel level = player.serverLevel();
+        BlockPos spawnPos = level.getSharedSpawnPos();
 
         BlockPos deployPos;
         if (bedPos != null) {
@@ -932,7 +900,7 @@ public class BastionManager {
             deployPos = spawnPos;
         }
 
-        playerDeployPoints.put(player.getUUID(), new DeployPoint(deployPos, player.server.overworld()));
+        playerDeployPoints.put(player.getUUID(), new DeployPoint(deployPos, level));
     }
 
     /**

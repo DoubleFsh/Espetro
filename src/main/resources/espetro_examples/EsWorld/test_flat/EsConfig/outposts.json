@@ -1,0 +1,12 @@
+{
+  "redeploy_cooldown_seconds": 60,
+  "outposts": [
+    {
+      "name": "中部测试前哨",
+      "x": 48.5,
+      "y": 65,
+      "z": 0.5,
+      "yaw": 90
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import org.espetro.Espetro;
+import org.espetro.team.ClassCountManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.TeamPackManager;
 
@@ -94,11 +95,17 @@ public class SquadActionPacket {
                     SquadManager.getInstance().getPlayerSquadId(player.getUUID()),
                     SquadManager.getInstance().isSquadLeader(player.getUUID())
                 );
+                NetworkManager.broadcastMatchStats(
+                    org.espetro.stats.PlayerMatchStatsManager.getInstance());
             }
 
             if (result.team != null) {
                 TeamPackManager.getInstance().reconcileTeam(result.team);
                 NetworkManager.syncSquadsToTeam(result.team);
+                NetworkManager.broadcastClassCounts(
+                    result.team,
+                    ClassCountManager.getInstance().getPlayerFaction(player.getUUID())
+                );
                 // 入队/离队后刷新部署界面职业人数（小队作用域与禁用态依赖 mySquadId）。
                 NetworkManager.sendUnifiedDeployScreen(player, -1);
             } else {

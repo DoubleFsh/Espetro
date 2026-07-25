@@ -72,8 +72,6 @@ public final class SupplyManager {
         }
 
         pickupCooldowns.put(player.getUUID(), now);
-        org.espetro.tutorial.TutorialManager.getInstance().tryShow(
-            player, org.espetro.tutorial.TutorialStep.LOGISTICS_SUPPLY);
         player.getInventory().setChanged();
         player.inventoryMenu.broadcastChanges();
         player.sendSystemMessage(Component.literal(
@@ -138,8 +136,6 @@ public final class SupplyManager {
         bastion.addConstructionSupplies(construction, LogisticsConfig.get().maxConstruction);
         bastion.addAmmunitionSupplies(ammunition, LogisticsConfig.get().maxAmmunition);
         BastionManager.getInstance().advanceFobConstruction(bastion);
-        org.espetro.tutorial.TutorialManager.getInstance().tryShow(
-            player, org.espetro.tutorial.TutorialStep.FOB_SUPPLY);
         player.getInventory().setChanged();
         player.inventoryMenu.broadcastChanges();
         return new DepositResult(true, construction, ammunition, null);

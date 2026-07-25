@@ -32,7 +32,7 @@ public final class StaminaOverlay {
         return enabled;
     }
 
-    public static void render(GuiGraphics graphics, Minecraft mc) {
+    static void drawElement(GuiGraphics graphics, Minecraft mc) {
         if (!enabled || maxStamina <= 0 || stamina >= maxStamina
                 || mc.options.hideGui || mc.player == null) {
             return;

@@ -19,7 +19,9 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
@@ -31,6 +33,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.espetro.command.EspetroCommand;
 import org.espetro.bastion.BastionManager;
+import org.espetro.dimension.BattlefieldWorldManager;
 import org.espetro.kubejs.EspetroKubeJSDefaultScripts;
 import org.espetro.network.NetworkManager;
 import org.espetro.runtime.ServerRuntimeMaintenance;
@@ -51,8 +54,11 @@ import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.VoteManager;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.vehicle.VehicleCommand;
-import org.espetro.vehicle.VehicleConfig;
 import org.espetro.vehicle.VehicleManager;
+import org.espetro.mapconfig.ExternalConfigBootstrap;
+import org.espetro.stats.PlayerMatchStatsManager;
+import org.espetro.governance.CommanderGovernanceManager;
+import org.espetro.team.MapVoteManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +85,6 @@ public class Espetro {
 
     public Espetro() {
         ensureKubeJSDefaultScriptsIfLoaded();
-        disableAuraTipDevelopmentLoginTips();
 
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -103,64 +108,32 @@ public class Espetro {
         }
     }
 
-    /** AuraTip's development bundle registers login demos; they are not player tutorials. */
-    private static void disableAuraTipDevelopmentLoginTips() {
-        int removed = cc.sighs.auratip.api.tip.TipRegistry.getTips("auratip_dev").size();
-        cc.sighs.auratip.api.tip.TipRegistry.clear("auratip_dev");
-        if (removed > 0) {
-            LOGGER.info("已禁用 AuraTip 的 {} 个开发示例提示（包括登录提示）", removed);
-        }
-    }
-
     // ========== 辅助方法 ==========
 
     /**
-     * 热重载所有配置（数据包热更改入口）
-     * <ul>
-     *   <li>重新加载数据包中的 faction JSON → FactionDataLoader</li>
-     *   <li>重新加载 game.json 全局参数</li>
-     *   <li>重新加载 spawn_points.json 复活点</li>
-     *   <li>重新加载 bastion.json 兵站参数</li>
-     *   <li>重新加载 outposts.json 布防期前哨基地</li>
-     *   <li>重新加载编制自定义载具配置 → VehicleConfig</li>
-     * </ul>
+     * 热重载入口：外部 EsDimensions / EsWorld/EsConfig / EsFactions 仅启动冻结，
+     * 不从 datapack 重读游戏参数。请重启以应用文件修改。
      */
     public static void reloadAllConfigs() {
-        MinecraftServer server = getServer();
-        if (server == null) {
-            LOGGER.warn("无法热重载：服务端实例为空");
-            return;
-        }
-
-        ResourceManager resourceManager = server.getResourceManager();
-
-        // 1. 热重载阵营/职业数据
-        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
-        loader.reload(resourceManager);
-
-        // 2. 热重载全局游戏配置
-        GameConfig.reloadConfig(server);
-
-        // 3. 热重载复活点配置。指挥官技能由 KubeJS startup/server scripts 注册与实现。
-        SpawnPointConfig.loadConfig(server);
-
-        // 4. 热重载兵站配置
-        BastionManager.getInstance().reloadConfig();
-        TeamPackManager.getInstance().reloadConfig();
-        LogisticsConfig.load(server);
-
-        // 5. 热重载载具配置（依赖 faction 数据，放在最后）
-        VehicleConfig.loadConfig(server);
-
-        // 6. 热重载前哨基地配置
-        org.espetro.team.OutpostManager.getInstance().loadConfig(server);
-
+        LOGGER.warn("Espetro 外部地图、维度、编制及每地图 EsConfig 仅在启动时加载；"
+            + "本次 reload 未重新读取这些文件，请重启游戏或服务端。");
         NetworkManager.syncSquadsToTeam("ATTACK");
         NetworkManager.syncSquadsToTeam("DEFEND");
+    }
 
-        org.espetro.tutorial.TutorialManager.getInstance().onConfigReloaded();
+    /**
+     * 启动一次性加载：EsDimensions / EsWorld / EsFactions。
+     * 地图级 game/spawn/bastion 等仅在 BattlefieldContext 激活时由
+     * GameConfigBridge 从该图 EsConfig 快照应用；不从 data/espetro datapack 读取。
+     */
+    private static void loadStartupConfigs(MinecraftServer server) {
+        ExternalConfigBootstrap.bootstrapIfNeeded();
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        loader.loadExternalFrozen(ExternalConfigBootstrap.getFactionFiles());
 
-        LOGGER.info("Espetro 所有配置已热重载完成");
+        // 代码默认值保留至选图激活；不调用 GameConfig/SpawnPoint/Bastion 等 datapack load。
+        LOGGER.info("Espetro 启动配置已冻结：{} 个可用地图，{} 个 EsFactions 编制（地图 EsConfig 将在战场激活时应用）",
+            ExternalConfigBootstrap.getUsableMaps().size(), loader.getFactionArray().length);
     }
 
     /**
@@ -239,7 +212,6 @@ public class Espetro {
         public static void commonSetup(FMLCommonSetupEvent event) {
             event.enqueueWork(() -> {
                 ensureKubeJSDefaultScriptsIfLoaded();
-                disableAuraTipDevelopmentLoginTips();
                 NetworkManager.registerNetwork();
                 // 初始化职业人数管理器
                 new ClassCountManager();
@@ -257,6 +229,9 @@ public class Espetro {
                 org.espetro.team.OutpostManager.init();
                 // 初始化指挥官技能管理器
                 org.espetro.team.CommanderSkillManager.init();
+                MapVoteManager.init();
+                PlayerMatchStatsManager.init();
+                CommanderGovernanceManager.init();
             });
         }
 
@@ -283,20 +258,15 @@ public class Espetro {
             }
 
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                // 先强制主城再清背包/阶段逻辑，避免登录瞬间仍停在战场维度
+                GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
                 StaminaManager.resetPlayer(serverPlayer);
                 clearAndSavePlayerInventory(serverPlayer);
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-
-                if (phase == GamePhase.WAITING_FOR_PLAYERS) {
-                    // 对局未开始，进入等待队列
-                    GameStateManager.getInstance().onPlayerJoin(serverPlayer);
-                    Espetro.LOGGER.info("玩家 {} 进入等待状态", serverPlayer.getName().getString());
-                } else {
-                    // 战局中加入：无论是投票、编制选择、部署还是战斗阶段，都进入增援流程
-                    GameStateManager.getInstance().onMidGameJoin(serverPlayer);
-                    Espetro.LOGGER.info("玩家 {} 在{}阶段增援加入", serverPlayer.getName().getString(), phase.getDisplayName());
-                }
+                GameStateManager.getInstance().onPlayerJoin(serverPlayer);
+                Espetro.LOGGER.info("玩家 {} 在{}阶段加入", serverPlayer.getName().getString(),
+                    phase.getDisplayName());
             }
         }
 
@@ -304,7 +274,10 @@ public class Espetro {
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             // 玩家离开时清空装备并立即写入 playerdata，避免重进时恢复退出前的职业装备。
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                // 退服前强制写回主城坐标与重生点（主城维度不重置）
+                GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
                 StaminaManager.removePlayer(serverPlayer.getUUID());
+                org.espetro.tutorial.TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
                 clearAndSavePlayerInventory(serverPlayer);
             } else {
                 ClassEquipment.clearEquipment(event.getEntity());
@@ -314,6 +287,16 @@ public class Espetro {
             ClassCountManager countManager = ClassCountManager.getInstance();
             String classCountTeam = countManager.getEffectivePlayerTeam(event.getEntity().getUUID());
             String classCountFaction = countManager.getPlayerFaction(event.getEntity().getUUID());
+            boolean wasLeader = SquadManager.getInstance().isSquadLeader(event.getEntity().getUUID());
+            if (GameStateManager.getInstance().getCurrentPhase() == GamePhase.BATTLE
+                && classCountTeam != null
+                && VoteManager.getInstance().isCommander(event.getEntity().getUUID())) {
+                CommanderGovernanceManager.getInstance().onCommanderDisconnected(
+                    classCountTeam, event.getEntity().getUUID());
+            }
+            if (wasLeader) {
+                CommanderGovernanceManager.getInstance().onSquadLeaderLost(event.getEntity().getUUID());
+            }
             String squadTeam = SquadManager.getInstance().removePlayer(event.getEntity().getUUID());
             countManager.removePlayer(event.getEntity());
             NetworkManager.broadcastClassCounts(classCountTeam, classCountFaction);
@@ -323,7 +306,11 @@ public class Espetro {
             }
 
             // 从游戏状态管理器移除
-            GameStateManager.getInstance().onPlayerLeave(event.getEntity().getUUID());
+            if (event.getEntity() instanceof ServerPlayer leavePlayer) {
+                GameStateManager.getInstance().onPlayerLeave(leavePlayer);
+            } else {
+                GameStateManager.getInstance().onPlayerLeave(event.getEntity().getUUID());
+            }
         }
 
         @SubscribeEvent
@@ -342,6 +329,15 @@ public class Espetro {
         public static void onLivingDrops(LivingDropsEvent event) {
             if (event.getEntity() instanceof ServerPlayer player && !player.hasPermissions(2)) {
                 event.getDrops().clear();
+            }
+        }
+
+        /** The overworld is the persistent safe hub in every game phase. */
+        @SubscribeEvent
+        public static void onHubPlayerHurt(LivingHurtEvent event) {
+            if (event.getEntity() instanceof ServerPlayer player
+                && net.minecraft.world.level.Level.OVERWORLD.equals(player.serverLevel().dimension())) {
+                event.setCanceled(true);
             }
         }
 
@@ -385,12 +381,19 @@ public class Espetro {
         }
 
         @SubscribeEvent
+        public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+            int prepared = BattlefieldWorldManager.getInstance()
+                .prepareAllAtStartup(event.getServer());
+            LOGGER.info("战场地图启动准备完成: {} 个维度", prepared);
+        }
+
+        @SubscribeEvent
         public static void onServerStarting(ServerStartingEvent event) {
             serverInstance = event.getServer();
             disableNaturalRegeneration(event.getServer());
             ServerRuntimeMaintenance.getInstance().reset();
-            // 初始化所有配置（首次加载）
-            reloadAllConfigs();
+            // 初始化并冻结所有外部配置（仅此一次）
+            loadStartupConfigs(event.getServer());
             // 初始化职业人数记分板
             ClassCountManager.getInstance().initializeAllClassScores();
             // 重置游戏状态（含兵站清空）
@@ -423,6 +426,7 @@ public class Espetro {
             SupplyManager.getInstance().reset();
             VehicleManager.getInstance().clearRuntimeState();
             ServerRuntimeMaintenance.getInstance().reset();
+            BattlefieldWorldManager.getInstance().resetAfterServerStop();
             StaminaManager.clear();
             serverInstance = null;
         }

@@ -104,7 +104,7 @@ public class FactionRevealScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xD03A3A3A);
+        // 默认无全屏遮罩：依赖 MatchHold 失明黑底。
     }
 
     @Override
@@ -114,7 +114,7 @@ public class FactionRevealScreen extends MutilScreen {
         if (ticksRemaining % 20 == 0 && phaseHeader != null) {
             phaseHeader.setDetail("\u00a78" + getSecondsRemaining() + "秒后进入部署");
         }
-        if (ticksRemaining <= 0 && Minecraft.getInstance().screen == this) {
+        if (ticksRemaining <= 0 && Minecraft.getInstance().screen == this && !tutorialPreviewMode) {
             Minecraft.getInstance().setScreen(null);
         }
     }
