@@ -10,8 +10,9 @@ import javax.annotation.Nullable;
 import java.util.UUID;
 
 /**
- * 兵站数据类
- * 存储单个兵站的信息
+ * Radio / 兵站（HAB）共享运行时记录。
+ * {@link StructureKind#RADIO} 持有建材/弹药库存与建造范围；
+ * {@link StructureKind#HAB} 为可复活兵站（建筑 + 盔甲架）。
  */
 public class BastionData {
 
@@ -20,13 +21,14 @@ public class BastionData {
     private String name;
     private final BlockPos position;
     private final ServerLevel level;
+    private StructureKind kind = StructureKind.RADIO;
     private UUID armorStandId;
     private int bastionNumber = -1;
     private float coreHealth;
     @Nullable
     private BlockPos armorStandPosition;
     @Nullable
-    private BlockPos shulkerPos; // 弹药补给潜影盒位置
+    private BlockPos shulkerPos; // Radio 弹药补给潜影盒位置
     private boolean active;
     private int constructionSupplies;
     private int ammunitionSupplies;
@@ -34,20 +36,69 @@ public class BastionData {
     private boolean ammoCrateBuilt;
     private long habAvailableAt;
     private long habDisabledUntil;
+    /** 旧档：单一 FOB 同时充当 Radio+HAB，读档后仍可部署直至被拆。 */
+    private boolean legacyCombined;
+    /** 运行时覆盖缓存：HAB 是否仍在己方 Radio 建造半径内（事件驱动重算，不存 NBT）。 */
+    private transient boolean habCoveredCache = true;
+
+    public boolean isHabCoveredCache() {
+        return habCoveredCache;
+    }
+
+    public void setHabCoveredCache(boolean habCoveredCache) {
+        this.habCoveredCache = habCoveredCache;
+    }
 
     public BastionData(String team, String name, BlockPos position, ServerLevel level) {
-        this(UUID.randomUUID(), team, name, position, level);
+        this(UUID.randomUUID(), team, name, position, level, StructureKind.RADIO);
+    }
+
+    public BastionData(String team, String name, BlockPos position, ServerLevel level, StructureKind kind) {
+        this(UUID.randomUUID(), team, name, position, level, kind);
     }
 
     public BastionData(UUID bastionId, String team, String name, BlockPos position, ServerLevel level) {
+        this(bastionId, team, name, position, level, StructureKind.RADIO);
+    }
+
+    public BastionData(UUID bastionId, String team, String name, BlockPos position, ServerLevel level,
+                       StructureKind kind) {
         this.bastionId = bastionId;
         this.team = team;
         this.name = name;
         this.position = position;
         this.level = level;
+        this.kind = kind == null ? StructureKind.RADIO : kind;
         this.armorStandPosition = position.above();
         this.active = true;
         this.coreHealth = BastionManager.getInstance().getArmorStandHealth();
+        if (this.kind == StructureKind.HAB) {
+            this.habBuilt = true;
+        }
+    }
+
+    public StructureKind getKind() {
+        return kind;
+    }
+
+    public void setKind(StructureKind kind) {
+        this.kind = kind == null ? StructureKind.RADIO : kind;
+    }
+
+    public boolean isRadio() {
+        return kind == StructureKind.RADIO;
+    }
+
+    public boolean isHab() {
+        return kind == StructureKind.HAB;
+    }
+
+    public boolean isLegacyCombined() {
+        return legacyCombined;
+    }
+
+    public void setLegacyCombined(boolean legacyCombined) {
+        this.legacyCombined = legacyCombined;
     }
 
     public UUID getBastionId() {
@@ -197,11 +248,21 @@ public class BastionData {
     }
 
     /**
-     * 检查盔甲架是否还存在
+     * 检查核心（Radio 方块或 HAB 盔甲架）是否还存在。
      */
     public boolean checkArmorStand() {
-        if (armorStandId == null) return false;
         if (!isChunkLoaded()) return false;
+        // Radio 核心 = 方块本身
+        if (kind == StructureKind.RADIO && !legacyCombined) {
+            if (BastionItems.RADIO_BLOCK != null
+                && level.getBlockState(position).is(BastionItems.RADIO_BLOCK)) {
+                armorStandPosition = position;
+                resetMissingEntityTicks();
+                return true;
+            }
+            return false;
+        }
+        if (armorStandId == null) return false;
         Entity entity = level.getEntity(armorStandId);
         if (entity instanceof ArmorStand armorStand && armorStand.isAlive()) {
             BastionManager.getInstance().syncCoreArmorStand(armorStand);
@@ -221,9 +282,12 @@ public class BastionData {
     }
 
     /**
-     * 获取盔甲架当前生命值
+     * 获取核心实体当前生命值（Radio 方块无 HP，返回记录值）。
      */
     public float getArmorStandHealth() {
+        if (kind == StructureKind.RADIO && !legacyCombined) {
+            return coreHealth;
+        }
         if (armorStandId == null) return 0;
         Entity entity = level.getEntity(armorStandId);
         if (entity instanceof ArmorStand armorStand) {
@@ -240,6 +304,8 @@ public class BastionData {
         tag.putUUID("bastionId", bastionId);
         tag.putString("team", team);
         tag.putString("name", name);
+        tag.putString("kind", kind.name());
+        tag.putBoolean("legacyCombined", legacyCombined);
         tag.putInt("x", position.getX());
         tag.putInt("y", position.getY());
         tag.putInt("z", position.getZ());
@@ -280,7 +346,9 @@ public class BastionData {
         int z = tag.getInt("z");
         BlockPos pos = new BlockPos(x, y, z);
 
-        BastionData data = new BastionData(bastionId, team, name, pos, level);
+        boolean hasKind = tag.contains("kind");
+        StructureKind kind = StructureKind.fromStorage(hasKind ? tag.getString("kind") : null);
+        BastionData data = new BastionData(bastionId, team, name, pos, level, kind);
         if (tag.contains("bastionNumber")) {
             data.setBastionNumber(tag.getInt("bastionNumber"));
         }
@@ -311,6 +379,19 @@ public class BastionData {
         data.ammoCrateBuilt = !tag.contains("ammoCrateBuilt") || tag.getBoolean("ammoCrateBuilt");
         data.habAvailableAt = tag.getLong("habAvailableAt");
         data.habDisabledUntil = tag.getLong("habDisabledUntil");
+
+        if (!hasKind) {
+            // 旧单一 FOB：视为 Radio，且若已建成 HAB 则保留可部署（legacyCombined）。
+            data.setKind(StructureKind.RADIO);
+            if (data.habBuilt) {
+                data.setLegacyCombined(true);
+            }
+        } else if (tag.contains("legacyCombined")) {
+            data.setLegacyCombined(tag.getBoolean("legacyCombined"));
+        }
+        if (data.isHab()) {
+            data.habBuilt = true;
+        }
 
         return data;
     }

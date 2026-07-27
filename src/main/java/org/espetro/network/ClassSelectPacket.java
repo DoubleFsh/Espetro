@@ -17,7 +17,6 @@ import org.espetro.team.GameStateManager;
 import org.espetro.team.OutpostManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.VoteManager;
-import org.espetro.vehicle.VehicleItems;
 
 import java.util.function.Supplier;
 
@@ -151,11 +150,7 @@ public class ClassSelectPacket {
                 ClassEquipment.equipPlayer(player, actualFactionId, classId, selectedVariantId);
             }
 
-            // 如果是指挥官，给予兵站建筑指令和载具部署木棍（若背包中没有）
-            if (VoteManager.getInstance().isCommander(player.getUUID())) {
-                giveBastionWandIfNeeded(player);
-                giveVehicleDeployStickIfNeeded(player);
-            }
+            // 部署入口统一在 Alt 轮盘，不再发放鱼竿/木棍
             org.espetro.team.TeamPackManager.getInstance().syncTeamPackItem(player);
 
             String team = countManager.getEffectivePlayerTeam(player.getUUID());
@@ -170,36 +165,4 @@ public class ClassSelectPacket {
         ctx.get().setPacketHandled(true);
     }
 
-    /**
-     * 若指挥官背包中没有兵站建筑指令，给予一个
-     */
-    private static void giveBastionWandIfNeeded(ServerPlayer player) {
-        if (BastionItems.BASTION_BUILDING_WAND == null) return;
-
-        for (ItemStack stack : player.getInventory().items) {
-            if (stack.getItem() == BastionItems.BASTION_BUILDING_WAND) return;
-        }
-
-        ItemStack wand = new ItemStack(BastionItems.BASTION_BUILDING_WAND);
-        player.getInventory().add(wand);
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§6你获得了 §e兵站建筑指令 §6！右键使用消耗木板建造兵站。"));
-    }
-
-    /**
-     * 若指挥官背包中没有载具部署木棍，给予一个
-     */
-    private static void giveVehicleDeployStickIfNeeded(ServerPlayer player) {
-        if (VehicleItems.VEHICLE_DEPLOY_STICK == null) return;
-
-        // 检查是否已有
-        for (ItemStack stack : player.getInventory().items) {
-            if (stack.getItem() == VehicleItems.VEHICLE_DEPLOY_STICK) return;
-        }
-
-        ItemStack stick = new ItemStack(VehicleItems.VEHICLE_DEPLOY_STICK);
-        stick.setHoverName(net.minecraft.network.chat.Component.literal("§e载具部署指令"));
-        player.getInventory().add(stick);
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§6你获得了 §e载具部署指令 §6！右键使用发送可点击部署信息。§7（/vehicle list 查看状态）"));
-    }
 }

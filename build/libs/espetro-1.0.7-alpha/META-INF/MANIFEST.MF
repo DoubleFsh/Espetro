@@ -1,9 +1,0 @@
-Manifest-Version: 1.0
-Specification-Title: espetro
-Specification-Vendor: 
-Specification-Version: 1
-Implementation-Title: espetro
-Implementation-Version: 1.0.7-alpha
-Implementation-Vendor: 
-Implementation-Timestamp: 2026-07-20T17:07:39+0800
-

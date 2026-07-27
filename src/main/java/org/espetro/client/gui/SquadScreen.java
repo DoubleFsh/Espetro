@@ -8,11 +8,17 @@ import org.espetro.network.UnifiedDeployScreenPacket;
 import se.mickelus.mutil.gui.GuiElement;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * 班组小队界面。
+ *
+ * 更新策略（tetra/mutil 风格）：树只建一次；
+ * 类别弹窗用 setVisible 切换；展开详情/选中态只重建对应子树；
+ * 仅当小队列表结构（id+成员）变化时整树 rebuild。
  */
 public class SquadScreen extends MutilScreen {
 
@@ -35,8 +41,14 @@ public class SquadScreen extends MutilScreen {
     private int mySquadId;
     private int selectedSquadId;
     private SquadNameField nameField;
-    private boolean choosingCategory;
     private String pendingSquadName = "";
+
+    // 保留引用做原地更新
+    private GuiElement categoryPopup;
+    private GuiElement detailContainer;
+    private int detailX, detailY, detailW, detailH;
+    private final Map<Integer, EspetroMutilWidgets.ActionButton> rowJoinButtons = new HashMap<>();
+    private final Map<Integer, EspetroMutilWidgets.ActionButton> rowDetailButtons = new HashMap<>();
 
     public SquadScreen(List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId, String team,
                        List<UnifiedDeployScreenPacket.SquadCategoryInfo> categories, Screen parent) {
@@ -57,6 +69,8 @@ public class SquadScreen extends MutilScreen {
         if (this.mySquadId == updatedMySquadId && this.squads.equals(nextSquads)) {
             return;
         }
+        boolean structureChanged = this.mySquadId != updatedMySquadId
+            || !squadStructureSignature(this.squads).equals(squadStructureSignature(nextSquads));
         this.squads.clear();
         this.squads.addAll(nextSquads);
         this.mySquadId = updatedMySquadId;
@@ -66,9 +80,29 @@ public class SquadScreen extends MutilScreen {
         if (parent instanceof UnifiedDeployScreen deployScreen) {
             deployScreen.updateSquads(updatedSquads, updatedMySquadId);
         }
-        if (root != null) {
-            rebuildMutilRoot();
+        if (root == null) {
+            return;
         }
+        if (structureChanged) {
+            rebuildMutilRoot();
+        } else {
+            // 仅成员职业名等展示字段变化：原地刷新行标签与详情
+            refreshSquadRowLabels();
+            rebuildDetailContainer();
+        }
+    }
+
+    /** 结构签名 = 小队 id + 成员 UUID 列表（忽略 className 等展示字段）。 */
+    private static List<Object> squadStructureSignature(List<UnifiedDeployScreenPacket.SquadInfo> list) {
+        List<Object> signature = new ArrayList<>();
+        for (UnifiedDeployScreenPacket.SquadInfo squad : list) {
+            signature.add(squad.id);
+            for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
+                signature.add(member.uuid);
+                signature.add(member.leader);
+            }
+        }
+        return signature;
     }
 
     public void updateFromDeployPacket(UnifiedDeployScreenPacket packet) {
@@ -90,6 +124,9 @@ public class SquadScreen extends MutilScreen {
 
     @Override
     protected void buildMutilRoot(GuiElement root) {
+        rowJoinButtons.clear();
+        rowDetailButtons.clear();
+
         int panelW = Math.max(250, Math.min(520, this.width - 12));
         int panelH = Math.max(154, Math.min(210, this.height - 12));
         int panelX = (this.width - panelW) / 2;
@@ -99,7 +136,7 @@ public class SquadScreen extends MutilScreen {
             PANEL_BG, EspetroMutilWidgets.BORDER));
 
         root.addChild(compactText(panelX + 5, panelY + 5,
-            "\u00a76\u00a7l班组小队", EspetroMutilWidgets.GOLD));
+            "§6§l班组小队", EspetroMutilWidgets.GOLD));
         root.addChild(compactText(panelX + 5, panelY + 14,
             EspetroMutilWidgets.teamPrefix(team) + EspetroMutilWidgets.teamName(team),
             EspetroMutilWidgets.teamColor(team)));
@@ -123,16 +160,25 @@ public class SquadScreen extends MutilScreen {
 
         int contentY = panelY + 40;
         int contentH = panelH - 45;
-        int detailW = Math.max(112, Math.min(210, (panelW - 14) / 2));
+        detailW = Math.max(112, Math.min(210, (panelW - 14) / 2));
         int listW = panelW - detailW - 13;
         int listX = panelX + 5;
-        int detailX = listX + listW + 3;
+        detailX = listX + listW + 3;
+        detailY = contentY;
+        detailH = contentH;
 
         buildSquadList(root, listX, contentY, listW, contentH);
-        buildDetails(root, detailX, contentY, detailW, contentH);
-        if (choosingCategory) {
-            buildCategoryPopup(root, panelX, panelY, panelW, panelH);
-        }
+
+        root.addChild(EspetroMutilWidgets.panel(detailX, detailY, detailW, detailH,
+            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
+        detailContainer = new GuiElement(0, 0, this.width, this.height);
+        root.addChild(detailContainer);
+        rebuildDetailContainer();
+
+        // 类别弹窗常驻构建，setVisible 切换（tetra 式：不为弹窗重建整树）
+        categoryPopup = buildCategoryPopup(panelX, panelY, panelW, panelH);
+        categoryPopup.setVisible(false);
+        root.addChild(categoryPopup);
     }
 
     private void buildSquadList(GuiElement root, int x, int y, int width, int height) {
@@ -153,51 +199,84 @@ public class SquadScreen extends MutilScreen {
         int rowY = 0;
         int buttonW = list.getWidth() - 18;
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
-            boolean joined = squad.id == mySquadId;
-            boolean full = squad.memberCount >= squad.maxMembers && !joined;
-            String count = "\u00a77[" + squad.memberCount + "/" + squad.maxMembers + "]";
-            String marker = firstCodePoint(squad.categoryId, squad.categoryDisplayName);
-            String label = (joined ? "\u00a7a" : full ? "\u00a7c" : "\u00a7f")
-                + squad.name + " " + count + (marker.isEmpty() ? "" : " \u00a76[" + marker + "]");
-
+            final int squadId = squad.id;
             EspetroMutilWidgets.ActionButton joinButton = compactButton(
-                0, rowY, buttonW, ROW_H, label, () -> NetworkManager.joinSquad(squad.id))
-                .setSelected(joined)
-                .setEnabled(!full)
-                .setTextColor(full ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
+                0, rowY, buttonW, ROW_H, squadRowLabel(squad),
+                () -> NetworkManager.joinSquad(squadId));
             list.addChild(joinButton);
+            rowJoinButtons.put(squadId, joinButton);
 
-            String triangle = squad.id == selectedSquadId ? "\u25bc" : "\u25b6";
             EspetroMutilWidgets.ActionButton detailButton = compactButton(
-                buttonW + 2, rowY, 12, ROW_H, triangle, () -> {
-                    selectedSquadId = selectedSquadId == squad.id ? NO_SQUAD : squad.id;
-                    rebuildMutilRoot();
-                })
-                .setSelected(squad.id == selectedSquadId)
+                buttonW + 2, rowY, 12, ROW_H, "▶", () -> toggleDetail(squadId))
                 .setTextColor(EspetroMutilWidgets.GOLD);
             list.addChild(detailButton);
+            rowDetailButtons.put(squadId, detailButton);
 
             rowY += ROW_H + GAP;
         }
+        refreshSquadRowLabels();
     }
 
-    private void buildDetails(GuiElement root, int x, int y, int width, int height) {
-        root.addChild(EspetroMutilWidgets.panel(x, y, width, height,
-            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
+    private String squadRowLabel(UnifiedDeployScreenPacket.SquadInfo squad) {
+        boolean joined = squad.id == mySquadId;
+        boolean full = squad.memberCount >= squad.maxMembers && !joined;
+        String count = "§7[" + squad.memberCount + "/" + squad.maxMembers + "]";
+        String marker = firstCodePoint(squad.categoryId, squad.categoryDisplayName);
+        return (joined ? "§a" : full ? "§c" : "§f")
+            + squad.name + " " + count + (marker.isEmpty() ? "" : " §6[" + marker + "]");
+    }
+
+    /** 原地刷新行按钮的标签/状态与展开三角。 */
+    private void refreshSquadRowLabels() {
+        for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
+            EspetroMutilWidgets.ActionButton join = rowJoinButtons.get(squad.id);
+            if (join != null) {
+                boolean joined = squad.id == mySquadId;
+                boolean full = squad.memberCount >= squad.maxMembers && !joined;
+                join.setLabel(squadRowLabel(squad))
+                    .setSelected(joined)
+                    .setEnabled(!full)
+                    .setTextColor(full ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
+            }
+            EspetroMutilWidgets.ActionButton detail = rowDetailButtons.get(squad.id);
+            if (detail != null) {
+                detail.setLabel(squad.id == selectedSquadId ? "▼" : "▶")
+                    .setSelected(squad.id == selectedSquadId);
+            }
+        }
+    }
+
+    /** 展开/收起详情：只重建详情子树 + 原地更新三角，不整树 rebuild。 */
+    private void toggleDetail(int squadId) {
+        selectedSquadId = selectedSquadId == squadId ? NO_SQUAD : squadId;
+        refreshSquadRowLabels();
+        rebuildDetailContainer();
+    }
+
+    /** 详情面板子树重建（背景板常驻，只换内容元素）。 */
+    private void rebuildDetailContainer() {
+        if (detailContainer == null) {
+            return;
+        }
+        detailContainer.clearChildren();
 
         UnifiedDeployScreenPacket.SquadInfo squad = findSquad(selectedSquadId);
         if (squad == null) {
             return;
         }
+        int x = detailX;
+        int y = detailY;
+        int width = detailW;
+        int height = detailH;
 
-        root.addChild(compactText(x + 4, y + 4, width - 8,
-            "\u00a76\u00a7l" + squad.name, EspetroMutilWidgets.GOLD, TEXT_SCALE));
-        root.addChild(compactText(x + 4, y + 13, width - 43,
-            "\u00a77成员 " + squad.memberCount + "/" + squad.maxMembers,
+        detailContainer.addChild(compactText(x + 4, y + 4, width - 8,
+            "§6§l" + squad.name, EspetroMutilWidgets.GOLD, TEXT_SCALE));
+        detailContainer.addChild(compactText(x + 4, y + 13, width - 43,
+            "§7成员 " + squad.memberCount + "/" + squad.maxMembers,
             EspetroMutilWidgets.MUTED, TEXT_SCALE));
 
         if (isLocalPlayerLeader(squad)) {
-            root.addChild(compactButton(x + width - 36, y + 11, 32, BUTTON_H,
+            detailContainer.addChild(compactButton(x + width - 36, y + 11, 32, BUTTON_H,
                 "删除", () -> NetworkManager.deleteSquad(squad.id))
                 .setTextColor(EspetroMutilWidgets.NEGATIVE));
         }
@@ -205,7 +284,7 @@ public class SquadScreen extends MutilScreen {
         ScrollableList detailList = new ScrollableList(x + 4, y + 25, width - 8, height - 29)
             .setScrollStep(8)
             .setAlwaysShowScrollbar(true);
-        root.addChild(detailList);
+        detailContainer.addChild(detailList);
 
         if (squad.members.isEmpty()) {
             detailList.addChild(compactText(0, 0, "暂无成员", EspetroMutilWidgets.MUTED));
@@ -237,7 +316,8 @@ public class SquadScreen extends MutilScreen {
         }
     }
 
-    private void buildCategoryPopup(GuiElement root, int panelX, int panelY, int panelW, int panelH) {
+    private GuiElement buildCategoryPopup(int panelX, int panelY, int panelW, int panelH) {
+        GuiElement popup = new GuiElement(0, 0, this.width, this.height);
         List<UnifiedDeployScreenPacket.SquadCategoryInfo> options = categories.isEmpty()
             ? List.of(new UnifiedDeployScreenPacket.SquadCategoryInfo("none", "无"))
             : categories;
@@ -247,25 +327,39 @@ public class SquadScreen extends MutilScreen {
         int popupH = 22 + visibleRows * rowH + 5;
         int x = panelX + 5;
         int y = Math.min(panelY + panelH - popupH - 5, panelY + 39);
-        root.addChild(EspetroMutilWidgets.panel(x, y, popupW, popupH,
+        // 点击拦截：弹窗打开时吞掉弹窗矩形内的空白点击，防止穿透到下层小队按钮。
+        // mutil 反序遍历子元素，此元素放最前 → 按钮优先响应，拦截兜底。
+        final int clickX = x, clickY = y, clickW = popupW, clickH = popupH;
+        popup.addChild(new GuiElement(clickX, clickY, clickW, clickH) {
+            @Override
+            public boolean onMouseClick(int mouseX, int mouseY, int button) {
+                return mouseX >= clickX && mouseX < clickX + clickW
+                    && mouseY >= clickY && mouseY < clickY + clickH;
+            }
+        });
+        popup.addChild(EspetroMutilWidgets.panel(x, y, popupW, popupH,
             0xF0181818, EspetroMutilWidgets.BORDER_ACTIVE));
-        root.addChild(compactText(x + 6, y + 6, "\u00a76\u00a7l选择小队类别",
+        popup.addChild(compactText(x + 6, y + 6, "§6§l选择小队类别",
             EspetroMutilWidgets.GOLD));
-        root.addChild(compactButton(x + popupW - 34, y + 4, 28, BUTTON_H,
-            "取消", () -> {
-                choosingCategory = false;
-                pendingSquadName = "";
-                rebuildMutilRoot();
-            }));
+        popup.addChild(compactButton(x + popupW - 34, y + 4, 28, BUTTON_H,
+            "取消", this::cancelCategoryPopup));
         ScrollableList list = new ScrollableList(x + 6, y + 22, popupW - 12, popupH - 28)
             .setScrollStep(BUTTON_H + 2)
             .setAlwaysShowScrollbar(options.size() > visibleRows);
-        root.addChild(list);
+        popup.addChild(list);
         int rowY = 0;
         for (UnifiedDeployScreenPacket.SquadCategoryInfo category : options) {
             list.addChild(compactButton(0, rowY, list.getWidth() - 12, BUTTON_H,
                 category.displayName, () -> finishCreate(category.id)));
             rowY += BUTTON_H + 2;
+        }
+        return popup;
+    }
+
+    private void cancelCategoryPopup() {
+        pendingSquadName = "";
+        if (categoryPopup != null) {
+            categoryPopup.setVisible(false);
         }
     }
 
@@ -299,15 +393,22 @@ public class SquadScreen extends MutilScreen {
     private void createSquad() {
         String name = nameField != null ? nameField.getValue() : "";
         pendingSquadName = name;
-        choosingCategory = true;
-        rebuildMutilRoot();
+        if (categoryPopup != null) {
+            categoryPopup.setVisible(true);
+        }
     }
 
     private void finishCreate(String categoryId) {
         NetworkManager.sendSquadCreateWithCategory(pendingSquadName, categoryId);
         pendingSquadName = "";
-        choosingCategory = false;
+        if (categoryPopup != null) {
+            categoryPopup.setVisible(false);
+        }
         if (nameField != null) nameField.clear();
+    }
+
+    private boolean isCategoryPopupOpen() {
+        return categoryPopup != null && categoryPopup.isVisible();
     }
 
     private UnifiedDeployScreenPacket.SquadInfo findSquad(int id) {
@@ -342,10 +443,8 @@ public class SquadScreen extends MutilScreen {
 
     @Override
     public void onClose() {
-        if (choosingCategory) {
-            choosingCategory = false;
-            pendingSquadName = "";
-            rebuildMutilRoot();
+        if (isCategoryPopupOpen()) {
+            cancelCategoryPopup();
             return;
         }
         returnToParent();

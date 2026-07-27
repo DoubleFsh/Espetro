@@ -58,9 +58,9 @@ public final class LogisticsConfig {
         @SerializedName("radio_teammate_radius")
         public double radioTeammateRadius = 30.0;
         @SerializedName("radio_teammate_count")
-        public int radioTeammateCount = 1;
+        public int radioTeammateCount = 0;
         @SerializedName("require_teammate")
-        public boolean requireTeammate = true;
+        public boolean requireTeammate = false;
         /** Radio 放置规则；未配置时由旧的 radio_* 平铺字段生成等价配置。 */
         public RadioPlacementSettings radio;
         @SerializedName("hab_construction_cost")
@@ -130,7 +130,7 @@ public final class LogisticsConfig {
         @SerializedName("cooldown_seconds")
         public int cooldownSeconds = -1;
         @SerializedName("required_planks")
-        public int requiredPlanks = -1;
+        public int requiredPlanks = 0;
         @SerializedName("creative_bypasses_planks")
         public boolean creativeBypassesPlanks = true;
         @SerializedName("max_active_per_team")
@@ -142,7 +142,7 @@ public final class LogisticsConfig {
         @SerializedName("exclusion_radius")
         public double exclusionRadius = 400.0;
         @SerializedName("teammate_count")
-        public int teammateCount = 1;
+        public int teammateCount = 0;
         @SerializedName("teammate_radius")
         public double teammateRadius = 30.0;
 

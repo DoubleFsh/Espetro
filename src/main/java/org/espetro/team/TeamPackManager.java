@@ -347,17 +347,49 @@ public class TeamPackManager {
     }
 
     public void syncTeamPackItem(ServerPlayer player) {
-        // 不再发放 Rally 部署包；仅清理历史遗留物品。部署只走 Alt 轮盘 + 小队长。
         applyInheritedLeaderCooldown(
             player.getUUID(),
             Espetro.getPlayerTeam(player),
             SquadManager.getInstance().getPlayerSquadId(player.getUUID()));
-        removeTeamPackItems(player);
+        // 非小队长不允许持有 Rally 部署包；小队长手里已领取的保留。
+        if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
+            removeTeamPackItems(player);
+        }
     }
 
     public void giveTeamPackItemIfNeeded(ServerPlayer player) {
-        // 兼容旧调用：不再给予物品，只移除。
-        removeTeamPackItems(player);
+        // 兼容旧调用：交给 syncTeamPackItem 的清理策略。
+        syncTeamPackItem(player);
+    }
+
+    /**
+     * 径向菜单「部署 Rally」：发放 1 个 Rally 部署包（信标 + NBT），背包限 1。
+     * 返回错误信息；null 表示已发放。
+     */
+    @Nullable
+    public String giveRallyItem(ServerPlayer player) {
+        if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase()
+            != org.espetro.team.GamePhase.BATTLE) {
+            return "§c只有战斗阶段才能部署 Rally。";
+        }
+        if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
+            return "§c只有小队长可以部署 Rally。";
+        }
+        for (ItemStack stack : player.getInventory().items) {
+            if (isTeamPackItem(stack)) {
+                return "§e你已经携带了一个 Rally 部署包，先放置它。";
+            }
+        }
+        if (isTeamPackItem(player.getInventory().offhand.get(0))) {
+            return "§e你已经携带了一个 Rally 部署包，先放置它。";
+        }
+        ItemStack stack = new ItemStack(Items.BEACON);
+        stack.getOrCreateTag().putBoolean(TEAM_PACK_ITEM_TAG, true);
+        stack.setHoverName(net.minecraft.network.chat.Component.literal("§bRally 部署包"));
+        if (!player.getInventory().add(stack)) {
+            player.drop(stack, false);
+        }
+        return null;
     }
 
     public void removeTeamPackItems(ServerPlayer player) {

@@ -243,7 +243,11 @@ final class EspetroMutilWidgets {
         }
 
         void setText(String value) {
-            this.value = value == null ? "" : value;
+            String next = value == null ? "" : value;
+            if (next.equals(this.value)) {
+                return; // 等值短路：避免无谓的宽度重算与视觉抖动
+            }
+            this.value = next;
             if (!fixedWidth) {
                 setWidth(Math.max(1, Math.round(
                     Minecraft.getInstance().font.width(stripFormatting(this.value)) * textScale)));
@@ -296,7 +300,11 @@ final class EspetroMutilWidgets {
         }
 
         void setText(String value) {
-            this.value = value == null ? "" : value;
+            String next = value == null ? "" : value;
+            if (next.equals(this.value)) {
+                return;
+            }
+            this.value = next;
             updateHeight();
         }
 
@@ -341,7 +349,10 @@ final class EspetroMutilWidgets {
         }
 
         ActionButton setLabel(String label) {
-            this.label = label == null ? "" : label;
+            String next = label == null ? "" : label;
+            if (!next.equals(this.label)) {
+                this.label = next;
+            }
             return this;
         }
 

@@ -17,13 +17,17 @@ import java.util.Map;
 public class SquadRadialMenuScreen extends MutilScreen {
 
     private static final ResourceLocation RADIO =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/radio.png");
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/radio_deploy.png");
+    private static final ResourceLocation HAB =
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/hab_deploy.png");
     private static final ResourceLocation RALLY =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/rally.png");
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/rally_deploy.png");
     private static final ResourceLocation CONSTRUCTION =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/construction_supply.png");
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/deposit_supply.png");
     private static final ResourceLocation AMMO =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/ammo_supply.png");
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/fob_status.png");
+    private static final ResourceLocation VEHICLE =
+        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/vehicle_deploy.png");
     private static final ResourceLocation COMMAND =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/commander_skills/command.png");
 
@@ -35,9 +39,13 @@ public class SquadRadialMenuScreen extends MutilScreen {
                                  List<CommanderSkillManager.SkillView> skills) {
         super(Component.literal("战术交互"));
         addTacticalOption("部署 Radio", RADIO, 128, RadialActionPacket.Action.DEPLOY_RADIO);
-        addTacticalOption("部署 Rally", RALLY, 256, RadialActionPacket.Action.DEPLOY_RALLY);
+        addTacticalOption("部署兵站", HAB, 128, RadialActionPacket.Action.DEPLOY_HAB);
+        addTacticalOption("部署 Rally", RALLY, 128, RadialActionPacket.Action.DEPLOY_RALLY);
         addTacticalOption("存入补给", CONSTRUCTION, 128, RadialActionPacket.Action.DEPOSIT_SUPPLIES);
-        addTacticalOption("查看 FOB 状态", AMMO, 128, RadialActionPacket.Action.FOB_STATUS);
+        addTacticalOption("查看 Radio 状态", AMMO, 128, RadialActionPacket.Action.FOB_STATUS);
+        if (commander) {
+            addTacticalOption("载具部署", VEHICLE, 128, RadialActionPacket.Action.DEPLOY_VEHICLE);
+        }
 
         if (commander && skills != null) {
             for (CommanderSkillManager.SkillView skill : skills) {

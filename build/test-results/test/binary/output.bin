@@ -1,9 +1,0 @@
-j2026-07-25 15:08:49,236 Test worker WARN Advanced terminal features are not available in this environment
-j[15:08:49] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
-y[15:08:51] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit9390743157206255389/compatible.json (Test)
-_[15:08:51] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
-w[15:08:51] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit9390743157206255389/overflow.json (Test)
-_[15:08:51] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
-�[15:08:51] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_slot 变体 default 的 equipment 槽位无效: not_a_slot
-#�[15:08:51] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_item 变体 default 物品参数解析失败: minecraft:does_not_exist 1 (Unknown item 'minecraft:does_not_exist' at position 0: <--[HERE])
-(�[15:08:51] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 illegal_count 变体 default 物品参数解析失败: minecraft:iron_sword abc (Expected integer at position 21: ...ron_sword <--[HERE])

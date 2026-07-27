@@ -129,12 +129,17 @@ public class BastionManager {
     }
 
     /**
-     * Radio 放置所需 Espetro 建材点数：logistics.radio.required_planks ≥ 0 时覆盖，否则 bastion.json。
-     * 与补给站 construction 点数同一体系（非任意原版木板）。
+     * Radio 放置始终免费（不消耗建材）。保留方法供 tooltip/旧调用兼容，恒为 0。
      */
     public int getEffectiveRadioRequiredConstruction() {
-        int configured = org.espetro.logistics.LogisticsConfig.get().getRadio().requiredPlanks;
-        return configured >= 0 ? Math.max(0, configured) : Math.max(0, requiredPlanks);
+        return 0;
+    }
+
+    /**
+     * 建造 HAB 所需建材点数（从覆盖 Radio 库存扣除）。
+     */
+    public int getHabConstructionCost() {
+        return Math.max(0, LogisticsConfig.get().habConstructionCost);
     }
 
     /**
@@ -159,55 +164,162 @@ public class BastionManager {
     }
 
     /**
-     * 创建兵站
-     * @param level 世界
-     * @param pos 位置
-     * @param team 队伍
-     * @param name 兵站名称
-     * @return 创建的兵站数据，失败返回null
+     * 兼容旧调用：创建 Radio。
      */
     public BastionData createBastion(ServerLevel level, BlockPos pos, String team, String name) {
-        if (!hasBastionCapacity(team)) {
-            Espetro.LOGGER.warn("队伍 {} 的生效兵站数量已达到上限 {}，拒绝创建: {} ({})",
+        return createStructure(level, pos, team, name, StructureKind.RADIO);
+    }
+
+    public BastionData createRadio(ServerLevel level, BlockPos pos, String team, String name) {
+        return createStructure(level, pos, team, name, StructureKind.RADIO);
+    }
+
+    public BastionData createHab(ServerLevel level, BlockPos pos, String team, String name) {
+        return createStructure(level, pos, team, name, StructureKind.HAB);
+    }
+
+    /**
+     * 创建 Radio 或 HAB。
+     * Radio 受每队上限约束；HAB 不占 Radio 上限。
+     */
+    public BastionData createStructure(ServerLevel level, BlockPos pos, String team, String name,
+                                       StructureKind kind) {
+        StructureKind structureKind = kind == null ? StructureKind.RADIO : kind;
+        if (structureKind == StructureKind.RADIO && !hasBastionCapacity(team)) {
+            Espetro.LOGGER.warn("队伍 {} 的生效 Radio 数量已达到上限 {}，拒绝创建: {} ({})",
                 team, getBastionLimitPerTeam(), name, pos);
             return null;
         }
 
-        BastionData bastion = new BastionData(team, name, pos, level);
+        BastionData bastion = new BastionData(team, name, pos, level, structureKind);
         bastion.setArmorStandPosition(pos.above());
+        if (structureKind == StructureKind.HAB) {
+            bastion.setHabBuilt(true);
+            long activationMs = LogisticsConfig.get().habActivationSeconds * 1000L;
+            bastion.setHabAvailableAt(System.currentTimeMillis() + Math.max(0L, activationMs));
+        }
 
         if (!registerBastionRecord(bastion)) {
-            Espetro.LOGGER.warn("兵站记录失败，拒绝创建: {} ({})", name, pos);
+            Espetro.LOGGER.warn("结构记录失败，拒绝创建: {} ({})", name, pos);
             return null;
         }
         bastion.setCoreHealth(armorStandHealth);
 
-        // 创建盔甲架实体
-        ArmorStand armorStand = createCoreArmorStand(level, pos.above(), team, name);
-        if (armorStand == null) {
-            releaseBastionRecord(bastion);
-            Espetro.LOGGER.error("无法创建盔甲架实体");
-            return null;
+        if (structureKind == StructureKind.RADIO) {
+            // Radio 核心就是玩家放置的方块本身，不生成任何实体
+            bastion.setArmorStandPosition(pos);
+            radioBlockPositions.put(pos.immutable(), bastion.getBastionId());
+        } else {
+            ArmorStand armorStand = createCoreArmorStand(level, pos.above(), team, name);
+            if (armorStand == null) {
+                releaseBastionRecord(bastion);
+                Espetro.LOGGER.error("无法创建盔甲架实体");
+                return null;
+            }
+            level.addFreshEntity(armorStand);
+            bastion.setArmorStandId(armorStand.getUUID());
+            registerCoreEntity(bastion);
+            bastion.setArmorStandPosition(armorStand.blockPosition());
         }
 
-        // 生成并添加到世界
-        level.addFreshEntity(armorStand);
-
-        bastion.setArmorStandId(armorStand.getUUID());
-        registerCoreEntity(bastion);
-        updateBastionArmorStandPosition(bastion, armorStand.blockPosition());
+        updateBastionArmorStandPosition(bastion, bastion.getArmorStandPosition());
         bastion.setActive(true);
 
         bastions.put(bastion.getBastionId(), bastion);
+        recomputeHabCoverage();
 
-        Espetro.LOGGER.info("创建兵站: {} (队伍: {}, 编号: {}, 盔甲架位置: {}, 盔甲架ID: {})",
-            name, team, bastion.getBastionNumber(), bastion.getArmorStandPosition(), armorStand.getUUID());
+        Espetro.LOGGER.info("创建{}: {} (队伍: {}, 编号: {}, 核心位置: {})",
+            structureKind, name, team, bastion.getBastionNumber(), bastion.getArmorStandPosition());
 
         return bastion;
     }
 
+    // Radio 方块位置 -> bastionId
+    private final Map<BlockPos, UUID> radioBlockPositions = new HashMap<>();
+
+    @Nullable
+    public BastionData findRadioByBlockPos(BlockPos pos) {
+        UUID id = radioBlockPositions.get(pos);
+        if (id != null) {
+            BastionData data = bastions.get(id);
+            if (data != null && data.isRadio()) {
+                return data;
+            }
+            radioBlockPositions.remove(pos);
+        }
+        // 兜底：按记录坐标线性查（读档后 map 为空时重建）
+        for (BastionData bastion : bastions.values()) {
+            if (bastion.isRadio() && bastion.isActive() && bastion.getPosition().equals(pos)) {
+                radioBlockPositions.put(pos.immutable(), bastion.getBastionId());
+                return bastion;
+            }
+        }
+        return null;
+    }
+
+    public void releaseRadioBlockRecord(BastionData bastion) {
+        if (bastion != null) {
+            radioBlockPositions.remove(bastion.getPosition());
+        }
+    }
+
     /**
-     * 获取玩家所属队伍的兵站列表
+     * 己方指挥/小队长收起 Radio：静默注销记录（不扣兵力、不播报摧毁）并清放置冷却。
+     */
+    public void retrieveRadio(BastionData bastion, UUID retrieverId) {
+        if (bastion == null || !bastion.isRadio()) {
+            return;
+        }
+        releaseRadioBlockRecord(bastion);
+        releaseBastionRecord(bastion);
+        bastion.setActive(false);
+        bastions.remove(bastion.getBastionId());
+        if (retrieverId != null) {
+            bastionCooldowns.remove(retrieverId);
+        }
+        Espetro.LOGGER.info("Radio {} 被 {} 收起", bastion.getName(), retrieverId);
+        recomputeHabCoverage();
+    }
+
+    /**
+     * 事件驱动重算所有 HAB 的覆盖缓存（Radio/HAB 增减时调用一次）。
+     * 覆盖状态变化时向所属队伍播报。
+     */
+    public void recomputeHabCoverage() {
+        double buildRadius = LogisticsConfig.get().radioBuildRadius;
+        double radiusSq = buildRadius * buildRadius;
+
+        List<BastionData> radios = new ArrayList<>();
+        for (BastionData bastion : bastions.values()) {
+            if (bastion.isActive() && bastion.isRadio()) {
+                radios.add(bastion);
+            }
+        }
+
+        for (BastionData hab : bastions.values()) {
+            if (!hab.isHab() || !hab.isActive()) {
+                continue;
+            }
+            boolean covered = false;
+            for (BastionData radio : radios) {
+                if (radio.getLevel() == hab.getLevel()
+                    && Objects.equals(radio.getTeam(), hab.getTeam())
+                    && radio.getPosition().distSqr(hab.getPosition()) <= radiusSq) {
+                    covered = true;
+                    break;
+                }
+            }
+            if (covered != hab.isHabCoveredCache()) {
+                hab.setHabCoveredCache(covered);
+                Espetro.broadcastToTeam(hab.getTeam(), covered
+                    ? "§a[兵站] §e" + hab.getName() + " §a已恢复 Radio 覆盖，可以复活。"
+                    : "§c[兵站] §e" + hab.getName() + " §c失去 Radio 覆盖，无法复活！");
+            }
+        }
+    }
+
+    /**
+     * 获取玩家所属队伍可部署的 HAB 列表（不含纯 Radio）。
      */
     public List<BastionData> getTeamBastions(String team) {
         List<BastionData> result = new ArrayList<>(MAX_BASTIONS);
@@ -221,18 +333,26 @@ public class BastionManager {
     }
 
     /**
-     * 获取所有兵站列表
+     * 获取所有结构列表（Radio + HAB）
      */
     public List<BastionData> getAllBastions() {
         return new ArrayList<>(bastions.values());
     }
 
+    /**
+     * 查找排斥半径内最近的 <strong>Radio</strong>（HAB 不参与 Radio 间距）。
+     */
     @Nullable
     public BastionData findNearestBastion(ServerLevel level, BlockPos pos, @Nullable String team, double radius) {
+        return findNearestRadio(level, pos, team, radius);
+    }
+
+    @Nullable
+    public BastionData findNearestRadio(ServerLevel level, BlockPos pos, @Nullable String team, double radius) {
         BastionData nearest = null;
         double bestDistance = radius * radius;
         for (BastionData bastion : bastions.values()) {
-            if (!bastion.isActive() || bastion.getLevel() != level
+            if (!bastion.isActive() || !bastion.isRadio() || bastion.getLevel() != level
                 || (team != null && !team.equals(bastion.getTeam()))) {
                 continue;
             }
@@ -245,30 +365,104 @@ public class BastionManager {
         return nearest;
     }
 
-    public void advanceFobConstruction(BastionData bastion) {
-        LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
-        if (!bastion.isHabBuilt()
-            && bastion.consumeConstructionSupplies(config.habConstructionCost)) {
-            bastion.setHabBuilt(true);
-            bastion.setHabAvailableAt(System.currentTimeMillis()
-                + config.habActivationSeconds * 1000L);
-            Espetro.broadcastToTeam(bastion.getTeam(),
-                "§a[FOB] §f" + bastion.getName() + " §a的 HAB 已建成，正在启用。");
+    /**
+     * 覆盖 pos 的己方活跃 Radio（同维度），按建材升序（最少优先）。
+     */
+    public List<BastionData> findCoveringRadios(ServerLevel level, BlockPos pos, String team) {
+        double buildRadius = LogisticsConfig.get().radioBuildRadius;
+        double radiusSq = buildRadius * buildRadius;
+        List<BastionData> covering = new ArrayList<>();
+        for (BastionData bastion : bastions.values()) {
+            if (!bastion.isActive() || !bastion.isRadio()
+                || bastion.getLevel() != level
+                || !Objects.equals(team, bastion.getTeam())) {
+                continue;
+            }
+            if (bastion.getPosition().distSqr(pos) <= radiusSq) {
+                covering.add(bastion);
+            }
         }
+        covering.sort(Comparator
+            .comparingInt(BastionData::getConstructionSupplies)
+            .thenComparing(b -> b.getBastionId().toString()));
+        return covering;
+    }
+
+    public boolean isInsideFriendlyRadioBuildRadius(ServerLevel level, BlockPos pos, String team) {
+        return !findCoveringRadios(level, pos, team).isEmpty();
+    }
+
+    /**
+     * 从覆盖 pos 的己方 Radio 原子扣除建材：优先库存最少者。总和不足则不扣并返回 false。
+     */
+    public boolean tryDebitConstructionFromCoveringRadios(ServerLevel level, BlockPos pos,
+                                                          String team, int amount) {
+        if (amount <= 0) {
+            return true;
+        }
+        List<BastionData> covering = findCoveringRadios(level, pos, team);
+        if (covering.isEmpty()) {
+            return false;
+        }
+        int total = 0;
+        for (BastionData radio : covering) {
+            total += radio.getConstructionSupplies();
+            if (total >= amount) {
+                break;
+            }
+        }
+        if (total < amount) {
+            return false;
+        }
+        int remaining = amount;
+        for (BastionData radio : covering) {
+            if (remaining <= 0) {
+                break;
+            }
+            int take = Math.min(remaining, radio.getConstructionSupplies());
+            if (take > 0 && radio.consumeConstructionSupplies(take)) {
+                remaining -= take;
+            }
+        }
+        return remaining <= 0;
+    }
+
+    public int sumConstructionInCoveringRadios(ServerLevel level, BlockPos pos, String team) {
+        int total = 0;
+        for (BastionData radio : findCoveringRadios(level, pos, team)) {
+            total += radio.getConstructionSupplies();
+        }
+        return total;
+    }
+
+    /**
+     * Radio 库存推进：仅自动建弹药箱，不再自动建 HAB。
+     */
+    public void advanceFobConstruction(BastionData bastion) {
+        if (bastion == null || !bastion.isActive() || !bastion.isRadio()) {
+            return;
+        }
+        LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
         if (!bastion.isAmmoCrateBuilt()
             && bastion.consumeConstructionSupplies(config.ammoCrateConstructionCost)) {
             bastion.setAmmoCrateBuilt(true);
             Espetro.broadcastToTeam(bastion.getTeam(),
-                "§b[FOB] §f" + bastion.getName() + " §b的弹药箱已建成。");
+                "§b[Radio] §f" + bastion.getName() + " §b的弹药箱已建成。");
         }
     }
 
     public boolean tryConsumeFobAmmunition(BastionData bastion, int amount) {
-        return bastion != null && bastion.isActive() && bastion.isAmmoCrateBuilt()
+        return bastion != null && bastion.isActive() && bastion.isRadio() && bastion.isAmmoCrateBuilt()
             && bastion.consumeAmmunitionSupplies(Math.max(0, amount));
     }
 
     public String getFobStatus(BastionData bastion) {
+        if (bastion == null) {
+            return "无效";
+        }
+        if (bastion.isRadio() && !bastion.isLegacyCombined()) {
+            return bastion.isAmmoCrateBuilt() ? "Radio 弹药箱可用" : "Radio 等待弹药箱";
+        }
         if (!bastion.isHabBuilt()) {
             return "HAB 待建造";
         }
@@ -279,7 +473,25 @@ public class BastionManager {
         if (bastion.getHabDisabledUntil() > now) {
             return "HAB 被压制 " + ((bastion.getHabDisabledUntil() - now + 999L) / 1000L) + "s";
         }
+        if (bastion.isHab() && !isCoveredByFriendlyRadio(bastion)) {
+            return "HAB 无 Radio 覆盖";
+        }
         return "HAB 可部署";
+    }
+
+    /** HAB 或旧版合并 FOB 是否仍被己方 Radio 建造半径覆盖。 */
+    public boolean isCoveredByFriendlyRadio(BastionData hab) {
+        if (hab == null || !hab.isActive()) {
+            return false;
+        }
+        if (hab.isRadio() && hab.isLegacyCombined()) {
+            return true;
+        }
+        if (!hab.isHab()) {
+            return false;
+        }
+        // 读事件驱动缓存（recomputeHabCoverage 在结构增减时更新）
+        return hab.isHabCoveredCache();
     }
 
     /**
@@ -323,9 +535,9 @@ public class BastionManager {
             return;
         }
 
-        if (!bastion.isActive() && !hasBastionCapacity(bastion.getTeam())) {
+        if (!bastion.isActive() && bastion.isRadio() && !hasBastionCapacity(bastion.getTeam())) {
             bastion.setActive(false);
-            Espetro.LOGGER.warn("兵站 {} 无法重新激活：队伍 {} 的生效兵站数量已达上限",
+            Espetro.LOGGER.warn("Radio {} 无法重新激活：队伍 {} 的生效 Radio 数量已达上限",
                 bastion.getName(), bastion.getTeam());
             return;
         }
@@ -349,40 +561,76 @@ public class BastionManager {
      * 统一摧毁兵站，负责释放编号、移除核心实体、广播和扣兵力。
      */
     public void destroyBastion(BastionData bastion, @Nullable Entity attacker) {
-        destroyBastion(bastion, attacker, true);
+        destroyBastion(bastion, attacker, true, null);
+    }
+
+    /**
+     * 摧毁并显式指定是否扣兵力（己方拆 Radio 时传 false）。
+     * 独立命名避免与私有 (…, boolean removeLoadedCoreEntity) 重载因装箱歧义误分派。
+     */
+    public void destroyBastionWithManpower(BastionData bastion, @Nullable Entity attacker,
+                                           boolean deductManpower) {
+        destroyBastion(bastion, attacker, true, deductManpower);
     }
 
     private void destroyBastion(BastionData bastion, @Nullable Entity attacker, boolean removeLoadedCoreEntity) {
+        destroyBastion(bastion, attacker, removeLoadedCoreEntity, null);
+    }
+
+    private void destroyBastion(BastionData bastion, @Nullable Entity attacker,
+                                boolean removeLoadedCoreEntity, @Nullable Boolean manpowerOverride) {
         if (bastion == null || !bastion.isActive()) {
             return;
         }
 
         String bastionName = bastion.getName();
         String bastionTeam = bastion.getTeam();
+        boolean radio = bastion.isRadio();
+        // 旧合并 FOB 仍按 Radio 扣兵力；纯 HAB 不扣；己方拆 Radio 可 override 为不扣。
+        boolean deductManpower = manpowerOverride != null ? manpowerOverride : radio;
 
         if (removeLoadedCoreEntity) {
             removeCoreEntityIfLoaded(bastion, true);
         }
-
-        setBastionActive(bastion, false);
-
-        int penalty = getDestroyTroopPenalty();
-        org.espetro.team.TroopCountManager troopManager = org.espetro.team.TroopCountManager.getInstance();
-        if ("ATTACK".equals(bastionTeam)) {
-            troopManager.modifyAttackTroops(-penalty);
-        } else {
-            troopManager.modifyDefendTroops(-penalty);
+        if (radio) {
+            releaseRadioBlockRecord(bastion);
         }
 
-        Espetro.LOGGER.info("兵站 {} 被摧毁！攻击者={}", bastionName, attacker == null ? "unknown" : attacker.getName().getString());
-        Espetro.broadcastToTeam(bastionTeam, "§c[兵站] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
-        String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-        Espetro.broadcastToTeam(enemyTeam, "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
+        setBastionActive(bastion, false);
+        if (radio) {
+            recomputeHabCoverage();
+        }
+
+        String attackerName = attacker == null ? "unknown" : attacker.getName().getString();
+        if (deductManpower) {
+            int penalty = getDestroyTroopPenalty();
+            org.espetro.team.TroopCountManager troopManager = org.espetro.team.TroopCountManager.getInstance();
+            if ("ATTACK".equals(bastionTeam)) {
+                troopManager.modifyAttackTroops(-penalty);
+            } else {
+                troopManager.modifyDefendTroops(-penalty);
+            }
+            Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
+            Espetro.broadcastToTeam(bastionTeam,
+                "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
+            String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
+            Espetro.broadcastToTeam(enemyTeam,
+                "§a[Radio] 敌方 Radio §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
+        } else {
+            Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
+            Espetro.broadcastToTeam(bastionTeam,
+                "§c[兵站] §e" + bastionName + " §c已被摧毁！无法再从此点复活（不扣兵力）。");
+            String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
+            Espetro.broadcastToTeam(enemyTeam,
+                "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！");
+        }
 
         ServerPlayer commander = findCommanderForTeam(bastionTeam);
         if (commander != null) {
             commander.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
+                deductManpower
+                    ? "§c你的 Radio §e" + bastionName + " §c已被摧毁！"
+                    : "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
             ));
         }
     }
@@ -504,6 +752,7 @@ public class BastionManager {
         }
         bastions.clear();
         bastionIdsByArmorStand.clear();
+        radioBlockPositions.clear();
         waitingPlayers.clear();
         deathWaitingPlayers.clear();
         playerDeployPoints.clear();
@@ -537,12 +786,12 @@ public class BastionManager {
     }
 
     /**
-     * 获取当前所有队伍生效兵站数量。
+     * 获取当前所有队伍生效 Radio 数量。
      */
     public int getActiveBastionCount() {
         int count = 0;
         for (BastionData bastion : bastions.values()) {
-            if (bastion.isActive()) {
+            if (bastion.isActive() && bastion.isRadio()) {
                 count++;
             }
         }
@@ -550,12 +799,13 @@ public class BastionManager {
     }
 
     /**
-     * 获取指定队伍当前生效兵站数量。
+     * 获取指定队伍当前生效 <strong>Radio</strong> 数量（HAB 不占上限）。
      */
     public int getActiveBastionCount(String team) {
         int count = 0;
         for (BastionData bastion : bastions.values()) {
-            if (bastion.isActive() && Objects.equals(team, bastion.getTeam())) {
+            if (bastion.isActive() && bastion.isRadio()
+                && Objects.equals(team, bastion.getTeam())) {
                 count++;
             }
         }
@@ -608,6 +858,10 @@ public class BastionManager {
         if (!bastion.isActive()) {
             return false;
         }
+        // 纯 Radio 不可作为复活点；旧合并 FOB 或 HAB 才可。
+        if (bastion.isRadio() && !bastion.isLegacyCombined()) {
+            return false;
+        }
         if (!bastionRecordPositions.containsKey(bastion.getBastionId()) && !registerBastionRecord(bastion)) {
             return false;
         }
@@ -621,6 +875,12 @@ public class BastionManager {
     }
 
     public boolean isHabOperational(BastionData bastion) {
+        if (bastion == null || !bastion.isActive()) {
+            return false;
+        }
+        if (bastion.isRadio() && !bastion.isLegacyCombined()) {
+            return false;
+        }
         if (!bastion.isHabBuilt()) {
             return false;
         }
@@ -629,11 +889,19 @@ public class BastionManager {
             return false;
         }
 
-        float maximum = Math.max(1.0f, armorStandHealth);
-        float healthPercent = bastion.getCoreHealth() * 100.0f / maximum;
-        if (healthPercent <= LogisticsConfig.get().habDisableRadioHealth) {
-            bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+        // HAB 必须仍在己方 Radio 建造半径内（旧合并 FOB 除外）。
+        if (bastion.isHab() && !isCoveredByFriendlyRadio(bastion)) {
             return false;
+        }
+
+        // Radio 现为方块无血量：覆盖判定即足够；旧合并 FOB 仍按自身盔甲架血量压制。
+        if (!bastion.isHab()) {
+            float maximum = Math.max(1.0f, armorStandHealth);
+            float healthPercent = bastion.getCoreHealth() * 100.0f / maximum;
+            if (healthPercent <= LogisticsConfig.get().habDisableRadioHealth) {
+                bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+                return false;
+            }
         }
 
         if (isHabProxied(bastion)) {

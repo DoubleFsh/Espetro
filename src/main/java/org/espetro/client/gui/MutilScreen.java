@@ -6,6 +6,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
 abstract class MutilScreen extends Screen {
 
     protected GuiElement root;
@@ -13,6 +18,66 @@ abstract class MutilScreen extends Screen {
     private boolean rebuildingRoot;
     /** 教程预览：打开阶段 GUI 但禁用业务交互与发包。 */
     protected boolean tutorialPreviewMode;
+
+    // ==================== 动态更新框架 ====================
+    // 结构签名：数据包到达时先比签名；相同走原地更新，不同才 rebuild。
+    private Object structureSignature;
+    // 每秒节流闸：本地倒计时/冷却标签统一走它，杜绝每 tick 改字符串。
+    private long lastThrottleEpochSec = -1;
+    // 动态绑定用独立计数器：不与子类可见的 onceEverySecond() 共享，避免互相消耗闸值。
+    private long lastBindingEpochSec = -1;
+    // 动态标签注册表：buildMutilRoot 里 bindDynamic 注册，tick 每秒统一刷新。
+    private final List<DynamicBinding> dynamicBindings = new ArrayList<>();
+
+    private record DynamicBinding(EspetroMutilWidgets.Text widget, Supplier<String> supplier) {
+    }
+
+    /**
+     * 比较结构签名：不同则记录并请求延迟 rebuild，返回 true；
+     * 相同返回 false，调用方应转为原地更新已保留的 widget。
+     */
+    protected final boolean updateStructure(Object newSignature) {
+        if (Objects.equals(structureSignature, newSignature)) {
+            return false;
+        }
+        structureSignature = newSignature;
+        rebuildMutilRoot();
+        return true;
+    }
+
+    /** 当前记录的结构签名（rebuild 后仍保留，供子类比对）。 */
+    protected final Object getStructureSignature() {
+        return structureSignature;
+    }
+
+    /** 每客户端 tick 至多每秒返回一次 true；用于节流倒计时文案更新。 */
+    protected final boolean onceEverySecond() {
+        long epochSec = System.currentTimeMillis() / 1000L;
+        if (epochSec == lastThrottleEpochSec) {
+            return false;
+        }
+        lastThrottleEpochSec = epochSec;
+        return true;
+    }
+
+    /**
+     * 注册动态文本：每秒自动 setText(supplier.get())。
+     * 必须在 buildMutilRoot 内调用（rebuild 会清空注册表后重新构建）。
+     */
+    protected final EspetroMutilWidgets.Text bindDynamic(
+            EspetroMutilWidgets.Text widget, Supplier<String> supplier) {
+        dynamicBindings.add(new DynamicBinding(widget, supplier));
+        return widget;
+    }
+
+    private void refreshDynamicBindings() {
+        for (DynamicBinding binding : dynamicBindings) {
+            String next = binding.supplier.get();
+            if (next != null) {
+                binding.widget.setText(next);
+            }
+        }
+    }
 
     protected MutilScreen(Component title) {
         super(title);
@@ -46,6 +111,7 @@ abstract class MutilScreen extends Screen {
             return;
         }
         rebuildingRoot = true;
+        dynamicBindings.clear();
         GuiElement newRoot = new GuiElement(0, 0, this.width, this.height);
         buildMutilRoot(newRoot);
         this.root = newRoot;
@@ -61,6 +127,13 @@ abstract class MutilScreen extends Screen {
         }
         if (root != null) {
             root.updateAnimations();
+        }
+        if (!dynamicBindings.isEmpty()) {
+            long epochSec = System.currentTimeMillis() / 1000L;
+            if (epochSec != lastBindingEpochSec) {
+                lastBindingEpochSec = epochSec;
+                refreshDynamicBindings();
+            }
         }
     }
 

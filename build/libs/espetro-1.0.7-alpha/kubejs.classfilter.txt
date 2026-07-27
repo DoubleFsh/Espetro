@@ -1,3 +1,0 @@
-+org.espetro
-+com.example.espoints
-+se.mickelus.mutil

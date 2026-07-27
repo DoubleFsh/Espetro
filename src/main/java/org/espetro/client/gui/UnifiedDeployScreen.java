@@ -52,13 +52,13 @@ public class UnifiedDeployScreen extends MutilScreen {
     private static final int BTN_BG_DISABLED = 0xFF181B1D;
     private static final int BTN_BORDER      = 0xFF59605E;
     private static final int BTN_TEXT        = 0xFFFFFF;
-    /** 标题/底栏/列面板：完全不透明，挡住 isPauseScreen=false 时透出的世界（防 Embeddium 叠影）。 */
-    private static final int CHROME_BG       = 0xFF16191B;
-    private static final int PANEL_LEFT_BG   = 0xFF171A1C;
-    private static final int PANEL_CENTER_BG = 0xFF121517;
-    private static final int PANEL_MAP_FOOTER_BG = 0xFF101416;
-    /** 全屏深黑灰遮罩：J 键主 GUI 专用，阶段投票 UI 不走此路径。 */
-    private static final int SCREEN_SHADE    = 0xFF121517;
+    /** J 键主 GUI 的所有非地图背景统一使用不透明纯黑，避免世界画面穿透或色块交替闪烁。 */
+    private static final int CHROME_BG       = 0xFF000000;
+    private static final int PANEL_LEFT_BG   = 0xFF000000;
+    private static final int PANEL_CENTER_BG = 0xFF000000;
+    private static final int PANEL_MAP_FOOTER_BG = 0xFF000000;
+    private static final int SCREEN_SHADE    = 0xFF000000;
+    private static final int STATIC_DIVIDER = 0xFF3A3F3D;
     private static final Pattern COORDINATE_PATTERN =
         Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final ResourceLocation HAB_ICON =
@@ -90,10 +90,15 @@ public class UnifiedDeployScreen extends MutilScreen {
     private long outpostRedeployCooldownEndsAt;
     private GovernanceStatePacket governanceState = new GovernanceStatePacket(List.of());
     private long governanceReceivedAtMs;
-    /** 上一帧已刷新过的 epoch 秒，用于把 Rally/冷却文案节流到每秒一次。 */
-    private int lastDynamicLabelEpochSec = -1;
-    /** 同 tick 内多次结构更新只 rebuild 一次。 */
-    private boolean structureRebuildQueued;
+    /** 数据事件只使相关区域失效；下一客户端 tick 合并后局部重建。 */
+    private enum Section {
+        SQUAD,
+        CLASS,
+        DEPLOY,
+        MAP_CONTROLS,
+        STATUS
+    }
+    private final EnumSet<Section> dirtySections = EnumSet.noneOf(Section.class);
 
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
@@ -110,7 +115,6 @@ public class UnifiedDeployScreen extends MutilScreen {
     private EspButton outpostRedeployButton;
     private EspButton confirmDeployButton;
     private PlainText statusText;
-    private PlainText deployTitleText;
     private PlainText statusTimerText;
     private PlainText governanceTimerText;
     private String pendingDeployPosition;
@@ -139,8 +143,13 @@ public class UnifiedDeployScreen extends MutilScreen {
     private ScrollableList classScrollList;
     private ScrollableList deployScrollList;
     private ScrollableList squadScrollList;
-    private Double pendingSquadScrollOffset;
-    private Double pendingDeployScrollOffset;
+
+    // ===== 可独立重建的区域容器 =====
+    private GuiElement squadSectionRoot;
+    private GuiElement classSectionRoot;
+    private GuiElement deploySectionRoot;
+    private GuiElement mapControlsRoot;
+    private GuiElement statusSectionRoot;
 
     // ===== 区域边界 =====
     private int leftX, leftY, leftW, leftH;
@@ -200,7 +209,8 @@ public class UnifiedDeployScreen extends MutilScreen {
                 if (!Objects.equals(a.id, b.id)
                     || !Objects.equals(a.type, b.type)
                     || !Objects.equals(a.name, b.name)
-                    || !Objects.equals(a.pos, b.pos)) {
+                    || !Objects.equals(a.pos, b.pos)
+                    || !Objects.equals(a.status, b.status)) {
                     structureChanged = true;
                     break;
                 }
@@ -209,9 +219,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         bastions.clear();
         bastions.addAll(next);
         if (structureChanged) {
-            if (root != null) {
-                rebuildGuiPreservingDeployAndSquadScroll();
-            }
+            invalidateSections(Section.DEPLOY, Section.STATUS);
             return;
         }
         // 结构相同：只刷新 Rally 时间戳与 label。
@@ -246,12 +254,6 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
         refreshRallyWaveLabels();
         refreshConfirmDeployButton();
-    }
-
-    private void rebuildGuiPreservingDeployAndSquadScroll() {
-        pendingSquadScrollOffset = squadScrollList != null ? squadScrollList.getOffset() : 0;
-        pendingDeployScrollOffset = deployScrollList != null ? deployScrollList.getOffset() : 0;
-        queueStructureRebuild();
     }
 
     public void updateClassCounts(Map<String, Integer> counts) {
@@ -313,10 +315,9 @@ public class UnifiedDeployScreen extends MutilScreen {
         if (nextClasses != null) {
             classGridChanged = !classGridEquals(this.classes, nextClasses);
             classDataChanged = !classDisplayStateEquals(this.classes, nextClasses);
-            if (classGridChanged || classDataChanged) {
-                this.classes.clear();
-                this.classes.addAll(nextClasses);
-            }
+            // 即使按钮展示态相同，也采用最新描述与装备预览；替换数据本身不会动 GUI 树。
+            this.classes.clear();
+            this.classes.addAll(nextClasses);
         }
         if (countsChanged) {
             this.classCounts.clear();
@@ -328,22 +329,35 @@ public class UnifiedDeployScreen extends MutilScreen {
         if (!classGridChanged && !classDataChanged && !countsChanged && !variantsChanged) {
             return;
         }
-        if (classGridChanged && root != null) {
-            rebuildGuiPreservingDeployAndSquadScroll();
+        if (classGridChanged) {
+            closeVariantPopup();
+            activePreviewClassIndex = -1;
+            activePreviewVariantId = null;
+            previewGraceDeadlineMs = 0L;
+            invalidateSections(Section.CLASS);
             return;
         }
         refreshClassButtons();
     }
 
-    /** 职业按钮网格结构（数量 + classId 顺序）。 */
+    /** 职业交互结构（职业及其变体的数量、ID 与顺序）。 */
     private static boolean classGridEquals(
             List<UnifiedDeployScreenPacket.ClassInfo> a,
             List<UnifiedDeployScreenPacket.ClassInfo> b) {
         if (a == b) return true;
         if (a == null || b == null || a.size() != b.size()) return false;
         for (int i = 0; i < a.size(); i++) {
-            if (!Objects.equals(a.get(i).classId, b.get(i).classId)) {
+            UnifiedDeployScreenPacket.ClassInfo x = a.get(i);
+            UnifiedDeployScreenPacket.ClassInfo y = b.get(i);
+            if (!Objects.equals(x.classId, y.classId)
+                || x.variants.size() != y.variants.size()) {
                 return false;
+            }
+            for (int v = 0; v < x.variants.size(); v++) {
+                if (!Objects.equals(
+                    x.variants.get(v).variantId, y.variants.get(v).variantId)) {
+                    return false;
+                }
             }
         }
         return true;
@@ -389,12 +403,11 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     public void updateTimeRemaining(int seconds) {
+        boolean statusLayoutChanged = (deployTimeRemaining < 0) != (seconds < 0);
         anchorDeployTimer(seconds);
-        if (deployTitleText != null) {
-            deployTitleText.setText(buildDeployTitle());
-        }
-        if (statusTimerText != null) {
-            statusTimerText.setText(formatTime(seconds));
+        refreshTitleTimer();
+        if (statusLayoutChanged) {
+            invalidateSections(Section.STATUS);
         }
     }
 
@@ -416,9 +429,6 @@ public class UnifiedDeployScreen extends MutilScreen {
         if (this.mySquadId == updatedMySquadId && this.squads.equals(nextSquads)) {
             return;
         }
-        // 仅成员职业名等展示态变化：更新内存，不 rebuild 整页（避免选职时高度闪烁）。
-        boolean structureChanged = this.mySquadId != updatedMySquadId
-            || !squadListStructureEquals(this.squads, nextSquads);
         this.squads.clear();
         this.squads.addAll(nextSquads);
         Set<Integer> availableSquadIds = new HashSet<>();
@@ -427,13 +437,12 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
         expandedSquadIds.retainAll(availableSquadIds);
         this.mySquadId = updatedMySquadId;
-        if (root == null) {
-            return;
+        // 成员职业、人数或结构变化都只重建班组区域，其他区域保持原树不动。
+        invalidateSections(Section.SQUAD);
+        if (statusText != null) {
+            statusText.setText(buildStatusText());
         }
-        if (structureChanged) {
-            rebuildGuiPreservingSquadScroll();
-        }
-        // 结构未变时只刷职业按钮（小队作用域人数/禁用态）；结构变时 rebuild 已重建职业区。
+        // 入队状态会影响职业按钮是否可用，但无需重建职业网格。
         refreshClassButtons();
     }
 
@@ -442,8 +451,8 @@ public class UnifiedDeployScreen extends MutilScreen {
         governanceState = packet == null ? new GovernanceStatePacket(List.of()) : packet;
         governanceReceivedAtMs = System.currentTimeMillis();
         GovernanceStatePacket.TeamState current = activeGovernance();
-        if (root != null && !sameGovernanceLayout(previous, current)) {
-            rebuildGuiPreservingSquadScroll();
+        if (!sameGovernanceLayout(previous, current)) {
+            invalidateSections(Section.MAP_CONTROLS);
         } else if (governanceTimerText != null && current != null) {
             governanceTimerText.setText("\u00a7e剩余 " + current.remainingSeconds + "s");
         }
@@ -457,73 +466,6 @@ public class UnifiedDeployScreen extends MutilScreen {
             && Objects.equals(a.commander, b.commander)
             && Objects.equals(a.challenger, b.challenger)
             && Objects.equals(a.volunteers, b.volunteers);
-    }
-
-    /**
-     * 小队列表结构是否相同（忽略成员 className，避免选职导致整页 rebuild 闪烁）。
-     * 比较：小队 id/名/队长/人数上限/锁定，以及成员 playerName + leader/commander 顺序。
-     */
-    private static boolean squadListStructureEquals(
-            List<UnifiedDeployScreenPacket.SquadInfo> a,
-            List<UnifiedDeployScreenPacket.SquadInfo> b) {
-        if (a == b) {
-            return true;
-        }
-        if (a == null || b == null || a.size() != b.size()) {
-            return false;
-        }
-        for (int i = 0; i < a.size(); i++) {
-            if (!squadStructureEquals(a.get(i), b.get(i))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean squadStructureEquals(
-            UnifiedDeployScreenPacket.SquadInfo a,
-            UnifiedDeployScreenPacket.SquadInfo b) {
-        if (a == b) {
-            return true;
-        }
-        if (a == null || b == null) {
-            return false;
-        }
-        if (a.id != b.id
-            || a.memberCount != b.memberCount
-            || a.maxMembers != b.maxMembers
-            || a.isLocked != b.isLocked
-            || !Objects.equals(a.name, b.name)
-            || !Objects.equals(a.leaderName, b.leaderName)
-            || !Objects.equals(a.categoryId, b.categoryId)
-            || !Objects.equals(a.categoryDisplayName, b.categoryDisplayName)) {
-            return false;
-        }
-        List<UnifiedDeployScreenPacket.SquadMemberInfo> am = a.members;
-        List<UnifiedDeployScreenPacket.SquadMemberInfo> bm = b.members;
-        if (am == bm) {
-            return true;
-        }
-        if (am == null || bm == null || am.size() != bm.size()) {
-            return false;
-        }
-        for (int i = 0; i < am.size(); i++) {
-            UnifiedDeployScreenPacket.SquadMemberInfo x = am.get(i);
-            UnifiedDeployScreenPacket.SquadMemberInfo y = bm.get(i);
-            if (x == y) {
-                continue;
-            }
-            if (x == null || y == null) {
-                return false;
-            }
-            // 故意忽略 className：队友换职业不应触发整页重建。
-            if (x.leader != y.leader
-                || x.commander != y.commander
-                || !Objects.equals(x.playerName, y.playerName)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     // ==================== 自定义按钮 ====================
@@ -703,66 +645,136 @@ public class UnifiedDeployScreen extends MutilScreen {
     @Override
     protected void buildMutilRoot(GuiElement root) {
         this.root = root;
+        dirtySections.clear();
         populateGui();
-        if (pendingSquadScrollOffset != null && squadScrollList != null) {
-            squadScrollList.setOffset(pendingSquadScrollOffset);
-        }
-        if (pendingDeployScrollOffset != null && deployScrollList != null) {
-            deployScrollList.setOffset(pendingDeployScrollOffset);
-        }
-        pendingSquadScrollOffset = null;
-        pendingDeployScrollOffset = null;
         // 打开包已携带服务端最新人数，后续变更也由服务端主动推送，
         // 不再打开界面后立即发起第二次请求。
-    }
-
-    private void rebuildGui() {
-        rebuildMutilRoot();
     }
 
     private void populateGui() {
         this.outpostRedeployButton = null;
         this.confirmDeployButton = null;
         this.statusText = null;
-        this.deployTitleText = null;
         this.statusTimerText = null;
         this.governanceTimerText = null;
         computeRegions();
 
         buildTitleBar();
-        buildDividerLine(TITLE_H);
 
-        // 左/中列不透明底，挡住背后世界与聊天；地图视口不铺半透明盖层（地图在 renderBefore 绘制）。
+        // 所有非地图区域使用同一层不透明纯黑底；地图视口由桥接渲染器逐帧绘制。
         root.addChild(new GuiRect(leftX, leftY, leftW, leftH, PANEL_LEFT_BG));
         root.addChild(new GuiRect(centerX, centerY, centerW, centerH, PANEL_CENTER_BG));
         root.addChild(new GuiRect(mapX, mapY + Math.max(0, mapH - MAP_FOOTER_H),
             mapW, MAP_FOOTER_H, PANEL_MAP_FOOTER_BG));
 
-        buildSquadSection();
-        buildClassSection();
-        root.addChild(new GuiRect(centerX + 3, deployAreaY - 3, centerW - 6, 1, 0xFF3A3F3D));
-        buildDeploySection();
+        squadSectionRoot = new GuiElement(0, 0, this.width, this.height);
+        classSectionRoot = new GuiElement(0, 0, this.width, this.height);
+        deploySectionRoot = new GuiElement(0, 0, this.width, this.height);
+        mapControlsRoot = new GuiElement(0, 0, this.width, this.height);
+        statusSectionRoot = new GuiElement(0, 0, this.width, this.height);
 
-        root.addChild(new GuiRect(leftX + leftW, TITLE_H + 2, 1,
-            this.height - TITLE_H - STATUS_BAR_H - 4, 0xFF3A3F3D));
-        root.addChild(new GuiRect(centerX + centerW, TITLE_H + 2, 1,
-            this.height - TITLE_H - STATUS_BAR_H - 4, 0xFF3A3F3D));
-
-        buildMapPanel();
-        buildStatusBar();
+        root.addChild(squadSectionRoot);
+        buildSquadSection(squadSectionRoot);
+        root.addChild(classSectionRoot);
+        buildClassSection(classSectionRoot);
+        root.addChild(deploySectionRoot);
+        buildDeploySection(deploySectionRoot);
+        root.addChild(mapControlsRoot);
+        buildMapPanel(mapControlsRoot);
+        root.addChild(statusSectionRoot);
+        buildStatusBar(statusSectionRoot);
     }
 
-    private void rebuildGuiPreservingSquadScroll() {
-        pendingSquadScrollOffset = squadScrollList == null ? 0 : squadScrollList.getOffset();
-        queueStructureRebuild();
-    }
-
-    private void queueStructureRebuild() {
-        if (structureRebuildQueued) {
+    private void invalidateSections(Section... sections) {
+        if (root == null) {
             return;
         }
-        structureRebuildQueued = true;
-        rebuildGui();
+        dirtySections.addAll(Arrays.asList(sections));
+    }
+
+    /** 在 tick 边界合并同一批数据事件，避免渲染遍历期间替换 MUtil 子树。 */
+    private void flushDirtySections() {
+        if (dirtySections.isEmpty()) {
+            return;
+        }
+        EnumSet<Section> pending = EnumSet.copyOf(dirtySections);
+        dirtySections.clear();
+        if (pending.contains(Section.SQUAD)) {
+            rebuildSquadSection();
+        }
+        if (pending.contains(Section.CLASS)) {
+            rebuildClassSection();
+        }
+        if (pending.contains(Section.DEPLOY)) {
+            rebuildDeploySection();
+        }
+        if (pending.contains(Section.MAP_CONTROLS)) {
+            rebuildMapControls();
+        }
+        if (pending.contains(Section.STATUS)) {
+            rebuildStatusSection();
+        }
+    }
+
+    private void rebuildSquadSection() {
+        if (squadSectionRoot == null) {
+            return;
+        }
+        double scrollOffset = squadScrollList == null ? 0.0D : squadScrollList.getOffset();
+        squadSectionRoot.clearChildren();
+        buildSquadSection(squadSectionRoot);
+        if (squadScrollList != null) {
+            squadScrollList.setOffset(scrollOffset);
+        }
+    }
+
+    private void rebuildClassSection() {
+        if (classSectionRoot == null) {
+            return;
+        }
+        double scrollOffset = classScrollList == null ? 0.0D : classScrollList.getOffset();
+        classSectionRoot.clearChildren();
+        buildClassSection(classSectionRoot);
+        if (classScrollList != null) {
+            classScrollList.setOffset(scrollOffset);
+        }
+    }
+
+    private void rebuildDeploySection() {
+        if (deploySectionRoot == null) {
+            return;
+        }
+        double scrollOffset = deployScrollList == null ? 0.0D : deployScrollList.getOffset();
+        deploySectionRoot.clearChildren();
+        buildDeploySection(deploySectionRoot);
+        if (deployScrollList != null) {
+            deployScrollList.setOffset(scrollOffset);
+        }
+        if (pendingDeployCommand != null
+            && findDeployButton(pendingDeployPosition, pendingDeployCommand) == null) {
+            clearPendingDeploySelection();
+        } else {
+            refreshConfirmDeployButton();
+        }
+    }
+
+    private void rebuildMapControls() {
+        if (mapControlsRoot == null) {
+            return;
+        }
+        governanceTimerText = null;
+        mapControlsRoot.clearChildren();
+        buildMapPanel(mapControlsRoot);
+    }
+
+    private void rebuildStatusSection() {
+        if (statusSectionRoot == null) {
+            return;
+        }
+        statusText = null;
+        outpostRedeployButton = null;
+        statusSectionRoot.clearChildren();
+        buildStatusBar(statusSectionRoot);
     }
 
     /** 计算所有区域的坐标和尺寸 */
@@ -802,10 +814,6 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     // ---------- 标题行 ----------
     private void buildTitleBar() {
-        root.addChild(new GuiRect(0, 0, this.width, TITLE_H, CHROME_BG));
-        int teamAccent = "ATTACK".equals(team) ? 0xFFD35B50 : 0xFF5685C7;
-        root.addChild(new GuiRect(0, 0, 3, TITLE_H, teamAccent));
-
         String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
         String titleText = EspetroMutilWidgets.trimToWidth(
             "\u00a76\u00a7l部署阶段 \u00a77| " + teamColor + "\u00a7l"
@@ -828,27 +836,23 @@ public class UnifiedDeployScreen extends MutilScreen {
                 Math.max(80, this.width - 16)), BTN_TEXT);
         root.addChild(hint);
 
-        if (deployTimeRemaining >= 0) {
-            String timer = formatTime(deployTimeRemaining);
-            statusTimerText = new PlainText(
-                this.width - Math.round(Minecraft.getInstance().font.width(timer) * UI_TEXT_SCALE) - 6,
-                4, timer, 0xFFFFD27A);
-            root.addChild(statusTimerText);
-        }
+        statusTimerText = new PlainText(this.width - 6, 4, "", 0xFFFFD27A);
+        root.addChild(statusTimerText);
+        refreshTitleTimer();
     }
 
-    private void buildDividerLine(int y) {
-        root.addChild(new GuiRect(4, y, this.width - 8, 1, 0xFF3A3F3D));
+    private int teamAccentColor() {
+        return "ATTACK".equals(team) ? 0xFFD35B50 : 0xFF5685C7;
     }
 
     // ---------- 班组（左列） ----------
-    private void buildSquadSection() {
+    private void buildSquadSection(GuiElement sectionRoot) {
         int sx = squadAreaX;
         int sy = squadAreaY;
         int areaW = squadAreaW;
         int areaH = squadAreaH;
 
-        root.addChild(new PlainText(sx, sy, "\u00a76\u00a7l班组", 0xFFFFC766));
+        sectionRoot.addChild(new PlainText(sx, sy, "\u00a76\u00a7l班组", 0xFFFFC766));
         int manageH = SQUAD_ROW_H;
         int listY = sy + SECTION_TITLE_H + 1;
         int listH = areaH - SECTION_TITLE_H - manageH - 5;
@@ -856,7 +860,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         squadScrollList = new ScrollableList(sx, listY, areaW, Math.max(SQUAD_ROW_H, listH))
             .setScrollStep(SQUAD_ROW_H + SQUAD_ROW_GAP)
             .setAlwaysShowScrollbar(false);
-        root.addChild(squadScrollList);
+        sectionRoot.addChild(squadScrollList);
 
         int rowW = areaW - 6;
         int rowY = 0;
@@ -929,14 +933,14 @@ public class UnifiedDeployScreen extends MutilScreen {
         EspButton manage = new EspButton(sx, sy + areaH - manageH, areaW, manageH,
             "\u00a7e管理班组", this::openSquadManagement);
         manage.setTextScale(SQUAD_TEXT_SCALE);
-        root.addChild(manage);
+        sectionRoot.addChild(manage);
     }
 
     private void toggleSquadExpanded(int squadId) {
         if (!expandedSquadIds.add(squadId)) {
             expandedSquadIds.remove(squadId);
         }
-        rebuildGuiPreservingSquadScroll();
+        invalidateSections(Section.SQUAD);
     }
 
     private void openSquadManagement() {
@@ -956,12 +960,12 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     // ---------- 职业选择（中上，滚轮列表）----------
-    private void buildClassSection() {
+    private void buildClassSection(GuiElement sectionRoot) {
         int sx = classAreaX, sy = classAreaY;
         int areaW = classAreaW, areaH = classAreaH;
 
         PlainText ct = new PlainText(sx, sy, "\u00a76职业选择", 0xFFFFAA00);
-        root.addChild(ct);
+        sectionRoot.addChild(ct);
 
         // 滚轮列表区域：标题下方，占满剩余空间
         int listY = sy + SECTION_TITLE_H + 1;
@@ -970,7 +974,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         classScrollList = new ScrollableList(sx, listY, areaW, listH)
             .setScrollStep(CLASS_BTN_H + 1)
             .setAlwaysShowScrollbar(true);
-        root.addChild(classScrollList);
+        sectionRoot.addChild(classScrollList);
 
         classButtons.clear();
         int contentW = areaW - SCROLLBAR_RESERVED_W;
@@ -1007,25 +1011,22 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     // ---------- 部署点（中下，滚轮列表）----------
-    private void buildDeploySection() {
+    private void buildDeploySection(GuiElement sectionRoot) {
         int sx = deployAreaX, sy = deployAreaY;
         int areaW = deployAreaW, areaH = deployAreaH;
 
         // 标题 + 倒计时
-        deployTitleText = new PlainText(sx, sy, buildDeployTitle(), 0xFFFFAA00);
-        root.addChild(deployTitleText);
-
-        root.addChild(new GuiRect(sx, sy + SECTION_TITLE_H + 1, areaW, 1, 0x30FFFFFF));
+        sectionRoot.addChild(new PlainText(sx, sy, buildDeployTitle(), 0xFFFFAA00));
 
         // 滚轮列表区域
-        int listY = sy + SECTION_TITLE_H + 3;
+        int listY = sy + SECTION_TITLE_H + 2;
         int confirmH = BTN_H;
-        int listH = areaH - SECTION_TITLE_H - confirmH - 7;
+        int listH = areaH - SECTION_TITLE_H - confirmH - 6;
 
         deployScrollList = new ScrollableList(sx, listY, areaW, listH)
             .setScrollStep(BTN_H + 1)
             .setAlwaysShowScrollbar(true);
-        root.addChild(deployScrollList);
+        sectionRoot.addChild(deployScrollList);
 
         deployButtons.clear();
         deployButtonPositions.clear();
@@ -1095,7 +1096,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             this::confirmDeploymentPoint
         );
         confirmDeployButton.setEnabled(false);
-        root.addChild(confirmDeployButton);
+        sectionRoot.addChild(confirmDeployButton);
     }
 
     private void registerDeployButton(EspButton button, String positionText, String command,
@@ -1306,21 +1307,19 @@ public class UnifiedDeployScreen extends MutilScreen {
     @Override
     public void tick() {
         super.tick();
-        structureRebuildQueued = false;
+        flushDirtySections();
         // 本地推进部署倒计时（服务端全量包不保证每秒到达）。
         tickLocalDeployTimer();
         // 动态文案（Rally 冷却 / 重新部署 / 治理倒计时）按整秒节流，避免每 tick 改 label。
-        int epochSec = (int) (System.currentTimeMillis() / 1000L);
-        if (epochSec == lastDynamicLabelEpochSec) {
+        if (!onceEverySecond()) {
             return;
         }
-        lastDynamicLabelEpochSec = epochSec;
         if (outpostRedeployButton != null) {
             outpostRedeployButton.setLabel(buildRedeployLabel());
             outpostRedeployButton.setEnabled(
                 !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
         }
-        // 仅更新 Rally 个人冷却文案，不 rebuildGui，避免高度闪烁。
+        // 仅更新 Rally 个人冷却文案，不重建部署区域。
         refreshRallyWaveLabels();
         refreshConfirmDeployButton();
         GovernanceStatePacket.TeamState governance = activeGovernance();
@@ -1341,9 +1340,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             return;
         }
         deployTimeRemaining = display;
-        if (statusTimerText != null) {
-            statusTimerText.setText(formatTime(display));
-        }
+        refreshTitleTimer();
     }
 
     @Override
@@ -1354,13 +1351,13 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     // ---------- 战术地图（右半屏，由 HCR AAD / ESPoints 绘制）----------
-    private void buildMapPanel() {
+    private void buildMapPanel(GuiElement sectionRoot) {
         int bx = mapX + 5;
         int by = mapY + mapH - BTN_H - 4;
         EspButton score = new EspButton(bx, by, 64, BTN_H, "\u00a76玩家分数板",
             () -> Minecraft.getInstance().setScreen(new MatchScoreboardScreen(this)));
         score.setTextScale(UI_TEXT_SCALE);
-        root.addChild(score);
+        sectionRoot.addChild(score);
 
         GovernanceStatePacket.TeamState state = activeGovernance();
         boolean battle = ClientGameState.getCurrentPhase() == GamePhase.BATTLE;
@@ -1369,7 +1366,7 @@ public class UnifiedDeployScreen extends MutilScreen {
                 () -> NetworkManager.sendGovernanceAction(
                     GovernanceActionPacket.Action.START_IMPEACHMENT, null));
             impeach.setTextScale(UI_TEXT_SCALE);
-            root.addChild(impeach);
+            sectionRoot.addChild(impeach);
             return;
         }
 
@@ -1378,28 +1375,28 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
 
         int governanceH = Math.max(20, mapH - MAP_FOOTER_H - 6);
-        root.addChild(new GuiRect(mapX + 3, mapY + 3, mapW - 6, governanceH, 0xE0181818));
-        root.addChild(new PlainText(mapX + 10, mapY + 30,
+        sectionRoot.addChild(new GuiRect(mapX + 3, mapY + 3, mapW - 6, governanceH, 0xE0181818));
+        sectionRoot.addChild(new PlainText(mapX + 10, mapY + 30,
             "\u00a76\u00a7l指挥官治理：" + state.state, 0xFFFFC766));
         governanceTimerText = new PlainText(mapX + 10, mapY + 43,
             "\u00a7e剩余 " + state.remainingSeconds + "s", 0xFFFFD27A);
-        root.addChild(governanceTimerText);
+        sectionRoot.addChild(governanceTimerText);
         int rowY = mapY + 60;
         if ("IMPEACHMENT_VOTE".equals(state.state)) {
-            addGovernanceVoteButton(state.commander, "原指挥官", rowY,
+            addGovernanceVoteButton(sectionRoot, state.commander, "原指挥官", rowY,
                 GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
-            addGovernanceVoteButton(state.challenger, "挑战者", rowY + 18,
+            addGovernanceVoteButton(sectionRoot, state.challenger, "挑战者", rowY + 18,
                 GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
         } else if ("VACANCY_VOLUNTEER".equals(state.state)) {
             EspButton volunteer = new EspButton(mapX + 10, rowY, Math.max(80, mapW - 20), BTN_H,
                 "\u00a7a志愿补位", () -> NetworkManager.sendGovernanceAction(
                     GovernanceActionPacket.Action.VOLUNTEER_VACANCY, null));
             volunteer.setTextScale(UI_TEXT_SCALE);
-            root.addChild(volunteer);
+            sectionRoot.addChild(volunteer);
         } else if ("VACANCY_VOTE".equals(state.state)) {
             int y = rowY;
             for (UUID volunteer : state.volunteers) {
-                addGovernanceVoteButton(volunteer, "志愿者", y,
+                addGovernanceVoteButton(sectionRoot, volunteer, "志愿者", y,
                     GovernanceActionPacket.Action.VOTE_VACANCY);
                 y += 18;
                 if (y > mapY + mapH - MAP_FOOTER_H - 18) break;
@@ -1407,7 +1404,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
     }
 
-    private void addGovernanceVoteButton(UUID candidate, String prefix, int y,
+    private void addGovernanceVoteButton(GuiElement sectionRoot, UUID candidate, String prefix, int y,
                                          GovernanceActionPacket.Action action) {
         if (candidate == null) return;
         String name = MatchScoreboardScreen.nameFor(candidate);
@@ -1415,7 +1412,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             "\u00a7f" + prefix + "：\u00a7e" + name,
             () -> NetworkManager.sendGovernanceAction(action, candidate));
         button.setTextScale(UI_TEXT_SCALE);
-        root.addChild(button);
+        sectionRoot.addChild(button);
     }
 
     private GovernanceStatePacket.TeamState activeGovernance() {
@@ -1426,12 +1423,12 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     // ---------- 底部状态栏 ----------
-    private void buildStatusBar() {
+    private void buildStatusBar(GuiElement sectionRoot) {
         int barY = this.height - STATUS_BAR_H;
-        root.addChild(new GuiRect(0, barY, this.width, STATUS_BAR_H, CHROME_BG));
+        sectionRoot.addChild(new GuiRect(0, barY, this.width, STATUS_BAR_H, CHROME_BG));
 
         statusText = new PlainText(5, barY + 3, buildStatusText(), BTN_TEXT);
-        root.addChild(statusText);
+        sectionRoot.addChild(statusText);
 
         boolean hasOutpost = bastions.stream().anyMatch(UnifiedDeployScreenPacket.BastionItem::isOutpost);
         if (deployTimeRemaining >= 0 && "DEFEND".equals(team) && hasOutpost) {
@@ -1443,7 +1440,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             );
             outpostRedeployButton.setEnabled(
                 !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
-            root.addChild(outpostRedeployButton);
+            sectionRoot.addChild(outpostRedeployButton);
         }
     }
 
@@ -1456,6 +1453,17 @@ public class UnifiedDeployScreen extends MutilScreen {
         return safeSeconds > 60
             ? (safeSeconds / 60) + ":" + String.format("%02d", safeSeconds % 60)
             : safeSeconds + "s";
+    }
+
+    private void refreshTitleTimer() {
+        if (statusTimerText == null) {
+            return;
+        }
+        String timer = deployTimeRemaining < 0 ? "" : formatTime(deployTimeRemaining);
+        statusTimerText.setText(timer);
+        int timerWidth = Math.round(
+            Minecraft.getInstance().font.width(timer) * UI_TEXT_SCALE);
+        statusTimerText.setX(this.width - timerWidth - 6);
     }
 
     private String buildStatusText() {
@@ -1522,7 +1530,7 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 始终铺不透明深黑灰，挡住世界与聊天。
+        // 始终铺不透明纯黑，挡住世界与聊天。
         graphics.fill(0, 0, this.width, this.height, SCREEN_SHADE);
         computeRegions();
         // 左/中列先铺实心，即使地图污染 GL 也不会露出世界。
@@ -1543,10 +1551,28 @@ public class UnifiedDeployScreen extends MutilScreen {
         graphics.fill(leftX, leftY, leftX + leftW, leftY + leftH, PANEL_LEFT_BG);
         graphics.fill(centerX, centerY, centerX + centerW, centerY + centerH, PANEL_CENTER_BG);
         graphics.fill(0, 0, this.width, TITLE_H, CHROME_BG);
+        // 阵营强调条属于稳定背景层，不加入会被局部更新影响的 MUtil 元素树。
+        graphics.fill(0, 0, 3, TITLE_H, teamAccentColor());
         int barY = this.height - STATUS_BAR_H;
         if (barY > TITLE_H) {
             graphics.fill(0, barY, this.width, this.height, CHROME_BG);
         }
+        renderStaticDividers(graphics);
+    }
+
+    /**
+     * 仅依赖当前窗口布局的装饰线。它们与阵营强调条同属稳定背景层，
+     * 不加入任何会因网络数据更新而清空、替换的 MUtil 区域容器。
+     */
+    private void renderStaticDividers(GuiGraphics graphics) {
+        graphics.fill(4, TITLE_H, Math.max(4, this.width - 4), TITLE_H + 1,
+            STATIC_DIVIDER);
+
+        int dividerBottom = Math.max(TITLE_H + 2, this.height - STATUS_BAR_H - 2);
+        graphics.fill(leftX + leftW, TITLE_H + 2, leftX + leftW + 1, dividerBottom,
+            STATIC_DIVIDER);
+        graphics.fill(centerX + centerW, TITLE_H + 2, centerX + centerW + 1, dividerBottom,
+            STATIC_DIVIDER);
     }
 
     private static void resetGuiRenderState(GuiGraphics graphics) {
@@ -1575,9 +1601,9 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private void renderTacticalMap(GuiGraphics graphics, float partialTick) {
-        int viewportH = Math.max(1, mapH - MAP_FOOTER_H);
+        int viewportH = mapViewportHeight();
         // 实心底再画地图（每帧），避免限频导致地图空白闪烁。
-        graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+        renderMapViewportBackground(graphics, viewportH);
         graphics.flush();
         HcrTacticalMapBridge.renderEmbeddedMap(
             graphics,
@@ -1588,7 +1614,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             partialTick
         );
         resetGuiRenderState(graphics);
-        graphics.renderOutline(mapX, mapY, mapW, viewportH, 0xFF5B6260);
+        renderMapViewportBorder(graphics, viewportH);
     }
 
     /**
@@ -1604,9 +1630,9 @@ public class UnifiedDeployScreen extends MutilScreen {
             renderTacticalMap(graphics, 0.0f);
             return;
         }
-        // 预览背景与战术地图背景一致，避免视觉跳变。
-        int viewportH = Math.max(1, mapH - MAP_FOOTER_H);
-        graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+        // 人物预览与战术地图共用同一视口背景、裁剪范围和边框。
+        int viewportH = mapViewportHeight();
+        renderMapViewportBackground(graphics, viewportH);
         int centerX = mapX + mapW / 2;
         // 实体渲染锚点略低于区域中心，给头部留出空间并平衡面板下方留白。
         int centerY = mapY + (viewportH * 11) / 16;
@@ -1625,7 +1651,19 @@ public class UnifiedDeployScreen extends MutilScreen {
             graphics.disableScissor();
         }
         resetGuiRenderState(graphics);
-        graphics.renderOutline(mapX, mapY, mapW, mapH, 0x805B6260);
+        renderMapViewportBorder(graphics, viewportH);
+    }
+
+    private int mapViewportHeight() {
+        return Math.max(1, mapH - MAP_FOOTER_H);
+    }
+
+    private void renderMapViewportBackground(GuiGraphics graphics, int viewportH) {
+        graphics.fill(mapX, mapY, mapX + mapW, mapY + viewportH, PANEL_MAP_FOOTER_BG);
+    }
+
+    private void renderMapViewportBorder(GuiGraphics graphics, int viewportH) {
+        graphics.renderOutline(mapX, mapY, mapW, viewportH, 0xFF5B6260);
     }
 
     /**
@@ -2035,6 +2073,8 @@ public class UnifiedDeployScreen extends MutilScreen {
             boolean disabled = isClassButtonDisabled(cls);
             boolean emphasizeRed = isClassEmphasizeRed(cls, disabled);
             classButtons.get(i).setLabel("§f" + cls.name);
+            classButtons.get(i).setIcon(RoleIconResources.resolve(cls.iconImage, cls.icon),
+                RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
             classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed || disabled));
             classButtons.get(i).setEnabled(!disabled);
             if (disabled) {

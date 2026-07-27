@@ -388,7 +388,31 @@ public final class ExternalConfigBootstrap {
             "pickup_cooldown_seconds": 5,
             "deposit_radius": 8.0,
             "radio_build_radius": 150.0,
-            "radio_exclusion_radius": 400.0
+            "radio_exclusion_radius": 400.0,
+            "radio_teammate_count": 0,
+            "radio_teammate_radius": 30.0,
+            "require_teammate": false,
+            "radio": {
+              "allowed_phases": ["BATTLE"],
+              "require_commander": false,
+              "allow_squad_leader": true,
+              "cooldown_seconds": -1,
+              "required_planks": 0,
+              "creative_bypasses_planks": true,
+              "max_active_per_team": -1,
+              "build_radius": 150.0,
+              "require_target_block": false,
+              "exclusion_radius": 400.0,
+              "teammate_count": 0,
+              "teammate_radius": 30.0
+            },
+            "hab_construction_cost": 500,
+            "ammo_crate_construction_cost": 100,
+            "default_resupply_ammo_cost": 50,
+            "hab_activation_seconds": 30,
+            "hab_reactivation_seconds": 30,
+            "hab_disable_radio_health": 75,
+            "sources": []
           }
         }
         """;

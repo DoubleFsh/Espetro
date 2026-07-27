@@ -44,10 +44,12 @@ public final class AuraTipRadialController {
     private static final ResourceLocation EXECUTE_ACTION = id("execute_tactical_action");
     private static final ResourceLocation SKILL_ACTIVATE_ACTION = id("skill_activate");
 
-    private static final ResourceLocation RADIO = id("textures/gui/squad/radio.png");
-    private static final ResourceLocation RALLY = id("textures/gui/squad/rally.png");
-    private static final ResourceLocation CONSTRUCTION = id("textures/gui/squad/construction_supply.png");
-    private static final ResourceLocation AMMO = id("textures/gui/squad/ammo_supply.png");
+    private static final ResourceLocation RADIO = id("textures/gui/squad/radio_deploy.png");
+    private static final ResourceLocation HAB = id("textures/gui/squad/hab_deploy.png");
+    private static final ResourceLocation RALLY = id("textures/gui/squad/rally_deploy.png");
+    private static final ResourceLocation CONSTRUCTION = id("textures/gui/squad/deposit_supply.png");
+    private static final ResourceLocation AMMO = id("textures/gui/squad/fob_status.png");
+    private static final ResourceLocation VEHICLE = id("textures/gui/squad/vehicle_deploy.png");
     private static final ResourceLocation COMMAND_ICON = id("textures/gui/commander_skills/command.png");
     private static final ResourceLocation UNAVAILABLE_ICON = id("textures/gui/commander_skills/unavailable.png");
 
@@ -336,12 +338,19 @@ public final class AuraTipRadialController {
     }
 
     private static cc.sighs.auratip.data.RadialMenuData deployMenu() {
-        return base(DEPLOY_MENU)
+        var builder = base(DEPLOY_MENU)
             .slot("espetro.radio", RADIO, action(RadialActionPacket.Action.DEPLOY_RADIO),
                 Component.translatable("radial.espetro.radio"), "#FFD5B25C")
+            .slot("espetro.hab", HAB, action(RadialActionPacket.Action.DEPLOY_HAB),
+                Component.literal("部署兵站"), "#FF8CB4D5")
             .slot("espetro.rally", RALLY, action(RadialActionPacket.Action.DEPLOY_RALLY),
-                Component.translatable("radial.espetro.rally"), "#FF7DAE82")
-            .build();
+                Component.translatable("radial.espetro.rally"), "#FF7DAE82");
+        if (cachedIsCommander) {
+            builder = builder.slot("espetro.vehicle", VEHICLE,
+                action(RadialActionPacket.Action.DEPLOY_VEHICLE),
+                Component.literal("载具部署"), "#FFB0A070");
+        }
+        return builder.build();
     }
 
     private static cc.sighs.auratip.data.RadialMenuData logisticsMenu() {

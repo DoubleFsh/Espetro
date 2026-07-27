@@ -55,3 +55,15 @@ Other built-in formations deliberately have no image mapping yet. Their cards
 keep the same dimensions and show the in-game fallback text requested by the
 project owner. A server pack can configure more images with the faction JSON
 field `selection_image`.
+
+
+## Map markers (mark1)
+
+Squad-style map icons from the user pack under `/home/shu/下载/mark1` are packaged into ESPoints
+`assets/espoints/textures/gui/map/` (radio/hab/hab_activated/mainspawn plus map_* set).
+Attack/defend tactical markers use generated `mark_attack.png` / `mark_defend.png`.
+
+## Role icon reprocess
+
+`/home/shu/图片/Icon/*.png` yellow backgrounds were chroma-keyed to alpha and line art normalized
+to white (128×128), then written back and packed into `assets/espetro/textures/gui/roles/`.

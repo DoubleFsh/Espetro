@@ -1,6 +1,7 @@
 package org.espetro.runtime;
 
 import org.espetro.bastion.BastionManager;
+import org.espetro.bastion.HabChannelManager;
 import org.espetro.team.TeamPackManager;
 import org.espetro.vehicle.VehicleManager;
 
@@ -25,10 +26,12 @@ public final class ServerRuntimeMaintenance {
 
     public void reset() {
         tickCounter = 0;
+        HabChannelManager.getInstance().reset();
     }
 
     public void onServerTick() {
         TeamPackManager.getInstance().onServerTick();
+        HabChannelManager.getInstance().tick();
         if (tickCounter++ % INVALID_STATE_SCAN_INTERVAL_TICKS == 0) {
             runInvalidStateCleanup();
         }

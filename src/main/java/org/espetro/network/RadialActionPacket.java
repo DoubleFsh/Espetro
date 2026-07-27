@@ -1,20 +1,13 @@
 package org.espetro.network;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.network.NetworkEvent;
 import org.espetro.Espetro;
-import org.espetro.bastion.BastionBuildingWandItem;
 import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
+import org.espetro.bastion.DeployActions;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.logistics.SupplyManager;
 import org.espetro.team.TeamPackManager;
@@ -27,7 +20,11 @@ public record RadialActionPacket(Action action) {
         DEPLOY_RADIO,
         DEPLOY_RALLY,
         DEPOSIT_SUPPLIES,
-        FOB_STATUS
+        FOB_STATUS,
+        /** 在己方 Radio 建造半径内部署 HAB；追加在末尾以保持旧 ordinal。 */
+        DEPLOY_HAB,
+        /** 打开载具部署面板（原载具部署木棍功能）。 */
+        DEPLOY_VEHICLE
     }
 
     public static void write(RadialActionPacket packet, FriendlyByteBuf buffer) {
@@ -49,54 +46,21 @@ public record RadialActionPacket(Action action) {
 
     private static void execute(ServerPlayer player, Action action) {
         switch (action) {
-            case DEPLOY_RADIO -> deployRadio(player);
+            case DEPLOY_RADIO -> DeployActions.giveRadioItem(player);
+            case DEPLOY_HAB -> DeployActions.startHabChannel(player);
+            case DEPLOY_VEHICLE -> DeployActions.openVehicleDeploy(player);
             case DEPLOY_RALLY -> deployRally(player);
             case DEPOSIT_SUPPLIES -> deposit(player);
             case FOB_STATUS -> showStatus(player);
         }
     }
 
-    private static void deployRadio(ServerPlayer player) {
-        int selected = player.getInventory().selected;
-        for (int slot = 0; slot < player.getInventory().items.size(); slot++) {
-            ItemStack stack = player.getInventory().items.get(slot);
-            if (!(stack.getItem() instanceof BastionBuildingWandItem wand)) {
-                continue;
-            }
-            try {
-                player.getInventory().selected = slot;
-                wand.use(player.serverLevel(), player, InteractionHand.MAIN_HAND);
-            } finally {
-                player.getInventory().selected = selected;
-            }
-            return;
-        }
-        player.sendSystemMessage(Component.literal("§c背包中没有 Radio 建筑指令。"));
-    }
-
     private static void deployRally(ServerPlayer player) {
-        // 仅 Alt 轮盘 + 小队长权限；不检查/消耗背包 Rally 物品。
-        HitResult hit = player.pick(8.0, 0.0f, false);
-        BlockPos pos = hit instanceof BlockHitResult blockHit
-            ? blockHit.getBlockPos().relative(blockHit.getDirection())
-            : player.blockPosition();
-        BlockState previous = player.serverLevel().getBlockState(pos);
-        if (!previous.canBeReplaced()) {
-            player.sendSystemMessage(Component.literal("§c目标位置无法部署 Rally。"));
-            return;
-        }
-        // 先做条件检查再放方块，避免无效放置。
-        String precheck = TeamPackManager.getInstance().canPlaceTeamPack(player, player.serverLevel(), pos);
-        if (precheck != null) {
-            player.sendSystemMessage(Component.literal(precheck));
-            return;
-        }
-        player.serverLevel().setBlock(pos, Blocks.BEACON.defaultBlockState(), 3);
-        String error = TeamPackManager.getInstance().placeTeamPack(player, player.serverLevel(), pos);
-        if (error != null) {
-            player.serverLevel().setBlock(pos, previous, 3);
-            player.sendSystemMessage(Component.literal(error));
-        }
+        // 改为发放 Rally 部署包（信标物品，限 1 个），玩家自行放置。
+        String error = TeamPackManager.getInstance().giveRallyItem(player);
+        player.sendSystemMessage(Component.literal(error != null
+            ? error
+            : "§a已领取 Rally 部署包，找到合适位置放置。"));
     }
 
     private static void deposit(ServerPlayer player) {
@@ -119,7 +83,7 @@ public record RadialActionPacket(Action action) {
             return;
         }
         player.sendSystemMessage(Component.literal(
-            "§6[FOB] §f" + bastion.getName() + " §7| 建材 §6"
+            "§6[Radio] §f" + bastion.getName() + " §7| 建材 §6"
                 + bastion.getConstructionSupplies() + " §7| 弹药 §b"
                 + bastion.getAmmunitionSupplies() + " §7| "
                 + BastionManager.getInstance().getFobStatus(bastion)));
@@ -127,7 +91,7 @@ public record RadialActionPacket(Action action) {
 
     private static BastionData nearestFob(ServerPlayer player) {
         String team = Espetro.getPlayerTeam(player);
-        return BastionManager.getInstance().findNearestBastion(
+        return BastionManager.getInstance().findNearestRadio(
             player.serverLevel(), player.blockPosition(), team,
             LogisticsConfig.get().depositRadius);
     }

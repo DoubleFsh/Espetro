@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.command.EspetroCommandRegistrationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-07-25T07:08:48" hostname="cachyos-x8664" time="0.375">
-  <properties/>
-  <testcase name="registersForcedStopSubcommand()" classname="org.espetro.command.EspetroCommandRegistrationTest" time="0.375"/>
-  <system-out><![CDATA[2026-07-25 15:08:49,236 Test worker WARN Advanced terminal features are not available in this environment
-]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

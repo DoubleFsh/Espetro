@@ -866,7 +866,7 @@ public class NetworkManager {
                 bd.getBastionId(), bd.getName(),
                 armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ(),
                 UnifiedDeployScreenPacket.BastionItem.TYPE_HAB,
-                "建材 " + bd.getConstructionSupplies() + " | 弹药 " + bd.getAmmunitionSupplies()
+                bm.getFobStatus(bd)
             ));
         }
         bastionList.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));

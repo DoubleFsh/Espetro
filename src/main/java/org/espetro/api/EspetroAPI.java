@@ -216,23 +216,34 @@ public class EspetroAPI {
     public static List<FobSnapshot> getFobs() {
         return BastionManager.getInstance().getAllBastions().stream()
             .filter(BastionData::isActive)
-            .map(data -> new FobSnapshot(
-                data.getBastionId(),
-                data.getTeam(),
-                data.getName(),
-                data.getLevel().dimension().location().toString(),
-                data.getPosition().getX(),
-                data.getPosition().getY(),
-                data.getPosition().getZ(),
-                data.getConstructionSupplies(),
-                data.getAmmunitionSupplies(),
-                data.isHabBuilt(),
-                data.isAmmoCrateBuilt(),
-                BastionManager.getInstance().isHabOperational(data),
-                LogisticsConfig.get().radioBuildRadius,
-                LogisticsConfig.get().radioExclusionRadius
-            ))
+            .map(EspetroAPI::toFobSnapshot)
             .toList();
+    }
+
+    private static FobSnapshot toFobSnapshot(BastionData data) {
+        boolean radio = data.isRadio();
+        double buildRadius = radio ? LogisticsConfig.get().radioBuildRadius : 0.0;
+        double exclusionRadius = radio ? LogisticsConfig.get().radioExclusionRadius : 0.0;
+        int construction = radio ? data.getConstructionSupplies() : 0;
+        int ammunition = radio ? data.getAmmunitionSupplies() : 0;
+        boolean habOperational = BastionManager.getInstance().isHabOperational(data);
+        return new FobSnapshot(
+            data.getBastionId(),
+            data.getTeam(),
+            data.getName(),
+            data.getLevel().dimension().location().toString(),
+            data.getPosition().getX(),
+            data.getPosition().getY(),
+            data.getPosition().getZ(),
+            construction,
+            ammunition,
+            data.isHabBuilt() || data.isHab(),
+            data.isAmmoCrateBuilt(),
+            habOperational,
+            buildRadius,
+            exclusionRadius,
+            data.getKind().networkType()
+        );
     }
 
     public static List<TeamPackManager.RallySnapshot> getRallies() {
@@ -242,7 +253,21 @@ public class EspetroAPI {
     public record FobSnapshot(UUID id, String team, String name, String dimension,
                               int x, int y, int z, int construction, int ammunition,
                               boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
-                              double buildRadius, double exclusionRadius) {
+                              double buildRadius, double exclusionRadius,
+                              String kind) {
+        /** 兼容旧反射调用。 */
+        public FobSnapshot(UUID id, String team, String name, String dimension,
+                           int x, int y, int z, int construction, int ammunition,
+                           boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
+                           double buildRadius, double exclusionRadius) {
+            this(id, team, name, dimension, x, y, z, construction, ammunition,
+                habBuilt, ammoCrateBuilt, habOperational, buildRadius, exclusionRadius,
+                habBuilt ? "HAB" : "RADIO");
+        }
+
+        public String type() {
+            return kind == null || kind.isBlank() ? "RADIO" : kind;
+        }
     }
 
     private static ActiveBattlefieldSnapshot toPublicSnapshot(ActiveMapConfig map) {

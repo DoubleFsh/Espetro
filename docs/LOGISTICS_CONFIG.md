@@ -247,3 +247,12 @@ Espetro 随后写入以下物品 NBT：
 Radio 不会扫描范围内的载具或容器，也不会自动读取其中的物品。载具里的补给必须先由
 玩家取出并放进自己的背包，再由玩家右击己方 Radio 核心（或潜行右击其弹药箱）存入
 FOB 共享库存。编制载具 JSON 不需要配置后勤载具类型，Radio 的放置条件也与载具无关。
+
+
+## Radio 与兵站（HAB）拆分（2026-07）
+
+- **Radio**：指挥/小队长右键建筑指令放置，**不消耗建材**；持有 construction/ammunition 库存；地图显示 `build_radius` 范围圈。
+- **兵站 HAB**：潜行右键（或径向「部署兵站」）仅在**己方** Radio 建造半径内可放；费用 `hab_construction_cost` 从**所有覆盖该点的己方 Radio** 扣除，**优先从建材最少的 Radio 开始**；总和不足则整笔失败。
+- **摧毁**：拆 HAB **不扣**兵力；拆 Radio 扣 `bastion.json` 的 `destroy_troop_penalty`。
+- **队友人数**：嵌套字段 `logistics.radio.teammate_count` 为权威（覆盖平铺 `radio_teammate_count`）。设为 `0` 关闭人数要求。
+- 弹药箱仍挂在 Radio 上，存入建材后自动支付 `ammo_crate_construction_cost`。

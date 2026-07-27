@@ -188,6 +188,13 @@ public class ClassSelectionScreen extends MutilScreen {
 
     public void updateClassCounts(Map<String, Integer> counts,
                                   Map<String, Map<String, Integer>> updatedVariantCounts) {
+        // 数据未变早退：避免每包都全量刷按钮标签
+        boolean countsUnchanged = this.classCounts.equals(counts);
+        boolean variantsUnchanged = updatedVariantCounts == null
+            || this.variantCounts.equals(updatedVariantCounts);
+        if (countsUnchanged && variantsUnchanged) {
+            return;
+        }
         this.classCounts.clear();
         this.classCounts.putAll(counts);
         if (updatedVariantCounts != null) {

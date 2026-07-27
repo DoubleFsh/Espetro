@@ -85,6 +85,9 @@ public final class SupplyManager {
      * 不扫描附近实体或容器，也不会直接读取载具库存。
      */
     public DepositResult depositAll(ServerPlayer player, BastionData bastion) {
+        if (bastion == null || !bastion.isRadio()) {
+            return DepositResult.failure("§c只能向己方 Radio 存入补给。");
+        }
         if (!Objects.equals(Espetro.getPlayerTeam(player), bastion.getTeam())) {
             return DepositResult.failure("§c不能向敌方 Radio 存入补给。");
         }

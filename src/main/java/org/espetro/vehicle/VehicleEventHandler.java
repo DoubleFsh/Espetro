@@ -60,22 +60,5 @@ public class VehicleEventHandler {
         }
     }
 
-    /**
-     * 指挥官右键载具部署木棍时发送部署面板消息
-     */
-    @SubscribeEvent
-    public static void onRightClickDeployStick(PlayerInteractEvent.RightClickItem event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (event.getItemStack().getItem() != VehicleItems.VEHICLE_DEPLOY_STICK) return;
-
-        event.setCanceled(true);
-
-        String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
-        if (factionId == null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你还没有选择编制！"));
-            return;
-        }
-
-        org.espetro.network.NetworkManager.sendVehicleDeployScreen(player, factionId);
-    }
+    // 载具部署木棍已移除；载具部署入口在 Alt 轮盘（DEPLOY_VEHICLE）。
 }

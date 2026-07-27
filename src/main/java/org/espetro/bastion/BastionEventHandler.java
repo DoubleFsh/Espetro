@@ -277,29 +277,295 @@ public class BastionEventHandler {
         if (!(target instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
             return;
         }
+        // HAB 盔甲架：取消交互并提示（补给在 Radio 方块上）
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
         if (!(event.getEntity() instanceof ServerPlayer player) || player.level().isClientSide) {
             return;
         }
         BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion != null && !bastion.isRadio()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§7这是兵站核心，请向己方 Radio 方块存取补给。"));
+        }
+    }
+
+    // ==================== Rally 部署包放置 ====================
+
+    /** 玩家放下 Rally 部署包（带 NBT 的信标）：跑 rally 校验，不合法则取消（物品退回）。 */
+    @SubscribeEvent
+    public static void onRallyItemPlace(BlockEvent.EntityPlaceEvent event) {
+        if (event.getLevel().isClientSide()
+            || !event.getPlacedBlock().is(Blocks.BEACON)
+            || !(event.getEntity() instanceof ServerPlayer player)
+            || !(event.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        TeamPackManager manager = TeamPackManager.getInstance();
+        // 放置瞬间手里仍握着该物品（shrink 在事件之后）
+        boolean fromRallyItem = manager.isTeamPackItem(player.getMainHandItem())
+            || manager.isTeamPackItem(player.getOffhandItem());
+        if (!fromRallyItem) {
+            return;
+        }
+
+        BlockPos pos = event.getPos();
+        String precheck = manager.canPlaceTeamPack(player, level, pos);
+        if (precheck != null) {
+            event.setCanceled(true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(precheck));
+            return;
+        }
+        String error = manager.placeTeamPack(player, level, pos);
+        if (error != null) {
+            event.setCanceled(true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(error));
+        }
+    }
+
+    // ==================== Radio 方块生命周期 ====================
+
+    /** Radio 方块放置校验：不合法则取消（物品退回）。 */
+    @SubscribeEvent
+    public static void onRadioBlockPlace(BlockEvent.EntityPlaceEvent event) {
+        if (event.getLevel().isClientSide()
+            || BastionItems.RADIO_BLOCK == null
+            || !event.getPlacedBlock().is(BastionItems.RADIO_BLOCK)) {
+            return;
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)
+            || !(event.getLevel() instanceof ServerLevel level)) {
+            event.setCanceled(true);
+            return;
+        }
+
+        BastionManager manager = BastionManager.getInstance();
+        LogisticsConfig.RadioPlacementSettings radio = LogisticsConfig.get().getRadio();
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        String phaseName = phase != null ? phase.name() : "";
+        BlockPos pos = event.getPos();
+
+        String error = null;
+        String team = Espetro.getPlayerTeam(player);
+        if (!radio.allowsPhase(phaseName)) {
+            error = "§c当前阶段不能部署 Radio！允许阶段: " + String.join(", ", radio.allowedPhases);
+        } else if (team == null) {
+            error = "§c无法确定你的队伍！";
+        } else {
+            boolean commander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
+            boolean squadLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
+            if (radio.requireCommander && !commander) {
+                error = "§c只有指挥官才能部署 Radio！";
+            } else if (!commander && !(radio.allowSquadLeader && squadLeader)) {
+                error = radio.allowSquadLeader
+                    ? "§c只有小队长或指挥官才能部署 Radio！"
+                    : "§c只有指挥官才能部署 Radio！";
+            }
+        }
+        if (error == null) {
+            int cooldownSeconds = manager.getEffectiveRadioCooldownSeconds();
+            error = manager.canBuildBastion(player.getUUID(), cooldownSeconds);
+        }
+        if (error == null && !manager.hasBastionCapacity(team)) {
+            error = "§c本方生效 Radio 数量已达到上限（" + manager.getBastionLimitPerTeam() + "个）！";
+        }
+        if (error == null
+            && manager.findNearestRadio(level, pos, null, radio.exclusionRadius) != null) {
+            error = "§c附近已有 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
+        }
+        if (error == null && radio.teammateCount > 0) {
+            int nearby = countNearbyTeammates(player, team, pos, radio.teammateRadius);
+            if (nearby < radio.teammateCount) {
+                error = "§c部署 Radio 需要放置点 " + (int) radio.teammateRadius
+                    + " 格内至少 " + radio.teammateCount + " 名队友！当前仅 " + nearby + " 名。";
+            }
+        }
+
+        if (error != null) {
+            event.setCanceled(true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(error));
+            return;
+        }
+
+        String radioName = generateRadioName(team);
+        BastionData bastion = manager.createRadio(level, pos, team, radioName);
+        if (bastion == null) {
+            event.setCanceled(true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cRadio 创建失败！"));
+            return;
+        }
+        manager.setBastionCooldown(player.getUUID());
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§aRadio §e" + radioName + " §a已部署！右键存/取补给，潜行右键鱼竿在圈内建兵站。"));
+        Espetro.broadcastToTeam(team, "§6[Radio] §a" + player.getName().getString()
+            + " §a部署了 Radio §b" + radioName);
+    }
+
+    private static String generateRadioName(String team) {
+        int number = 1;
+        for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
+            if (bastion.isActive() && team.equals(bastion.getTeam()) && bastion.isRadio()) {
+                number++;
+            }
+        }
+        return "ATTACK".equals(team) ? "进攻Radio-" + number : "防守Radio-" + number;
+    }
+
+    private static int countNearbyTeammates(ServerPlayer player, String team, BlockPos center, double radius) {
+        double radiusSquared = radius * radius;
+        int count = 0;
+        for (ServerPlayer other : player.serverLevel().players()) {
+            if (other == player || !other.isAlive() || other.isSpectator()) {
+                continue;
+            }
+            if (team.equals(Espetro.getPlayerTeam(other))
+                && other.blockPosition().distSqr(center) <= radiusSquared) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 己方指挥/小队长 Shift+左键收起 Radio 回物品栏。 */
+    @SubscribeEvent
+    public static void onRadioRetrieve(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)
+            || !player.isShiftKeyDown()
+            || BastionItems.RADIO_BLOCK == null
+            || !(event.getLevel() instanceof ServerLevel level)
+            || !level.getBlockState(event.getPos()).is(BastionItems.RADIO_BLOCK)) {
+            return;
+        }
+        BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(event.getPos());
         if (bastion == null) {
             return;
         }
-        SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
-        if (result.success()) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§a已存入 FOB §7| §6建材 +" + result.construction()
-                    + " §7| §b弹药 +" + result.ammunition()
-                    + " §7| 库存 §6" + bastion.getConstructionSupplies()
-                    + "§7/§b" + bastion.getAmmunitionSupplies()
-                    + " §7| " + BastionManager.getInstance().getFobStatus(bastion)));
-        } else {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                result.error() + " §7| §6" + bastion.getConstructionSupplies()
-                    + " 建材 §7| §b" + bastion.getAmmunitionSupplies()
-                    + " 弹药 §7| " + BastionManager.getInstance().getFobStatus(bastion)));
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null || !team.equals(bastion.getTeam())) {
+            return; // 敌方走正常破坏
         }
+        boolean commander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
+        boolean squadLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
+        if (!commander && !squadLeader) {
+            return; // 普通队员无收起权限，走正常破坏
+        }
+
+        event.setCanceled(true);
+
+        int lostConstruction = bastion.getConstructionSupplies();
+        int lostAmmunition = bastion.getAmmunitionSupplies();
+
+        level.setBlock(event.getPos(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+        BastionManager.getInstance().retrieveRadio(bastion, player.getUUID());
+
+        if (BastionItems.RADIO_BLOCK_ITEM != null) {
+            ItemStack stack = new ItemStack(BastionItems.RADIO_BLOCK_ITEM);
+            if (DeployActions.hasRadioItem(player) || !player.getInventory().add(stack)) {
+                player.drop(stack, false);
+            }
+        }
+
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§a已收起 Radio §e" + bastion.getName() + "§a，可重新放置。"));
+        if (lostConstruction > 0 || lostAmmunition > 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§7库存 §6" + lostConstruction + " 建材§7 / §b" + lostAmmunition + " 弹药§7 已丢失。"));
+        }
+    }
+
+    /** Radio 方块破坏：己方拆不扣兵力，敌方拆扣兵力。 */
+    @SubscribeEvent
+    public static void onRadioBlockBreak(BlockEvent.BreakEvent event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(event.getPos());
+        if (bastion == null) {
+            return;
+        }
+        boolean enemyAction = true;
+        if (event.getPlayer() instanceof ServerPlayer player) {
+            String playerTeam = Espetro.getPlayerTeam(player);
+            enemyAction = playerTeam == null || !playerTeam.equals(bastion.getTeam());
+        }
+        BastionManager.getInstance().destroyBastionWithManpower(bastion,
+            event.getPlayer(), enemyAction);
+        if (!enemyAction && event.getPlayer() instanceof ServerPlayer player) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§e已拆除己方 Radio（不扣兵力）。"));
+        }
+    }
+
+    /** Radio 方块挖掘速度锁定：任何工具/效果下都约 30 秒。 */
+    @SubscribeEvent
+    public static void onRadioBreakSpeed(PlayerEvent.BreakSpeed event) {
+        if (BastionItems.RADIO_BLOCK == null || !event.getState().is(BastionItems.RADIO_BLOCK)) {
+            return;
+        }
+        // destroyProgress += speed / hardness / 30（徒手无工具惩罚），每 tick；
+        // 需要 30s=600tick：speed = hardness * 30 / 600
+        float hardness = event.getState().getDestroySpeed(
+            event.getEntity().level(), event.getPosition().orElse(BlockPos.ZERO));
+        event.setNewSpeed(hardness * 30.0f / (RadioBlock.BREAK_SECONDS * 20.0f));
+    }
+
+    /** 爆炸摧毁 Radio：按敌方行为扣兵力。 */
+    @SubscribeEvent
+    public static void onExplosionDetonateRadio(ExplosionEvent.Detonate event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        for (BlockPos pos : event.getAffectedBlocks()) {
+            BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(pos);
+            if (bastion != null) {
+                BastionManager.getInstance().destroyBastionWithManpower(bastion,
+                    event.getExplosion().getExploder(), true);
+            }
+        }
+    }
+
+    /** Radio 方块交互：潜行右键=存补给，右键=领职业弹药。 */
+    @SubscribeEvent
+    public static void onRadioBlockRightClick(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)
+            || BastionItems.RADIO_BLOCK == null) {
+            return;
+        }
+        ServerLevel level = (ServerLevel) event.getLevel();
+        if (!level.getBlockState(event.getPos()).is(BastionItems.RADIO_BLOCK)) {
+            return;
+        }
+        BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(event.getPos());
+        if (bastion == null) {
+            return;
+        }
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null || !team.equals(bastion.getTeam())) {
+            return; // 敌方静默
+        }
+
+        if (player.isShiftKeyDown()) {
+            SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
+            if (result.success()) {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "§a已存入 Radio §7| §6建材 +" + result.construction()
+                        + " §7| §b弹药 +" + result.ammunition()
+                        + " §7| 库存 §6" + bastion.getConstructionSupplies()
+                        + "§7/§b" + bastion.getAmmunitionSupplies()
+                        + " §7| " + BastionManager.getInstance().getFobStatus(bastion)));
+            } else {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    result.error() + " §7| §6" + bastion.getConstructionSupplies()
+                        + " 建材 §7| §b" + bastion.getAmmunitionSupplies()
+                        + " 弹药 §7| " + BastionManager.getInstance().getFobStatus(bastion)));
+            }
+            return;
+        }
+
+        performAmmoResupply(player, bastion);
     }
 
     @SubscribeEvent
@@ -348,10 +614,17 @@ public class BastionEventHandler {
             return;
         }
 
+        performAmmoResupply(player, bastion);
+        event.setCanceled(true);
+    }
+
+    /**
+     * 从 Radio 领取职业弹药补给（原潜影盒逻辑，供潜影盒与 Radio 实体两个入口复用）。
+     */
+    static void performAmmoResupply(ServerPlayer player, BastionData bastion) {
         if (!bastion.isAmmoCrateBuilt()) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c该 FOB 尚未建成弹药箱，需要继续存入建材。"));
-            event.setCanceled(true);
+                "§c该 Radio 尚未建成弹药箱，需要继续存入建材。"));
             return;
         }
 
@@ -360,7 +633,6 @@ public class BastionEventHandler {
         String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
         if (classId == null) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
-            event.setCanceled(true);
             return;
         }
 
@@ -373,7 +645,6 @@ public class BastionEventHandler {
         FactionDataLoader.ResupplyData resupply = variant != null ? variant.resupply : null;
         if (resupply == null || resupply.items == null || resupply.items.length == 0) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业装备变体没有配置弹药补给！"));
-            event.setCanceled(true);
             return;
         }
 
@@ -382,15 +653,13 @@ public class BastionEventHandler {
             : LogisticsConfig.get().defaultResupplyAmmoCost;
         if (bastion.getAmmunitionSupplies() <= 0) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§cFOB 弹药库存为 0，无法补给。"));
-            event.setCanceled(true);
+                "§cRadio 弹药库存为 0，无法补给。"));
             return;
         }
 
         String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
         if (errorMsg != null) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
-            event.setCanceled(true);
             return;
         }
 
@@ -434,7 +703,6 @@ public class BastionEventHandler {
 
         if (givenItems == 0) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
-            event.setCanceled(true);
             return;
         }
 
@@ -447,12 +715,11 @@ public class BastionEventHandler {
         }
         BastionManager.getInstance().recordResupply(player.getUUID());
         String chargeDetail = chargedAmmo == ammoCost
-            ? "消耗 §b" + chargedAmmo + " FOB 弹药"
-            : "FOB 弹药不足 §7(需要 §b" + ammoCost + "§7)，已扣除剩余 §b"
+            ? "消耗 §b" + chargedAmmo + " Radio 弹药"
+            : "Radio 弹药不足 §7(需要 §b" + ammoCost + "§7)，已扣除剩余 §b"
                 + chargedAmmo + " §7并归零";
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
             "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 冷却5分钟"));
-        event.setCanceled(true);
     }
 
     private static ItemStack createResupplyStack(FactionDataLoader.ResupplyItem ri) {
