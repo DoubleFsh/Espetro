@@ -133,6 +133,7 @@ public class BastionSelectionPacket {
             127,
             false, false, false
         ));
+        GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
 
         player.sendSystemMessage(Component.literal("§a已在 §e" + bastion.getName() + " §a复活！"));
 

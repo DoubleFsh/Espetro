@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -15,9 +16,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -38,6 +41,9 @@ import org.espetro.mapconfig.BattlefieldContext;
 
 import javax.annotation.Nullable;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -45,9 +51,16 @@ import java.util.UUID;
  */
 @Mod.EventBusSubscriber(modid = Espetro.MOD_ID)
 public class BastionEventHandler {
+    private static final double RADIO_DISMANTLE_DISTANCE_SQR = 6.0 * 6.0;
+    private static final Map<UUID, RadioDismantleAttempt> RADIO_DISMANTLE_ATTEMPTS = new HashMap<>();
+    private static int radioDismantleTickCounter;
+
+    private record RadioDismantleAttempt(UUID radioId, ResourceKey<Level> dimension,
+                                         BlockPos pos, long completesAtMillis) {
+    }
 
     /**
-     * 玩家死亡时触发
+     * 兵站核心盔甲架死亡：立即销毁对应兵站（替代每秒轮询）。
      */
     @SubscribeEvent
     public static void onPlayerDeath(LivingDeathEvent event) {
@@ -426,11 +439,13 @@ public class BastionEventHandler {
         return count;
     }
 
-    /** 己方指挥/小队长 Shift+左键收起 Radio 回物品栏。 */
+    /**
+     * Radio 左键：
+     * 己方指挥/小队长潜行左键立即收起；敌方潜行左键开始 30 秒拆除。
+     */
     @SubscribeEvent
     public static void onRadioRetrieve(PlayerInteractEvent.LeftClickBlock event) {
         if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)
-            || !player.isShiftKeyDown()
             || BastionItems.RADIO_BLOCK == null
             || !(event.getLevel() instanceof ServerLevel level)
             || !level.getBlockState(event.getPos()).is(BastionItems.RADIO_BLOCK)) {
@@ -440,17 +455,39 @@ public class BastionEventHandler {
         if (bastion == null) {
             return;
         }
+        // Radio 不再使用原版挖掘流程，避免挖掘疲劳、工具和客户端速度差异绕过规则。
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+
         String team = Espetro.getPlayerTeam(player);
-        if (team == null || !team.equals(bastion.getTeam())) {
-            return; // 敌方走正常破坏
+        if (team == null) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§c尚未加入阵营，无法拆除 Radio。"), true);
+            return;
+        }
+
+        if (!team.equals(bastion.getTeam())) {
+            if (!player.isShiftKeyDown()) {
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                    "§e潜行并左键点击可开始拆除敌方 Radio。"), true);
+                return;
+            }
+            startRadioDismantle(player, bastion);
+            return;
+        }
+
+        if (!player.isShiftKeyDown()) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§e小队长或指挥官可潜行左键收起己方 Radio。"), true);
+            return;
         }
         boolean commander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
         boolean squadLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
         if (!commander && !squadLeader) {
-            return; // 普通队员无收起权限，走正常破坏
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§c只有小队长或指挥官才能收起己方 Radio。"), true);
+            return;
         }
-
-        event.setCanceled(true);
 
         int lostConstruction = bastion.getConstructionSupplies();
         int lostAmmunition = bastion.getAmmunitionSupplies();
@@ -473,7 +510,7 @@ public class BastionEventHandler {
         }
     }
 
-    /** Radio 方块破坏：己方拆不扣兵力，敌方拆扣兵力。 */
+    /** Radio 禁止进入原版破坏流程；拆除统一由潜行左键计时完成。 */
     @SubscribeEvent
     public static void onRadioBlockBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel().isClientSide()) {
@@ -483,30 +520,136 @@ public class BastionEventHandler {
         if (bastion == null) {
             return;
         }
-        boolean enemyAction = true;
-        if (event.getPlayer() instanceof ServerPlayer player) {
-            String playerTeam = Espetro.getPlayerTeam(player);
-            enemyAction = playerTeam == null || !playerTeam.equals(bastion.getTeam());
-        }
-        BastionManager.getInstance().destroyBastionWithManpower(bastion,
-            event.getPlayer(), enemyAction);
-        if (!enemyAction && event.getPlayer() instanceof ServerPlayer player) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§e已拆除己方 Radio（不扣兵力）。"));
-        }
+        event.setCanceled(true);
     }
 
-    /** Radio 方块挖掘速度锁定：任何工具/效果下都约 30 秒。 */
+    /** 客户端裂纹显示的兜底：Radio 的实际拆除只由服务端计时流程完成。 */
     @SubscribeEvent
     public static void onRadioBreakSpeed(PlayerEvent.BreakSpeed event) {
         if (BastionItems.RADIO_BLOCK == null || !event.getState().is(BastionItems.RADIO_BLOCK)) {
             return;
         }
-        // destroyProgress += speed / hardness / 30（徒手无工具惩罚），每 tick；
-        // 需要 30s=600tick：speed = hardness * 30 / 600
-        float hardness = event.getState().getDestroySpeed(
-            event.getEntity().level(), event.getPosition().orElse(BlockPos.ZERO));
-        event.setNewSpeed(hardness * 30.0f / (RadioBlock.BREAK_SECONDS * 20.0f));
+        event.setNewSpeed(0.0f);
+    }
+
+    private static void startRadioDismantle(ServerPlayer player, BastionData bastion) {
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if ((phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE)
+            || !BattlefieldContext.isActiveBattlefield(player.serverLevel())
+            || player.isSpectator() || !player.isAlive()) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§c当前无法拆除 Radio。"), true);
+            return;
+        }
+        if (player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(bastion.getPosition()))
+            > RADIO_DISMANTLE_DISTANCE_SQR) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§c请靠近 Radio 后再开始拆除。"), true);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        RadioDismantleAttempt existing = RADIO_DISMANTLE_ATTEMPTS.get(player.getUUID());
+        if (existing != null && existing.radioId().equals(bastion.getBastionId())) {
+            long remaining = Math.max(1L, (existing.completesAtMillis() - now + 999L) / 1000L);
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§e正在拆除 Radio，剩余 §c" + remaining + " §e秒。"), true);
+            return;
+        }
+
+        RADIO_DISMANTLE_ATTEMPTS.put(player.getUUID(), new RadioDismantleAttempt(
+            bastion.getBastionId(), player.serverLevel().dimension(), bastion.getPosition().immutable(),
+            now + RadioBlock.BREAK_SECONDS * 1000L));
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§e开始拆除敌方 Radio。请在附近等待 §c" + RadioBlock.BREAK_SECONDS + " §e秒。"));
+        player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+            "§e拆除 Radio：§c" + RadioBlock.BREAK_SECONDS + " 秒"), true);
+    }
+
+    /**
+     * 仅在存在拆除任务时每秒校验一次，不扫描全体玩家或全体 Radio。
+     */
+    @SubscribeEvent
+    public static void onRadioDismantleServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || RADIO_DISMANTLE_ATTEMPTS.isEmpty()) {
+            return;
+        }
+        radioDismantleTickCounter++;
+        if (radioDismantleTickCounter < 20) {
+            return;
+        }
+        radioDismantleTickCounter = 0;
+
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            clearRadioDismantleAttempts();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Iterator<Map.Entry<UUID, RadioDismantleAttempt>> iterator =
+            RADIO_DISMANTLE_ATTEMPTS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, RadioDismantleAttempt> entry = iterator.next();
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            RadioDismantleAttempt attempt = entry.getValue();
+            ServerLevel level = server.getLevel(attempt.dimension());
+            BastionData bastion = level == null ? null
+                : BastionManager.getInstance().findRadioByBlockPos(attempt.pos());
+
+            String cancelReason = validateRadioDismantle(player, level, bastion, attempt);
+            if (cancelReason != null) {
+                iterator.remove();
+                if (player != null) {
+                    player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        "§cRadio 拆除已取消：" + cancelReason), true);
+                }
+                continue;
+            }
+
+            long remainingMillis = attempt.completesAtMillis() - now;
+            if (remainingMillis > 0L) {
+                long remainingSeconds = Math.max(1L, (remainingMillis + 999L) / 1000L);
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                    "§e拆除 Radio：§c" + remainingSeconds + " 秒"), true);
+                continue;
+            }
+
+            iterator.remove();
+            level.setBlock(attempt.pos(), Blocks.AIR.defaultBlockState(), 3);
+            BastionManager.getInstance().destroyBastionWithManpower(bastion, player, true);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§a敌方 Radio 已拆除。"));
+        }
+    }
+
+    @Nullable
+    private static String validateRadioDismantle(@Nullable ServerPlayer player,
+                                                  @Nullable ServerLevel level,
+                                                  @Nullable BastionData bastion,
+                                                  RadioDismantleAttempt attempt) {
+        if (player == null || level == null || bastion == null || !bastion.isActive()
+            || !bastion.getBastionId().equals(attempt.radioId())) {
+            return "目标已不存在";
+        }
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if ((phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE)
+            || player.serverLevel() != level || player.isSpectator() || !player.isAlive()) {
+            return "当前状态不允许拆除";
+        }
+        String playerTeam = Espetro.getPlayerTeam(player);
+        if (playerTeam == null || playerTeam.equals(bastion.getTeam())) {
+            return "阵营状态已改变";
+        }
+        if (player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(attempt.pos()))
+            > RADIO_DISMANTLE_DISTANCE_SQR) {
+            return "离开了 Radio 附近";
+        }
+        return null;
+    }
+
+    public static void clearRadioDismantleAttempts() {
+        RADIO_DISMANTLE_ATTEMPTS.clear();
+        radioDismantleTickCounter = 0;
     }
 
     /** 爆炸摧毁 Radio：按敌方行为扣兵力。 */
@@ -764,6 +907,24 @@ public class BastionEventHandler {
     }
 
     /**
+     * 兵站核心盔甲架离开世界（卸载/清除）：立即失效兵站。
+     */
+    @SubscribeEvent
+    public static void onBastionCoreLeaveLevel(EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        Entity entity = event.getEntity();
+        if (!(entity instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
+        }
+        BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
+        if (bastion != null && bastion.isActive()) {
+            BastionManager.getInstance().onCoreArmorStandDestroyed(bastion, null);
+        }
+    }
+
+    /**
      * 玩家重生时的状态复制
      * 等待状态由 onPlayerRespawn 处理，这里不做清除
      */
@@ -774,8 +935,8 @@ public class BastionEventHandler {
     }
 
     /**
-     * 每 tick：位置锁内的玩家强制固定；等待部署点选择的玩家刷新失明/旁观等待态。
-     * 失明客户端同步：每秒 force resync 一次（跨维后客户端可能丢效果）。
+     * 每 tick 轻量维持：位置锁回拉 + 禁移 + 旁观。
+     * 完整 MatchHold / 强制失明重推只在进入等待、跨维/传送后，或每 3 秒节流一次。
      */
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
@@ -783,30 +944,46 @@ public class BastionEventHandler {
         if (!(event.player instanceof ServerPlayer player)) return;
 
         BastionManager bastionManager = BastionManager.getInstance();
-        net.minecraft.world.phys.Vec3 lock = bastionManager.getPlayerLockPosition(player.getUUID());
-        if (lock != null) {
-            enforceLockedPosition(player, lock);
-            // 每秒强制向客户端重推失明，避免跨维 Respawn 后客户端无效果。
-            boolean forceBlindPacket = (player.tickCount % 20) == 0;
-            GameStateManager.enforceSpectatorBlindness(player, forceBlindPacket);
-            if (bastionManager.isWaitingForBastion(player.getUUID())) {
+        java.util.UUID playerId = player.getUUID();
+        net.minecraft.world.phys.Vec3 lock = bastionManager.getPlayerLockPosition(playerId);
+        boolean waiting = bastionManager.isWaitingForBastion(playerId);
+        if (lock == null && !waiting) {
+            return;
+        }
+
+        // 尚无位置锁的等待态：每秒补一次完整 hold，避免每 tick 走重路径
+        if (lock == null) {
+            if (player.tickCount % 20 == 0) {
                 applyWaitingDeployState(player);
+            } else {
+                maintainHoldWithoutTeleport(player, false);
             }
             return;
         }
 
-        if (bastionManager.isWaitingForBastion(player.getUUID())) {
-            applyWaitingDeployState(player);
-        }
+        boolean teleported = enforceLockedPosition(player, lock);
+        // 传送后立即强制失明；否则 3 秒节流重推，其余 tick 仅补缺失效果
+        boolean forceBlind = teleported || (player.tickCount % 60) == 0;
+        maintainHoldWithoutTeleport(player, forceBlind);
     }
 
-    private static void enforceLockedPosition(ServerPlayer player, net.minecraft.world.phys.Vec3 lock) {
+    /**
+     * @return true 若执行了回锚传送（调用方应强制失明重推）
+     */
+    private static boolean enforceLockedPosition(ServerPlayer player, net.minecraft.world.phys.Vec3 lock) {
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
         if (player.distanceToSqr(lock) > 0.04) {
             player.teleportTo(player.serverLevel(), lock.x, lock.y, lock.z,
                 player.getYRot(), player.getXRot());
+            player.setDeltaMovement(0, 0, 0);
+            return true;
         }
-        player.setDeltaMovement(0, 0, 0);
-        player.fallDistance = 0f;
+        return false;
+    }
+
+    private static void maintainHoldWithoutTeleport(ServerPlayer player, boolean forceBlindResync) {
+        GameStateManager.enforceSpectatorBlindness(player, forceBlindResync);
     }
 
     private static void applyWaitingDeployState(ServerPlayer player) {

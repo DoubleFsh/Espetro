@@ -744,6 +744,7 @@ public class BastionManager {
     }
 
     private void reset(boolean removeLoadedEntities) {
+        BastionEventHandler.clearRadioDismantleAttempts();
         for (BastionData bastion : bastions.values()) {
             if (removeLoadedEntities) {
                 removeCoreEntityIfLoaded(bastion, false);
@@ -1216,6 +1217,7 @@ public class BastionManager {
             127, // 最大等级
             false, false, false
         ));
+        org.espetro.team.GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
 
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a已在原部署点复活！"));
 

@@ -144,7 +144,8 @@ public class TeamPackManager {
         }
 
         processPendingRespawns(server);
-        if (tickCounter++ % 20L == 0L) {
+        // 敌近烧毁：5 秒一次（功能保留，允许最多数秒延迟）
+        if (tickCounter++ % 100L == 0L) {
             burnEnemyProxiedRallies();
         }
     }
@@ -619,6 +620,7 @@ public class TeamPackManager {
             127,
             false, false, false
         ));
+        org.espetro.team.GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
         player.sendSystemMessage(Component.literal("§a已随 Rally 部署复活！"));
         // 战局中加入：真正落地后补职业选择。
         // 不再 sendUnifiedDeployScreen：落地后重开 J 面板会整页闪且一直挡视线；需要时按 J。
@@ -626,6 +628,9 @@ public class TeamPackManager {
     }
 
     private void burnEnemyProxiedRallies() {
+        if (teamPacks.isEmpty()) {
+            return;
+        }
         for (TeamPackData teamPack : new ArrayList<>(teamPacks.values())) {
             if (teamPack.active && hasEnemyNear(
                 teamPack.level, teamPack.pos, teamPack.team, enemyBurnRadius)) {

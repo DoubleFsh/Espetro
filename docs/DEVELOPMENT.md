@@ -153,6 +153,8 @@ if (!classes.isFull("ATTACK", classId)) {
 ```
 
 该管理器同时保存玩家队伍、编制、职业和计数。换队/退出时必须调用对应清理流程并广播新的计数。
+职业或装备变体实际发生变化后，管理器按活动地图
+`game.class_switch_cooldown_seconds` 写入 UUID 级冷却；冷却与当前职业记录分离，只在整局状态重置时清空。
 
 ## 游戏状态
 
@@ -284,10 +286,10 @@ int cooldown = skills.getRemainingCooldownSeconds(
 
 - 持续奔跑开始时扣除一次 `sprint_cost_per_second`，之后每 20 tick 再扣除一次。
 - 跳跃每次扣除 `jump_cost`。
-- 停止消耗 `regen_delay_seconds × 20` tick 后恢复一次，之后每 20 tick 恢复 `regen_per_second`。
+- 停止消耗后按 `regen_delay_seconds` 等待，再每 20 tick 恢复一次；`full_recovery_seconds` 默认从最后一次消耗起限制为 12 秒，运行时按体力上限计算恢复量，`regen_per_second` 作为最低值。
 - 客户端的 `StaminaJumpPacket` 只报告跳跃动作；是否扣除或阻止跳跃仍由服务端决定。
 - `StaminaSyncPacket` 只发给对应玩家，用于更新 `StaminaOverlay` 和客户端耗尽状态。
-- `StaminaOverlay` 仅在体力未满时显示，在准星下方绘制 `40×2` 像素的无数字白线。
+- `StaminaOverlay` 仅在体力未满时显示，在 Action Bar 下方绘制 `40×2` 像素的无数字白线。
 
 修改结算周期或包结构时，需要同时检查客户端抑制奔跑/跳跃、重生重置、配置热重载和专用服务器类加载。
 

@@ -44,7 +44,7 @@ public class SquadCreateWithCategoryPacket {
                     org.espetro.team.ClassCountManager.getInstance().getPlayerFaction(player.getUUID()));
                 NetworkManager.broadcastMatchStats(
                     org.espetro.stats.PlayerMatchStatsManager.getInstance());
-                NetworkManager.sendUnifiedDeployScreen(player, -1);
+                NetworkManager.syncUnifiedDeployScreen(player, -1);
             }
         });
         ctx.get().setPacketHandled(true);

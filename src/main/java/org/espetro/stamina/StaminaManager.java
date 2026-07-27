@@ -45,6 +45,11 @@ public final class StaminaManager {
             changed = true;
         }
 
+        // 满体且未冲刺：跳过费用/回复结算（跳跃由 onPlayerJump 事件扣费）
+        if (!changed && state.stamina >= maxStamina && !player.isSprinting()) {
+            return;
+        }
+
         if (player.isSprinting()) {
             if (state.stamina <= 0) {
                 player.setSprinting(false);
@@ -67,8 +72,13 @@ public final class StaminaManager {
 
         if (!staminaUseActive && state.stamina < maxStamina
                 && currentTick >= state.regenAtTick) {
+            int restorePerSecond = StaminaRecoveryPolicy.restorePerSecond(
+                maxStamina,
+                GameConfig.getStaminaRegenPerSecond(),
+                GameConfig.getStaminaRegenDelaySeconds(),
+                GameConfig.getStaminaFullRecoverySeconds());
             int restored = Math.min(maxStamina,
-                state.stamina + GameConfig.getStaminaRegenPerSecond());
+                state.stamina + restorePerSecond);
             if (restored != state.stamina) {
                 state.stamina = restored;
                 state.regenAtTick = currentTick + TICKS_PER_SECOND;
@@ -128,8 +138,11 @@ public final class StaminaManager {
     }
 
     private static void scheduleRegeneration(ServerPlayer player, PlayerStamina state) {
+        int delaySeconds = StaminaRecoveryPolicy.effectiveDelaySeconds(
+            GameConfig.getStaminaRegenDelaySeconds(),
+            GameConfig.getStaminaFullRecoverySeconds());
         state.regenAtTick = player.serverLevel().getGameTime()
-            + GameConfig.getStaminaRegenDelaySeconds() * (long) TICKS_PER_SECOND;
+            + delaySeconds * (long) TICKS_PER_SECOND;
     }
 
     private static void sync(ServerPlayer player, PlayerStamina state) {

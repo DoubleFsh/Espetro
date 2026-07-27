@@ -111,7 +111,7 @@
 | `UnifiedDeployScreen` | 兵站、队包、前哨和原部署点统一页面 |
 | `VehicleDeployScreen` | 载具部署页面 |
 | `TroopCountOverlay` | 双方兵力 HUD |
-| `StaminaOverlay` | 体力未满时在准星下方绘制无数字的细白线 |
+| `StaminaOverlay` | 体力未满时在 Action Bar 下方绘制无数字的细白线 |
 
 ## Espetro 网络包
 

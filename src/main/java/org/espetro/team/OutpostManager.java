@@ -203,6 +203,7 @@ public class OutpostManager {
             127,
             false, false, false
         ));
+        GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
             "§a已传送到前哨基地: §f" + outpost.name));
         return null;

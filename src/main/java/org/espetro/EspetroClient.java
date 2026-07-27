@@ -136,7 +136,7 @@ public class EspetroClient {
     }
 
     /**
-     * 按战术规则显示队友头顶名牌。
+     * 主城显示全员白色名牌；对战阶段按战术规则仅显示队友名牌。
      */
     private static void onRenderNameTag(net.minecraftforge.client.event.RenderNameTagEvent event) {
         org.espetro.client.TeammateNameTagRenderer.onRenderNameTag(event);

@@ -182,6 +182,7 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
     "faction_reveal_seconds": 3,
     "round_end_seconds": 10,
     "respawn_invincibility_ticks": 60,
+    "class_switch_cooldown_seconds": 60,
     "teammate_name_tag_distance": 10.0,
     "waiting_y": 200
   },
@@ -194,8 +195,9 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
     "player_stamina": 100,
     "sprint_cost_per_second": 5,
     "jump_cost": 15,
-    "regen_delay_seconds": 4,
-    "regen_per_second": 2
+    "regen_delay_seconds": 2,
+    "regen_per_second": 2,
+    "full_recovery_seconds": 12
   },
   "governance": {
     "impeachment_vote_seconds": 60,
@@ -220,6 +222,7 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
 | `faction_reveal_seconds` | 3 | 8 | 双方编制揭示时间 |
 | `round_end_seconds` | 10 | 10 | 回合结算界面时间 |
 | `respawn_invincibility_ticks` | 60 | 60 | 复活保护 tick，20 tick = 1 秒 |
+| `class_switch_cooldown_seconds` | 60 | 60 | 每名玩家成功选择职业后的独立换职冷却，秒；首次选职不受已有冷却限制，设为 `0` 可关闭 |
 | `teammate_name_tag_distance` | 10.0 | 10.0 | 队友名牌距离，方块 |
 | `waiting_y` | 200 | 200 | 统一等待部署点的高空 Y 坐标；玩家聚集于主世界 `(0.5, waiting_y, 0.5)`，选择部署点前保持旁观、失明并锁位 |
 
@@ -259,16 +262,17 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `player_stamina` | 100 | 玩家初始体力与上限；设为 `-1` 时禁用整个体力系统 |
 | `sprint_cost_per_second` | 5 | 持续奔跑时每秒消耗的体力 |
 | `jump_cost` | 15 | 每次跳跃消耗的体力 |
-| `regen_delay_seconds` | 4 | 最后一次消耗后，开始恢复前等待的秒数 |
-| `regen_per_second` | 2 | 恢复期间每秒恢复的体力 |
+| `regen_delay_seconds` | 2 | 最后一次消耗后，开始恢复前等待的秒数 |
+| `regen_per_second` | 2 | 恢复期间每秒恢复的最低体力值 |
+| `full_recovery_seconds` | 12 | 从最后一次消耗起，完全耗尽的体力回满所需的最长秒数；会按体力上限自动提高每秒恢复量，设为 `0` 使用旧版固定恢复速度 |
 
 ### 静态教程
 
 教程不再是配置项。玩家在主城 GUI 点击“进入新手教程”后，会打开静态、可滚动的 MUtil 教程页；对局过程中不会自动推送动态提示。
 
-持续奔跑会在开始时结算一次消耗，之后每秒结算一次；跳跃按次结算。停止消耗后经过 `regen_delay_seconds`，立即恢复一次，之后每秒按 `regen_per_second` 恢复。
+持续奔跑会在开始时结算一次消耗，之后每秒结算一次；跳跃按次结算。停止消耗后经过 `regen_delay_seconds`，立即恢复一次，之后每秒恢复。默认 `full_recovery_seconds: 12` 会根据 `player_stamina` 自动提高恢复量，保证从最后一次消耗算起 12 秒内回满；`regen_per_second` 仍是最低恢复速度。若等待时间长到无法满足目标，系统会自动缩短有效等待时间。
 
-体力耗尽时，服务端会禁止玩家奔跑和跳跃。体力未满时，客户端 HUD 会在准星下方显示一条 `40×2` 像素、无数字的细白线，线条长度表示剩余体力；体力回满后自动隐藏。修改地图的 `EsConfig/game.json` 后必须重启。
+体力耗尽时，服务端会禁止玩家奔跑和跳跃。体力未满时，客户端 HUD 会在 Action Bar 下方显示一条 `40×2` 像素、无数字的细白线，线条长度表示剩余体力；体力回满后自动隐藏。修改地图的 `EsConfig/game.json` 后必须重启。
 
 除 `player_stamina: -1` 这一禁用值外，生产配置应使用非负数，并确保阶段时间合理。
 
@@ -661,7 +665,7 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 管理员配置命令通常要求权限等级 2；载具部署要求当前指挥官身份。
 
 `/espetro stop` 可在地图投票、地图装载、部署、战斗或结算阶段强制终止当前游戏。
-它会清除投票、职业、阵营、小队、兵力、比赛统计、兵站、队包、临时屏障、部署载具及冷却状态，
+它会清除投票、职业、换职冷却、阵营、小队、兵力、比赛统计、兵站、队包、临时屏障、部署载具及冷却状态，
 并把所有在线玩家送回主世界主城、打开 MUtil 主城界面。若地图切换正在执行，清理会在切换后自动接续，
 避免留下半完成状态。
 

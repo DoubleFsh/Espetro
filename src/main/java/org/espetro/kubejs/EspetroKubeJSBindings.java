@@ -4,6 +4,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import org.espetro.Espetro;
+import org.espetro.api.EspetroAPI;
 import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
@@ -54,6 +55,10 @@ public final class EspetroKubeJSBindings {
     public static String getActiveBattlefieldDimension() {
         return BattlefieldContext.getActiveDimensionKey()
             .map(key -> key.location().toString()).orElse(null);
+    }
+
+    public static long getBattlefieldSessionId() {
+        return BattlefieldContext.getSessionId();
     }
 
     public static boolean endRound(String winner) {
@@ -201,6 +206,19 @@ public final class EspetroKubeJSBindings {
         }
         String team = classes().getPlayerTeam(uuid);
         return team != null ? team : classes().getEffectivePlayerTeam(uuid);
+    }
+
+    /**
+     * Whether an online player is alive and actually deployed in the active
+     * battlefield rather than waiting for a team or respawn location.
+     */
+    public static boolean isPlayerDeployed(Object playerRef) {
+        ServerPlayer player = getPlayer(playerRef);
+        return player != null && EspetroAPI.isPlayerVisibleOnTacticalMap(player);
+    }
+
+    public static boolean isPlayerVisibleOnTacticalMap(Object playerRef) {
+        return isPlayerDeployed(playerRef);
     }
 
     @Nullable

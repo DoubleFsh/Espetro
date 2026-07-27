@@ -15,9 +15,16 @@ import org.espetro.client.gui.ClientTacticalState;
 import org.espetro.team.TeamManager;
 
 /**
- * 按战术规则控制队友头顶名牌显示。
+ * 控制玩家头顶名牌显示。
+ * <ul>
+ *   <li>主城（LOBBY）：所有人可见，统一白色，无瞄准/距离限制</li>
+ *   <li>对战等阶段：仅队友，且需瞄准并在配置距离内；颜色按指挥官/小队优先级</li>
+ * </ul>
  */
 public final class TeammateNameTagRenderer {
+
+    /** 主城名牌固定白色（无阵营着色）。 */
+    private static final int HUB_NAME_COLOR = 0xFFFFFF;
 
     private TeammateNameTagRenderer() {
     }
@@ -29,7 +36,22 @@ public final class TeammateNameTagRenderer {
 
         Minecraft mc = Minecraft.getInstance();
         Player viewer = mc.player;
-        if (viewer == null || target == viewer || !isFriendlyTeammate(viewer, target)
+        if (viewer == null || target == viewer) {
+            event.setResult(Event.Result.DENY);
+            return;
+        }
+
+        // 主城：所有玩家白色名牌
+        if (ClientGameState.getCurrentPhase().isLobbyLike()) {
+            String name = target.getName().getString();
+            event.setContent(Component.literal(name)
+                .setStyle(Style.EMPTY.withColor(TextColor.fromRgb(HUB_NAME_COLOR))));
+            event.setResult(Event.Result.ALLOW);
+            return;
+        }
+
+        // 对战：仅瞄准范围内的友军
+        if (!isFriendlyTeammate(viewer, target)
             || !isLookedAtWithinDistance(viewer, target, event.getPartialTick())) {
             event.setResult(Event.Result.DENY);
             return;

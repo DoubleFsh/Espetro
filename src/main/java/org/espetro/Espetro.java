@@ -51,7 +51,7 @@ import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
-import org.espetro.team.VoteManager;
+
 import org.espetro.team.ClassSelectManager;
 import org.espetro.vehicle.VehicleCommand;
 import org.espetro.vehicle.VehicleManager;
@@ -288,10 +288,9 @@ public class Espetro {
             String classCountTeam = countManager.getEffectivePlayerTeam(event.getEntity().getUUID());
             String classCountFaction = countManager.getPlayerFaction(event.getEntity().getUUID());
             boolean wasLeader = SquadManager.getInstance().isSquadLeader(event.getEntity().getUUID());
-            if (GameStateManager.getInstance().getCurrentPhase() == GamePhase.BATTLE
-                && classCountTeam != null
-                && VoteManager.getInstance().isCommander(event.getEntity().getUUID())) {
-                CommanderGovernanceManager.getInstance().onCommanderDisconnected(
+            if (GameStateManager.getInstance().getCurrentPhase() == GamePhase.BATTLE) {
+                // Any battle leaver: commander vacancy, challenger cancel, volunteer/vote scrub.
+                CommanderGovernanceManager.getInstance().onPlayerLeft(
                     classCountTeam, event.getEntity().getUUID());
             }
             if (wasLeader) {
@@ -435,13 +434,49 @@ public class Espetro {
         public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
                 StaminaManager.resetPlayer(serverPlayer);
+                // 主城重生：所有人先冒险；非管理员再强制锁定
+                GameStateManager.getInstance().applyHubAdventureOnEnter(serverPlayer);
+                GameStateManager.getInstance().enforceHubAdventure(serverPlayer);
+                GameStateManager.getInstance().applyBattlefieldMiningRestriction(serverPlayer);
+            }
+        }
+
+        @SubscribeEvent
+        public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                if (net.minecraft.world.level.Level.OVERWORLD.equals(event.getTo())) {
+                    // 离开战场时清掉旧版疲劳残留
+                    serverPlayer.removeEffect(net.minecraft.world.effect.MobEffects.DIG_SLOWDOWN);
+                    // 进入主城：所有人（含管理员）设为冒险
+                    GameStateManager.getInstance().applyHubAdventureOnEnter(serverPlayer);
+                } else if (org.espetro.mapconfig.BattlefieldContext
+                    .isActiveBattlefield(serverPlayer.serverLevel())) {
+                    GameStateManager.getInstance().applyBattlefieldMiningRestriction(serverPlayer);
+                } else {
+                    serverPlayer.removeEffect(net.minecraft.world.effect.MobEffects.DIG_SLOWDOWN);
+                }
+            }
+        }
+
+        @SubscribeEvent
+        public static void onPlayerChangeGameMode(PlayerEvent.PlayerChangeGameModeEvent event) {
+            // 非管理员在主城禁止切出冒险模式
+            if (event.getEntity() instanceof ServerPlayer serverPlayer
+                && GameStateManager.getInstance().shouldForceHubAdventure(serverPlayer)
+                && event.getNewGameMode() != net.minecraft.world.level.GameType.ADVENTURE) {
+                event.setNewGameMode(net.minecraft.world.level.GameType.ADVENTURE);
             }
         }
 
         @SubscribeEvent
         public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
             if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer serverPlayer) {
-                maintainPlayerFood(serverPlayer);
+                // 食物每秒最多修正一次；自然恢复 gamerule 仅在启动时设置
+                if (serverPlayer.tickCount % 20 == 0) {
+                    maintainPlayerFood(serverPlayer);
+                    // 低频兜底：非管理员主城被其它途径改模式时拉回冒险
+                    GameStateManager.getInstance().enforceHubAdventure(serverPlayer);
+                }
                 StaminaManager.onPlayerTick(serverPlayer);
             }
         }
@@ -471,8 +506,6 @@ public class Espetro {
         }
 
         private static void maintainPlayerFood(ServerPlayer player) {
-            disableNaturalRegeneration(player.getServer());
-
             FoodData foodData = player.getFoodData();
             if (foodData.getFoodLevel() != FIXED_FOOD_LEVEL) {
                 foodData.setFoodLevel(FIXED_FOOD_LEVEL);
@@ -480,7 +513,9 @@ public class Espetro {
             if (foodData.getSaturationLevel() != FIXED_SATURATION_LEVEL) {
                 foodData.setSaturation(FIXED_SATURATION_LEVEL);
             }
-            foodData.setExhaustion(0.0F);
+            if (foodData.getExhaustionLevel() != 0.0F) {
+                foodData.setExhaustion(0.0F);
+            }
         }
 
         private static void disableNaturalRegeneration(MinecraftServer server) {
@@ -531,7 +566,6 @@ public class Espetro {
             if (event.phase == TickEvent.Phase.END) {
                 GameStateManager.getInstance().onServerTick();
                 ServerRuntimeMaintenance.getInstance().onServerTick();
-                org.espetro.team.CommanderSkillManager.getInstance().onServerTick();
             }
         }
 

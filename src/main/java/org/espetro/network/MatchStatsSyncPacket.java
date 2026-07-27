@@ -22,13 +22,22 @@ public class MatchStatsSyncPacket {
         public final int kills;
         public final int deaths;
         public final String classId;
+        /** Jar role slug (e.g. rifleman). */
         public final String classIcon;
+        /** Absolute IconImage path; may be null. */
+        public final String classIconImage;
         public final boolean online;
         public final int squadId;
         public final String squadName;
 
         public Row(UUID uuid, String name, String team, int kills, int deaths,
                    String classId, String classIcon, boolean online, int squadId, String squadName) {
+            this(uuid, name, team, kills, deaths, classId, classIcon, null, online, squadId, squadName);
+        }
+
+        public Row(UUID uuid, String name, String team, int kills, int deaths,
+                   String classId, String classIcon, String classIconImage,
+                   boolean online, int squadId, String squadName) {
             this.uuid = uuid;
             this.name = name;
             this.team = team;
@@ -36,6 +45,7 @@ public class MatchStatsSyncPacket {
             this.deaths = deaths;
             this.classId = classId;
             this.classIcon = classIcon;
+            this.classIconImage = classIconImage;
             this.online = online;
             this.squadId = squadId;
             this.squadName = squadName;
@@ -62,7 +72,8 @@ public class MatchStatsSyncPacket {
                     }
                 }
             }
-            rows.add(new Row(s.uuid, s.name, team, s.kills, s.deaths, s.classId, s.classIcon,
+            rows.add(new Row(s.uuid, s.name, team, s.kills, s.deaths,
+                s.classId, s.classIcon, s.classIconImage,
                 s.online, squadId, squadName));
         }
         return new MatchStatsSyncPacket(rows);
@@ -78,6 +89,7 @@ public class MatchStatsSyncPacket {
                 buf.readBoolean() ? buf.readUtf() : null,
                 buf.readVarInt(),
                 buf.readVarInt(),
+                buf.readBoolean() ? buf.readUtf() : null,
                 buf.readBoolean() ? buf.readUtf() : null,
                 buf.readBoolean() ? buf.readUtf() : null,
                 buf.readBoolean(),
@@ -101,6 +113,10 @@ public class MatchStatsSyncPacket {
             if (r.classId != null) buf.writeUtf(r.classId);
             buf.writeBoolean(r.classIcon != null);
             if (r.classIcon != null) buf.writeUtf(r.classIcon);
+            buf.writeBoolean(r.classIconImage != null && !r.classIconImage.isBlank());
+            if (r.classIconImage != null && !r.classIconImage.isBlank()) {
+                buf.writeUtf(r.classIconImage);
+            }
             buf.writeBoolean(r.online);
             buf.writeVarInt(r.squadId);
             buf.writeUtf(r.squadName != null ? r.squadName : "");

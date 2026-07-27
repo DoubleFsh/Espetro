@@ -157,6 +157,9 @@ public class ClientPacketHandlers {
         try {
             GamePhase phase = GamePhase.valueOf(phaseName);
             org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
+            if (phase.isLobbyLike() || phase == GamePhase.ROUND_END || phase == GamePhase.CLEANUP) {
+                org.espetro.client.gui.ClientGovernanceState.clear();
+            }
 
             net.minecraft.client.Minecraft phaseMc = net.minecraft.client.Minecraft.getInstance();
             if (phase == GamePhase.MAP_LOADING
@@ -219,6 +222,7 @@ public class ClientPacketHandlers {
             screen.updateDeploymentState(
                 packet.isWaitingForDeploySelection(),
                 packet.getOutpostRedeployCooldownRemaining());
+            screen.updateClassSwitchCooldown(packet.getClassSwitchCooldownRemaining());
             screen.updateBastions(packet.getBastions());
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
             screen.updateClasses(packet.getClasses(), packet.getClassCounts(), packet.getVariantCounts());
@@ -226,7 +230,7 @@ public class ClientPacketHandlers {
             // 班组管理是部署界面的子界面。部署阶段会持续发送该包，
             // 此处只同步实时状态，不能把玩家强制切回部署界面。
             screen.updateFromDeployPacket(packet);
-        } else {
+        } else if (packet.shouldOpenScreen()) {
             mc.setScreen(new org.espetro.client.gui.UnifiedDeployScreen(packet));
         }
     }
@@ -378,10 +382,15 @@ public class ClientPacketHandlers {
     }
 
     public static void handleGovernanceState(GovernanceStatePacket packet) {
+        org.espetro.client.gui.ClientGovernanceState.update(packet);
         org.espetro.client.gui.MatchScoreboardScreen.updateGovernance(packet);
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
             screen.updateGovernance(packet);
+        } else if (mc.screen instanceof org.espetro.client.gui.MatchScoreboardScreen scoreboard
+            && scoreboard.getParent() instanceof org.espetro.client.gui.UnifiedDeployScreen parent) {
+            // Keep parent deploy panel in sync while scoreboard is open.
+            parent.updateGovernance(packet);
         }
     }
 

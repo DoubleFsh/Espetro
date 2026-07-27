@@ -50,6 +50,8 @@ public class UnifiedDeployScreen extends MutilScreen {
     private static final int BTN_BG_NORMAL   = 0xFF1B1E20;
     private static final int BTN_BG_HOVER    = 0xFF435145;
     private static final int BTN_BG_DISABLED = 0xFF181B1D;
+    private static final int CLASS_BG_UNAVAILABLE = 0xFF4A2024;
+    private static final int CLASS_BORDER_UNAVAILABLE = 0xFF8A3A42;
     private static final int BTN_BORDER      = 0xFF59605E;
     private static final int BTN_TEXT        = 0xFFFFFF;
     /** J 键主 GUI 的所有非地图背景统一使用不透明纯黑，避免世界画面穿透或色块交替闪烁。 */
@@ -88,8 +90,12 @@ public class UnifiedDeployScreen extends MutilScreen {
     private final String team;
     private boolean waitingForDeploySelection;
     private long outpostRedeployCooldownEndsAt;
-    private GovernanceStatePacket governanceState = new GovernanceStatePacket(List.of());
-    private long governanceReceivedAtMs;
+    private long classSwitchCooldownEndsAt;
+    private int lastDisplayedClassSwitchCooldown = -1;
+    private GovernanceStatePacket governanceState = ClientGovernanceState.get();
+    private long governanceReceivedAtMs = ClientGovernanceState.getReceivedAtMs();
+    /** candidate UUID string → vote button, for in-place label refresh */
+    private final Map<String, EspButton> governanceVoteButtons = new HashMap<>();
     /** 数据事件只使相关区域失效；下一客户端 tick 合并后局部重建。 */
     private enum Section {
         SQUAD,
@@ -114,6 +120,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     private final Map<EspButton, Integer> deployButtonWaveSeconds = new HashMap<>();
     private EspButton outpostRedeployButton;
     private EspButton confirmDeployButton;
+    private PlainText classTitleText;
     private PlainText statusText;
     private PlainText statusTimerText;
     private PlainText governanceTimerText;
@@ -182,6 +189,8 @@ public class UnifiedDeployScreen extends MutilScreen {
         this.waitingForDeploySelection = data.isWaitingForDeploySelection();
         this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
             + data.getOutpostRedeployCooldownRemaining() * 1000L;
+        this.classSwitchCooldownEndsAt = System.currentTimeMillis()
+            + data.getClassSwitchCooldownRemaining() * 1000L;
         anchorDeployTimer(data.getDeployTimeRemaining());
     }
 
@@ -418,6 +427,13 @@ public class UnifiedDeployScreen extends MutilScreen {
         refreshDeployButtonStates();
     }
 
+    /** 同步服务端权威的个人换职冷却；只刷新职业标题和按钮，不重建 GUI。 */
+    public void updateClassSwitchCooldown(int remainingSeconds) {
+        this.classSwitchCooldownEndsAt = System.currentTimeMillis()
+            + Math.max(0, remainingSeconds) * 1000L;
+        refreshClassSwitchCooldown();
+    }
+
     public boolean isWaitingForDeploySelection() {
         return waitingForDeploySelection;
     }
@@ -448,14 +464,59 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     public void updateGovernance(GovernanceStatePacket packet) {
         GovernanceStatePacket.TeamState previous = activeGovernance();
-        governanceState = packet == null ? new GovernanceStatePacket(List.of()) : packet;
-        governanceReceivedAtMs = System.currentTimeMillis();
+        if (packet != null) {
+            ClientGovernanceState.update(packet);
+        }
+        governanceState = ClientGovernanceState.get();
+        governanceReceivedAtMs = ClientGovernanceState.getReceivedAtMs();
         GovernanceStatePacket.TeamState current = activeGovernance();
         if (!sameGovernanceLayout(previous, current)) {
             invalidateSections(Section.MAP_CONTROLS);
-        } else if (governanceTimerText != null && current != null) {
-            governanceTimerText.setText("\u00a7e剩余 " + current.remainingSeconds + "s");
+        } else {
+            refreshGovernanceLabels(current);
         }
+    }
+
+    private void refreshGovernanceLabels(GovernanceStatePacket.TeamState current) {
+        if (current == null) {
+            return;
+        }
+        if (governanceTimerText != null) {
+            governanceTimerText.setText("\u00a7e剩余 "
+                + ClientGovernanceState.secondsLeft(current) + "s");
+        }
+        for (Map.Entry<String, EspButton> e : governanceVoteButtons.entrySet()) {
+            try {
+                UUID candidate = UUID.fromString(e.getKey());
+                e.getValue().setLabel(buildVoteButtonLabel(current, candidate,
+                    votePrefixFor(current, candidate)));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+    }
+
+    private static String votePrefixFor(GovernanceStatePacket.TeamState state, UUID candidate) {
+        if (state == null || candidate == null) {
+            return "候选人";
+        }
+        if ("IMPEACHMENT_VOTE".equals(state.state)) {
+            if (candidate.equals(state.commander)) {
+                return "原指挥官";
+            }
+            if (candidate.equals(state.challenger)) {
+                return "挑战者";
+            }
+        }
+        return "志愿者";
+    }
+
+    private static String buildVoteButtonLabel(GovernanceStatePacket.TeamState state,
+                                              UUID candidate, String prefix) {
+        String name = MatchScoreboardScreen.nameFor(candidate);
+        int votes = ClientGovernanceState.voteCount(state, candidate);
+        boolean mine = ClientGovernanceState.isMyVote(state, candidate);
+        String mark = mine ? "\u00a7a\u2713 " : "\u00a7f";
+        return mark + prefix + "\u00a7f\uff1a\u00a7e" + name + "  \u00a7b[" + votes + "\u7968]";
     }
 
     private static boolean sameGovernanceLayout(GovernanceStatePacket.TeamState a,
@@ -477,6 +538,9 @@ public class UnifiedDeployScreen extends MutilScreen {
         private boolean hovered = false;
         private int normalColor = BTN_BG_NORMAL;
         private int hoverColor = BTN_BG_HOVER;
+        private int disabledColor = BTN_BG_DISABLED;
+        private int disabledBorderColor = 0x60383848;
+        private int disabledTextColor = 0x666666;
         private int textColor = BTN_TEXT;
         private ResourceLocation icon;
         private int iconTextureWidth = 128;
@@ -510,6 +574,11 @@ public class UnifiedDeployScreen extends MutilScreen {
         void setRightLabel(String value) { rightLabel = value == null ? "" : value; }
         void setTextScale(float scale) { textScale = Math.max(0.5f, Math.min(1.0f, scale)); }
         void setCenteredText(boolean centered) { centeredText = centered; }
+        void setDisabledStyle(int background, int border, int text) {
+            disabledColor = background;
+            disabledBorderColor = border;
+            disabledTextColor = text;
+        }
 
         @Override
         public boolean onMouseClick(int mx, int my, int button) {
@@ -526,15 +595,16 @@ public class UnifiedDeployScreen extends MutilScreen {
             int bx = x + getX(), by = y + getY(), bw = getWidth(), bh = getHeight();
 
             int bgCol;
-            if (!enabled) bgCol = BTN_BG_DISABLED;
+            if (!enabled) bgCol = disabledColor;
             else if (hovered) bgCol = hoverColor;
             else bgCol = normalColor;
             graphics.fill(bx, by, bx + bw, by + bh, bgCol);
 
-            int borderCol = !enabled ? 0x60383848 : (hovered ? 0xFF9999BB : BTN_BORDER);
+            int borderCol = !enabled
+                ? disabledBorderColor : (hovered ? 0xFF9999BB : BTN_BORDER);
             graphics.renderOutline(bx, by, bw, bh, borderCol);
 
-            int textCol = enabled ? textColor : 0x666666;
+            int textCol = enabled ? textColor : disabledTextColor;
             int contentLeft = bx + 3;
             if (icon != null) {
                 int drawnIconSize = Math.min(iconSize, bh - 3);
@@ -654,9 +724,14 @@ public class UnifiedDeployScreen extends MutilScreen {
     private void populateGui() {
         this.outpostRedeployButton = null;
         this.confirmDeployButton = null;
+        this.classTitleText = null;
         this.statusText = null;
         this.statusTimerText = null;
         this.governanceTimerText = null;
+        this.governanceVoteButtons.clear();
+        // Seed from global cache so mid-impeachment open still shows vote UI.
+        this.governanceState = ClientGovernanceState.get();
+        this.governanceReceivedAtMs = ClientGovernanceState.getReceivedAtMs();
         computeRegions();
 
         buildTitleBar();
@@ -763,6 +838,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             return;
         }
         governanceTimerText = null;
+        governanceVoteButtons.clear();
         mapControlsRoot.clearChildren();
         buildMapPanel(mapControlsRoot);
     }
@@ -964,8 +1040,9 @@ public class UnifiedDeployScreen extends MutilScreen {
         int sx = classAreaX, sy = classAreaY;
         int areaW = classAreaW, areaH = classAreaH;
 
-        PlainText ct = new PlainText(sx, sy, "\u00a76职业选择", 0xFFFFAA00);
-        sectionRoot.addChild(ct);
+        classTitleText = new PlainText(sx, sy, buildClassTitle(), 0xFFFFAA00);
+        sectionRoot.addChild(classTitleText);
+        lastDisplayedClassSwitchCooldown = getClassSwitchCooldownRemaining();
 
         // 滚轮列表区域：标题下方，占满剩余空间
         int listY = sy + SECTION_TITLE_H + 1;
@@ -989,7 +1066,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             boolean disabled = isClassButtonDisabled(cls);
             boolean emphasizeRed = isClassEmphasizeRed(cls, disabled);
             String label = "\u00a7f" + cls.name;
-            String right = buildClassCountRightLabel(cls, emphasizeRed || disabled);
+            String right = buildClassCountRightLabel(cls, emphasizeRed);
 
             int col = i % cols;
             int row = i / cols;
@@ -1004,7 +1081,13 @@ public class UnifiedDeployScreen extends MutilScreen {
             btn.setRightLabel(right);
             btn.setCenteredText(false);
             btn.setEnabled(!disabled);
-            if (disabled) { btn.hoverColor = 0xF0403050; btn.normalColor = 0xE0252035; }
+            if (disabled) {
+                boolean coolingDown = getClassSwitchCooldownRemaining() > 0;
+                btn.setDisabledStyle(
+                    coolingDown ? BTN_BG_DISABLED : CLASS_BG_UNAVAILABLE,
+                    coolingDown ? 0x60383848 : CLASS_BORDER_UNAVAILABLE,
+                    coolingDown ? 0xFF777777 : 0xFFFF9A9A);
+            }
             classScrollList.addChild(btn);
             classButtons.add(btn);
         }
@@ -1322,11 +1405,11 @@ public class UnifiedDeployScreen extends MutilScreen {
         // 仅更新 Rally 个人冷却文案，不重建部署区域。
         refreshRallyWaveLabels();
         refreshConfirmDeployButton();
+        refreshClassSwitchCooldown();
         GovernanceStatePacket.TeamState governance = activeGovernance();
         if (governanceTimerText != null && governance != null) {
-            int elapsed = (int) ((System.currentTimeMillis() - governanceReceivedAtMs) / 1000L);
             governanceTimerText.setText("\u00a7e剩余 "
-                + Math.max(0, governance.remainingSeconds - elapsed) + "s");
+                + ClientGovernanceState.secondsLeft(governance) + "s");
         }
     }
 
@@ -1352,6 +1435,7 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     // ---------- 战术地图（右半屏，由 HCR AAD / ESPoints 绘制）----------
     private void buildMapPanel(GuiElement sectionRoot) {
+        governanceVoteButtons.clear();
         int bx = mapX + 5;
         int by = mapY + mapH - BTN_H - 4;
         EspButton score = new EspButton(bx, by, 64, BTN_H, "\u00a76玩家分数板",
@@ -1376,16 +1460,22 @@ public class UnifiedDeployScreen extends MutilScreen {
 
         int governanceH = Math.max(20, mapH - MAP_FOOTER_H - 6);
         sectionRoot.addChild(new GuiRect(mapX + 3, mapY + 3, mapW - 6, governanceH, 0xE0181818));
+        String stateTitle = switch (state.state) {
+            case "IMPEACHMENT_VOTE" -> "弹劾投票";
+            case "VACANCY_VOLUNTEER" -> "指挥官空缺";
+            case "VACANCY_VOTE" -> "空缺公投";
+            default -> state.state;
+        };
         sectionRoot.addChild(new PlainText(mapX + 10, mapY + 30,
-            "\u00a76\u00a7l指挥官治理：" + state.state, 0xFFFFC766));
+            "\u00a76\u00a7l指挥官治理：" + stateTitle, 0xFFFFC766));
         governanceTimerText = new PlainText(mapX + 10, mapY + 43,
-            "\u00a7e剩余 " + state.remainingSeconds + "s", 0xFFFFD27A);
+            "\u00a7e剩余 " + ClientGovernanceState.secondsLeft(state) + "s", 0xFFFFD27A);
         sectionRoot.addChild(governanceTimerText);
         int rowY = mapY + 60;
         if ("IMPEACHMENT_VOTE".equals(state.state)) {
-            addGovernanceVoteButton(sectionRoot, state.commander, "原指挥官", rowY,
+            addGovernanceVoteButton(sectionRoot, state, state.commander, "原指挥官", rowY,
                 GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
-            addGovernanceVoteButton(sectionRoot, state.challenger, "挑战者", rowY + 18,
+            addGovernanceVoteButton(sectionRoot, state, state.challenger, "挑战者", rowY + 18,
                 GovernanceActionPacket.Action.VOTE_IMPEACHMENT);
         } else if ("VACANCY_VOLUNTEER".equals(state.state)) {
             EspButton volunteer = new EspButton(mapX + 10, rowY, Math.max(80, mapW - 20), BTN_H,
@@ -1393,10 +1483,17 @@ public class UnifiedDeployScreen extends MutilScreen {
                     GovernanceActionPacket.Action.VOLUNTEER_VACANCY, null));
             volunteer.setTextScale(UI_TEXT_SCALE);
             sectionRoot.addChild(volunteer);
+            if (!state.volunteers.isEmpty()) {
+                String names = state.volunteers.stream()
+                    .map(MatchScoreboardScreen::nameFor)
+                    .reduce((a, b) -> a + ", " + b).orElse("");
+                sectionRoot.addChild(new PlainText(mapX + 10, rowY + 18,
+                    "\u00a77已志愿: " + names, 0xFFB0B0B0));
+            }
         } else if ("VACANCY_VOTE".equals(state.state)) {
             int y = rowY;
             for (UUID volunteer : state.volunteers) {
-                addGovernanceVoteButton(sectionRoot, volunteer, "志愿者", y,
+                addGovernanceVoteButton(sectionRoot, state, volunteer, "志愿者", y,
                     GovernanceActionPacket.Action.VOTE_VACANCY);
                 y += 18;
                 if (y > mapY + mapH - MAP_FOOTER_H - 18) break;
@@ -1404,18 +1501,24 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
     }
 
-    private void addGovernanceVoteButton(GuiElement sectionRoot, UUID candidate, String prefix, int y,
+    private void addGovernanceVoteButton(GuiElement sectionRoot,
+                                         GovernanceStatePacket.TeamState state,
+                                         UUID candidate, String prefix, int y,
                                          GovernanceActionPacket.Action action) {
         if (candidate == null) return;
-        String name = MatchScoreboardScreen.nameFor(candidate);
         EspButton button = new EspButton(mapX + 10, y, Math.max(80, mapW - 20), BTN_H,
-            "\u00a7f" + prefix + "：\u00a7e" + name,
+            buildVoteButtonLabel(state, candidate, prefix),
             () -> NetworkManager.sendGovernanceAction(action, candidate));
         button.setTextScale(UI_TEXT_SCALE);
         sectionRoot.addChild(button);
+        governanceVoteButtons.put(candidate.toString(), button);
     }
 
     private GovernanceStatePacket.TeamState activeGovernance() {
+        GovernanceStatePacket.TeamState cached = ClientGovernanceState.forTeam(team);
+        if (cached != null) {
+            return cached;
+        }
         for (GovernanceStatePacket.TeamState state : governanceState.teams) {
             if (team.equals(state.team)) return state;
         }
@@ -1997,7 +2100,7 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     /**
      * 职业按钮右侧人数文案（只显示一组 [当前/上限]）。
-     * 未入队：team_count 不显示；其它显示 [编制当前/编制总上限]。
+     * 未入队：不显示任何人数，避免在尚不能选职时造成可选错觉。
      * 已入队：显示 [本小队当前/本小队上限]
      *   （team_count → maxPlayers；否则 max_per_squad>0 → max_per_squad；无则回退 maxPlayers）。
      */
@@ -2005,11 +2108,7 @@ public class UnifiedDeployScreen extends MutilScreen {
                                             boolean disabled) {
         String color = disabled ? "§c" : "§a";
         if (!inSquad()) {
-            if (cls.teamCount) {
-                return "";
-            }
-            int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
-            return color + "[" + teamCount + "/" + cls.maxPlayers + "]";
+            return "";
         }
         int squadCur = Math.max(0, cls.squadCurrentCount);
         int squadCap = getSquadDisplayCap(cls);
@@ -2031,6 +2130,9 @@ public class UnifiedDeployScreen extends MutilScreen {
      * 未入队全部禁用；入队后 team_count 看小队满，非 team_count 看编制总限 + max_per_squad。
      */
     private boolean isClassButtonDisabled(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (getClassSwitchCooldownRemaining() > 0) {
+            return true;
+        }
         if (!inSquad()) {
             return true;
         }
@@ -2046,15 +2148,14 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private boolean isClassEmphasizeRed(UnifiedDeployScreenPacket.ClassInfo cls, boolean disabled) {
+        if (getClassSwitchCooldownRemaining() > 0) {
+            return false;
+        }
         if (!disabled) {
             return false;
         }
-        if (!inSquad() && cls.teamCount) {
-            return true;
-        }
         if (!inSquad()) {
-            int teamCount = classCounts.getOrDefault(cls.classId, cls.currentCount);
-            return teamCount >= cls.maxPlayers;
+            return true;
         }
         int squadCur = Math.max(0, cls.squadCurrentCount);
         if (cls.teamCount) {
@@ -2068,6 +2169,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private void refreshClassButtons() {
+        boolean coolingDown = getClassSwitchCooldownRemaining() > 0;
         for (int i = 0; i < classButtons.size() && i < classes.size(); i++) {
             var cls = classes.get(i);
             boolean disabled = isClassButtonDisabled(cls);
@@ -2075,16 +2177,45 @@ public class UnifiedDeployScreen extends MutilScreen {
             classButtons.get(i).setLabel("§f" + cls.name);
             classButtons.get(i).setIcon(RoleIconResources.resolve(cls.iconImage, cls.icon),
                 RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
-            classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed || disabled));
+            classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed));
             classButtons.get(i).setEnabled(!disabled);
             if (disabled) {
-                classButtons.get(i).normalColor = 0xE0252035;
-                classButtons.get(i).hoverColor = 0xF0403050;
+                classButtons.get(i).setDisabledStyle(
+                    coolingDown ? BTN_BG_DISABLED : CLASS_BG_UNAVAILABLE,
+                    coolingDown ? 0x60383848 : CLASS_BORDER_UNAVAILABLE,
+                    coolingDown ? 0xFF777777 : 0xFFFF9A9A);
             } else {
                 classButtons.get(i).normalColor = BTN_BG_NORMAL;
                 classButtons.get(i).hoverColor = BTN_BG_HOVER;
             }
         }
+    }
+
+    private int getClassSwitchCooldownRemaining() {
+        long remainingMs = classSwitchCooldownEndsAt - System.currentTimeMillis();
+        return remainingMs <= 0L ? 0 : (int) ((remainingMs + 999L) / 1000L);
+    }
+
+    private String buildClassTitle() {
+        int remaining = getClassSwitchCooldownRemaining();
+        return remaining > 0
+            ? "\u00a76职业选择 \u00a77| \u00a7e" + remaining + "秒后可更换"
+            : "\u00a76职业选择";
+    }
+
+    private void refreshClassSwitchCooldown() {
+        int remaining = getClassSwitchCooldownRemaining();
+        if (remaining == lastDisplayedClassSwitchCooldown) {
+            return;
+        }
+        lastDisplayedClassSwitchCooldown = remaining;
+        if (classTitleText != null) {
+            classTitleText.setText(buildClassTitle());
+        }
+        if (remaining > 0) {
+            closeVariantPopup();
+        }
+        refreshClassButtons();
     }
 
     private void selectClass(int index) {
@@ -2118,6 +2249,10 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private boolean handleVariantPopupClick(int mouseX, int mouseY) {
+        if (getClassSwitchCooldownRemaining() > 0) {
+            closeVariantPopup();
+            return true;
+        }
         int closeX = variantPopupX + VARIANT_POPUP_W - 16;
         int closeY = variantPopupY + 2;
         if (inside(mouseX, mouseY, closeX, closeY, 13, 13)) {

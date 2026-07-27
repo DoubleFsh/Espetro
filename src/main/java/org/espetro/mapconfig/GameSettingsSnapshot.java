@@ -18,6 +18,7 @@ public final class GameSettingsSnapshot {
     public final int factionRevealSeconds;
     public final int roundEndSeconds;
     public final int respawnInvincibilityTicks;
+    public final int classSwitchCooldownSeconds;
     public final double teammateNameTagDistance;
     public final double waitingY;
 
@@ -30,6 +31,7 @@ public final class GameSettingsSnapshot {
     public final int jumpCost;
     public final int regenDelaySeconds;
     public final int regenPerSecond;
+    public final int fullRecoverySeconds;
 
     public final int impeachmentVoteSeconds;
     public final int impeachmentCooldownSeconds;
@@ -50,6 +52,7 @@ public final class GameSettingsSnapshot {
         int factionRevealSeconds,
         int roundEndSeconds,
         int respawnInvincibilityTicks,
+        int classSwitchCooldownSeconds,
         double teammateNameTagDistance,
         double waitingY,
         int initialAttackTroops,
@@ -60,6 +63,7 @@ public final class GameSettingsSnapshot {
         int jumpCost,
         int regenDelaySeconds,
         int regenPerSecond,
+        int fullRecoverySeconds,
         int impeachmentVoteSeconds,
         int impeachmentCooldownSeconds,
         int commanderVacancySeconds,
@@ -77,6 +81,7 @@ public final class GameSettingsSnapshot {
         this.factionRevealSeconds = factionRevealSeconds;
         this.roundEndSeconds = roundEndSeconds;
         this.respawnInvincibilityTicks = respawnInvincibilityTicks;
+        this.classSwitchCooldownSeconds = classSwitchCooldownSeconds;
         this.teammateNameTagDistance = teammateNameTagDistance;
         this.waitingY = waitingY;
         this.initialAttackTroops = initialAttackTroops;
@@ -87,6 +92,7 @@ public final class GameSettingsSnapshot {
         this.jumpCost = jumpCost;
         this.regenDelaySeconds = regenDelaySeconds;
         this.regenPerSecond = regenPerSecond;
+        this.fullRecoverySeconds = fullRecoverySeconds;
         this.impeachmentVoteSeconds = impeachmentVoteSeconds;
         this.impeachmentCooldownSeconds = impeachmentCooldownSeconds;
         this.commanderVacancySeconds = commanderVacancySeconds;
@@ -96,9 +102,9 @@ public final class GameSettingsSnapshot {
 
     public static GameSettingsSnapshot defaults() {
         return new GameSettingsSnapshot(
-            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 10.0, 200.0,
+            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 60, 10.0, 200.0,
             280, 1200, 2,
-            100, 5, 15, 4, 2,
+            100, 5, 15, 2, 2, 12,
             60, 600, 180,
             false, false
         );
@@ -120,6 +126,7 @@ public final class GameSettingsSnapshot {
         int reveal = d.factionRevealSeconds;
         int roundEnd = d.roundEndSeconds;
         int invuln = d.respawnInvincibilityTicks;
+        int classSwitchCooldown = d.classSwitchCooldownSeconds;
         double nameTag = d.teammateNameTagDistance;
         double waitingY = d.waitingY;
 
@@ -132,6 +139,7 @@ public final class GameSettingsSnapshot {
         int jump = d.jumpCost;
         int regenDelay = d.regenDelaySeconds;
         int regen = d.regenPerSecond;
+        int fullRecovery = d.fullRecoverySeconds;
 
         int impeachVote = d.impeachmentVoteSeconds;
         int impeachCd = d.impeachmentCooldownSeconds;
@@ -153,6 +161,8 @@ public final class GameSettingsSnapshot {
             reveal = getInt(game, "faction_reveal_seconds", reveal);
             roundEnd = getInt(game, "round_end_seconds", roundEnd);
             invuln = getInt(game, "respawn_invincibility_ticks", invuln);
+            classSwitchCooldown = getInt(
+                game, "class_switch_cooldown_seconds", classSwitchCooldown);
             nameTag = getDouble(game, "teammate_name_tag_distance", nameTag);
             waitingY = getDouble(game, "waiting_y", waitingY);
         }
@@ -170,6 +180,8 @@ public final class GameSettingsSnapshot {
             jump = Math.max(0, getInt(st, "jump_cost", jump));
             regenDelay = Math.max(0, getInt(st, "regen_delay_seconds", regenDelay));
             regen = Math.max(0, getInt(st, "regen_per_second", regen));
+            fullRecovery = Math.max(0,
+                getInt(st, "full_recovery_seconds", fullRecovery));
         }
         if (root.has("governance") && root.get("governance").isJsonObject()) {
             JsonObject g = root.getAsJsonObject("governance");
@@ -193,6 +205,7 @@ public final class GameSettingsSnapshot {
             Math.max(1, reveal),
             Math.max(1, roundEnd),
             Math.max(0, invuln),
+            Math.max(0, classSwitchCooldown),
             nameTag,
             waitingY,
             Math.max(0, atkTroops),
@@ -203,6 +216,7 @@ public final class GameSettingsSnapshot {
             jump,
             regenDelay,
             regen,
+            fullRecovery,
             Math.max(1, impeachVote),
             Math.max(0, impeachCd),
             Math.max(1, vacancy),

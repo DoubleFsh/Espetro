@@ -11,6 +11,7 @@ import org.espetro.api.event.BattlefieldLifecycleEvent;
 
 import javax.annotation.Nullable;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class BattlefieldContext {
 
     private static final AtomicReference<ActiveMapConfig> ACTIVE = new AtomicReference<>(null);
+    private static final AtomicLong SESSION_ID = new AtomicLong(0L);
     private static volatile String lastRoundWinner = null;
 
     private BattlefieldContext() {
@@ -32,6 +34,7 @@ public final class BattlefieldContext {
             // half-activated battlefield through the public context.
             GameConfigBridge.apply(config);
             ACTIVE.set(config);
+            SESSION_ID.incrementAndGet();
             Espetro.LOGGER.info("激活战场配置: {} ({})", config.displayName, config.dimensionId);
             EspetroAPI.getActiveBattlefieldSnapshot().ifPresent(snapshot ->
                 MinecraftForge.EVENT_BUS.post(new BattlefieldLifecycleEvent.Activated(snapshot)));
@@ -41,6 +44,7 @@ public final class BattlefieldContext {
     }
 
     public static void clear() {
+        SESSION_ID.incrementAndGet();
         ActiveMapConfig previous = ACTIVE.getAndSet(null);
         if (previous != null) {
             ActiveBattlefieldSnapshot snapshot = new ActiveBattlefieldSnapshot(
@@ -68,6 +72,15 @@ public final class BattlefieldContext {
 
     public static boolean isActive() {
         return ACTIVE.get() != null;
+    }
+
+    /**
+     * Monotonically increasing token used by delayed effects. A token captured
+     * in an earlier battlefield copy can never become valid in a later round,
+     * even when both rounds use the same map and dimension id.
+     */
+    public static long getSessionId() {
+        return SESSION_ID.get();
     }
 
     public static Optional<ResourceKey<Level>> getActiveDimensionKey() {

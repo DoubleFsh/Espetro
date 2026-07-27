@@ -12,12 +12,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Radio 电台方块：队伍补给锚点核心。
- * 破坏耗时约 30 秒（strength + BreakSpeed 事件锁定），敌方破坏扣兵力。
+ * 敌方玩家潜行左键后由服务端执行 30 秒拆除计时，完成时扣除 Radio 兵力。
  */
 public class RadioBlock extends HorizontalDirectionalBlock {
 
     public static final String BLOCK_ID = "radio";
-    /** 目标徒手破坏时长（秒）；BreakSpeed 事件按此锁定挖掘速度。 */
+    /** 敌方潜行左键拆除所需时间（秒）。 */
     public static final int BREAK_SECONDS = 30;
 
     private static final VoxelShape SHAPE = Block.box(1, 0, 1, 15, 15, 15);

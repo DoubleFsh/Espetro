@@ -29,6 +29,7 @@ public class GameConfig {
     private static int attackFactionSelectSeconds = 30;
     private static int factionPoolSize = 6;
     private static int respawnInvincibilityTicks = 60;
+    private static int classSwitchCooldownSeconds = 60;
     private static double teammateNameTagDistance = 10.0;
     private static double waitingY = 200.0;
 
@@ -42,8 +43,9 @@ public class GameConfig {
     private static int playerStamina = 100;
     private static int sprintStaminaCostPerSecond = 5;
     private static int jumpStaminaCost = 15;
-    private static int staminaRegenDelaySeconds = 4;
+    private static int staminaRegenDelaySeconds = 2;
     private static int staminaRegenPerSecond = 2;
+    private static int staminaFullRecoverySeconds = 12;
 
     // ========== 多维度战局新增字段 ==========
     private static int teamSelectSeconds = 60;
@@ -137,6 +139,10 @@ public class GameConfig {
         return respawnInvincibilityTicks;
     }
 
+    public static int getClassSwitchCooldownSeconds() {
+        return classSwitchCooldownSeconds;
+    }
+
     public static double getTeammateNameTagDistance() {
         return teammateNameTagDistance;
     }
@@ -179,6 +185,10 @@ public class GameConfig {
 
     public static int getStaminaRegenPerSecond() {
         return staminaRegenPerSecond;
+    }
+
+    public static int getStaminaFullRecoverySeconds() {
+        return staminaFullRecoverySeconds;
     }
 
     public static int getTeamSelectSeconds() {
@@ -224,6 +234,7 @@ public class GameConfig {
         factionRevealSeconds = s.factionRevealSeconds;
         roundEndSeconds = s.roundEndSeconds;
         respawnInvincibilityTicks = s.respawnInvincibilityTicks;
+        classSwitchCooldownSeconds = s.classSwitchCooldownSeconds;
         teammateNameTagDistance = s.teammateNameTagDistance;
         waitingY = s.waitingY;
         initialAttackTroops = s.initialAttackTroops;
@@ -234,14 +245,15 @@ public class GameConfig {
         jumpStaminaCost = s.jumpCost;
         staminaRegenDelaySeconds = s.regenDelaySeconds;
         staminaRegenPerSecond = s.regenPerSecond;
+        staminaFullRecoverySeconds = s.fullRecoverySeconds;
         impeachmentVoteSeconds = s.impeachmentVoteSeconds;
         impeachmentCooldownSeconds = s.impeachmentCooldownSeconds;
         commanderVacancySeconds = s.commanderVacancySeconds;
         // required_players is deprecated; tutorial steps are AuraTip-driven (manual).
         loaded = true;
-        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 弹劾{}s/冷却{}s",
+        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 换职冷却{}s 弹劾{}s/冷却{}s",
             teamSelectSeconds, deployTimeoutSeconds, factionRevealSeconds, roundEndSeconds,
-            impeachmentVoteSeconds, impeachmentCooldownSeconds);
+            classSwitchCooldownSeconds, impeachmentVoteSeconds, impeachmentCooldownSeconds);
     }
 
     public static boolean isTutorialEnabled() {

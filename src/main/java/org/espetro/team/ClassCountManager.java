@@ -9,6 +9,7 @@ import net.minecraft.world.scores.Score;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.espetro.Espetro;
+import org.espetro.config.GameConfig;
 import org.espetro.stats.PlayerMatchStatsManager;
 
 import java.util.HashMap;
@@ -37,6 +38,9 @@ public class ClassCountManager {
     private final Map<UUID, String> playerFactions = new HashMap<>();
     // 玩家UUID -> 原始队伍（ATTACK/DEFEND，不受编制选择影响）
     private final Map<UUID, String> playerTeams = new HashMap<>();
+    // 与当前职业记录分离，避免离队、死亡或短线重连绕过换职冷却。
+    private final ClassSwitchCooldownTracker classSwitchCooldowns =
+        new ClassSwitchCooldownTracker();
 
     public ClassCountManager() {
         INSTANCE = this;
@@ -231,8 +235,12 @@ public class ClassCountManager {
         // 完全相同的职业与变体不重复清空/发放装备。
         if (classId.equals(oldClassId) && variantId.equals(oldVariantId)) {
             PlayerMatchStatsManager.getInstance().onClassSelected(player, classId,
-                (kit.iconImage != null && !kit.iconImage.isBlank()) ? kit.iconImage : kit.icon);
+                kit.icon, kit.iconImage);
             return SelectionResult.SUCCESS;
+        }
+
+        if (getClassSwitchCooldownRemaining(uuid) > 0) {
+            return SelectionResult.CLASS_SWITCH_COOLDOWN;
         }
 
         int squadId = SquadManager.getInstance().getPlayerSquadId(uuid);
@@ -322,8 +330,15 @@ public class ClassCountManager {
             kit.teamCount, kit.strictCount, getCount(team, classId), getMaxCount(classId));
 
         PlayerMatchStatsManager.getInstance().onClassSelected(player, classId,
-                (kit.iconImage != null && !kit.iconImage.isBlank()) ? kit.iconImage : kit.icon);
+                kit.icon, kit.iconImage);
+        classSwitchCooldowns.start(
+            uuid, GameConfig.getClassSwitchCooldownSeconds(), System.currentTimeMillis());
         return SelectionResult.SUCCESS;
+    }
+
+    public int getClassSwitchCooldownRemaining(UUID playerId) {
+        return classSwitchCooldowns.getRemainingSeconds(
+            playerId, System.currentTimeMillis());
     }
 
     public enum SelectionResult {
@@ -334,7 +349,8 @@ public class ClassCountManager {
         CLASS_FULL,
         VARIANT_FULL,
         REQUIRES_SQUAD,
-        SQUAD_CLASS_FULL
+        SQUAD_CLASS_FULL,
+        CLASS_SWITCH_COOLDOWN
     }
 
     public int countClassInSquad(String team, int squadId, String classId) {
@@ -625,6 +641,7 @@ public class ClassCountManager {
         playerVariants.clear();
         playerFactions.clear();
         playerTeams.clear();
+        classSwitchCooldowns.clearAll();
 
         // 重置所有职业分数为0
         Scoreboard scoreboard = getScoreboard();

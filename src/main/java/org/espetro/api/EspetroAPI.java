@@ -77,6 +77,28 @@ public class EspetroAPI {
         return Espetro.getPlayerTeam(player);
     }
 
+    /**
+     * 玩家是否已经实际部署到战场，可显示在 ESPoints 战术地图上。
+     *
+     * <p>未选阵营、中途加入仍在选边、死亡后等待选择部署点，以及其他仍处于
+     * Espetro 统一等待态的旁观玩家都不会出现在地图上。</p>
+     */
+    public static boolean isPlayerVisibleOnTacticalMap(ServerPlayer player) {
+        if (player == null
+            || !player.isAlive()
+            || player.isSpectator()
+            || !BattlefieldContext.isActiveBattlefield(player.serverLevel())
+            || BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
+            return false;
+        }
+
+        String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
+        if (team == null) {
+            team = Espetro.getPlayerTeam(player);
+        }
+        return "ATTACK".equals(team) || "DEFEND".equals(team);
+    }
+
     public static String getPlayerFaction(UUID playerId) {
         return ClassCountManager.getInstance().getPlayerFaction(playerId);
     }
@@ -87,6 +109,10 @@ public class EspetroAPI {
 
     public static String getPlayerClassVariant(UUID playerId) {
         return ClassCountManager.getInstance().getPlayerVariant(playerId);
+    }
+
+    public static int getClassSwitchCooldownRemaining(UUID playerId) {
+        return ClassCountManager.getInstance().getClassSwitchCooldownRemaining(playerId);
     }
 
     public static Map<String, Integer> getClassCounts(String team, String factionId) {
@@ -227,6 +253,8 @@ public class EspetroAPI {
         int construction = radio ? data.getConstructionSupplies() : 0;
         int ammunition = radio ? data.getAmmunitionSupplies() : 0;
         boolean habOperational = BastionManager.getInstance().isHabOperational(data);
+        boolean radioCovered = !data.isHab()
+            || BastionManager.getInstance().isCoveredByFriendlyRadio(data);
         return new FobSnapshot(
             data.getBastionId(),
             data.getTeam(),
@@ -242,6 +270,7 @@ public class EspetroAPI {
             habOperational,
             buildRadius,
             exclusionRadius,
+            radioCovered,
             data.getKind().networkType()
         );
     }
@@ -254,7 +283,18 @@ public class EspetroAPI {
                               int x, int y, int z, int construction, int ammunition,
                               boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
                               double buildRadius, double exclusionRadius,
+                              boolean radioCovered,
                               String kind) {
+        /** 兼容新增覆盖字段之前、已带 kind 的直接构造调用。 */
+        public FobSnapshot(UUID id, String team, String name, String dimension,
+                           int x, int y, int z, int construction, int ammunition,
+                           boolean habBuilt, boolean ammoCrateBuilt, boolean habOperational,
+                           double buildRadius, double exclusionRadius, String kind) {
+            this(id, team, name, dimension, x, y, z, construction, ammunition,
+                habBuilt, ammoCrateBuilt, habOperational, buildRadius, exclusionRadius,
+                true, kind);
+        }
+
         /** 兼容旧反射调用。 */
         public FobSnapshot(UUID id, String team, String name, String dimension,
                            int x, int y, int z, int construction, int ammunition,
@@ -262,7 +302,7 @@ public class EspetroAPI {
                            double buildRadius, double exclusionRadius) {
             this(id, team, name, dimension, x, y, z, construction, ammunition,
                 habBuilt, ammoCrateBuilt, habOperational, buildRadius, exclusionRadius,
-                habBuilt ? "HAB" : "RADIO");
+                true, habBuilt ? "HAB" : "RADIO");
         }
 
         public String type() {

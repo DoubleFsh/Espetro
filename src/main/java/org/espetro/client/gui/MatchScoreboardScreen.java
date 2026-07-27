@@ -26,11 +26,10 @@ import java.util.UUID;
 public final class MatchScoreboardScreen extends MutilScreen {
 
     private static MatchStatsSyncPacket latestStats = new MatchStatsSyncPacket(List.of());
-    private static GovernanceStatePacket latestGovernance = new GovernanceStatePacket(List.of());
-    private static long governanceReceivedAtMs;
 
     private final Screen parent;
     private final List<HitRow> hitRows = new ArrayList<>();
+    private final List<GovernanceHit> governanceHits = new ArrayList<>();
     private MatchStatsSyncPacket.Row contextRow;
     private int contextX;
     private int contextY;
@@ -38,6 +37,10 @@ public final class MatchScoreboardScreen extends MutilScreen {
     public MatchScoreboardScreen(Screen parent) {
         super(Component.literal("玩家分数板"));
         this.parent = parent;
+    }
+
+    public Screen getParent() {
+        return parent;
     }
 
     public static void updateStats(MatchStatsSyncPacket packet) {
@@ -48,9 +51,9 @@ public final class MatchScoreboardScreen extends MutilScreen {
         }
     }
 
+    /** Kept for callers; state lives in {@link ClientGovernanceState}. */
     public static void updateGovernance(GovernanceStatePacket packet) {
-        latestGovernance = packet == null ? new GovernanceStatePacket(List.of()) : packet;
-        governanceReceivedAtMs = System.currentTimeMillis();
+        ClientGovernanceState.update(packet);
     }
 
     public static String nameFor(UUID uuid) {
@@ -78,12 +81,13 @@ public final class MatchScoreboardScreen extends MutilScreen {
         public void draw(GuiGraphics graphics, int x, int y, int drawWidth, int drawHeight,
                          int mouseX, int mouseY, float partialTick) {
             hitRows.clear();
+            governanceHits.clear();
             graphics.drawCenteredString(font, "§6§l本回合玩家分数板",
                 width / 2, 10, 0xFFFFFF);
             renderTeamColumn(graphics, "ATTACK", 6, 34, width / 2 - 9, 0xFFD35B50);
             renderTeamColumn(graphics, "DEFEND", width / 2 + 3, 34,
                 width / 2 - 9, 0xFF5685C7);
-            renderGovernance(graphics);
+            renderGovernance(graphics, mouseX, mouseY);
             renderContextMenu(graphics, mouseX, mouseY);
             super.draw(graphics, x, y, drawWidth, drawHeight, mouseX, mouseY, partialTick);
         }
@@ -112,7 +116,7 @@ public final class MatchScoreboardScreen extends MutilScreen {
         int rowY = y + 31;
         String previousSquad = null;
         for (MatchStatsSyncPacket.Row row : rows) {
-            if (rowY > height - 21) break;
+            if (rowY > height - 78) break;
             String group = row.online && row.squadId >= 0 ? row.squadName : "未编组/离线";
             if (!Objects.equals(group, previousSquad)) {
                 graphics.fill(x + 3, rowY, x + w - 3, rowY + 11, 0x70363B3E);
@@ -128,12 +132,20 @@ public final class MatchScoreboardScreen extends MutilScreen {
             graphics.drawString(font, name, x + 6, rowY + 2, color);
             graphics.drawString(font, Integer.toString(row.kills), x + w - 83, rowY + 2, color);
             graphics.drawString(font, Integer.toString(row.deaths), x + w - 51, rowY + 2, color);
-            ResourceLocation icon = RoleIconResources.resolveDiskOrSlug(row.classIcon);
+            // Prefer path (IconImage) then jar slug (icon), then classId fallback.
+            ResourceLocation icon = RoleIconResources.resolveForScoreboard(
+                row.classIconImage, row.classIcon, row.classId);
             if (icon != null) {
-                graphics.blit(icon, x + w - 27, rowY, 0, 0, 11, 11,
+                // Full 128×128 UV → 11×11 screen (same as deploy class buttons).
+                int iconSize = 11;
+                int iconX = x + w - 27;
+                int iconY = rowY;
+                graphics.blit(icon, iconX, iconY, iconSize, iconSize,
+                    0.0f, 0.0f,
+                    RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE,
                     RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
             } else {
-                graphics.drawString(font, row.classId == null ? "-" : "●",
+                graphics.drawString(font, row.classId == null || row.classId.isBlank() ? "-" : "●",
                     x + w - 24, rowY + 2, color);
             }
             hitRows.add(new HitRow(x + 3, rowY, w - 6, 12, row));
@@ -141,32 +153,94 @@ public final class MatchScoreboardScreen extends MutilScreen {
         }
     }
 
-    private void renderGovernance(GuiGraphics graphics) {
+    private void renderGovernance(GuiGraphics graphics, int mouseX, int mouseY) {
         String myTeam = ClientGameState.getPlayerTeam();
         if (myTeam == null) return;
-        GovernanceStatePacket.TeamState state = latestGovernance.teams.stream()
-            .filter(t -> myTeam.equals(t.team)).findFirst().orElse(null);
+        GovernanceStatePacket.TeamState state = ClientGovernanceState.forTeam(myTeam);
         if (state == null || "IDLE".equals(state.state)) return;
 
-        int w = Math.min(330, width - 24);
+        int barH = 62;
+        int w = Math.min(420, width - 24);
         int x = (width - w) / 2;
-        int y = height - 53;
-        graphics.fill(x, y, x + w, height - 9, 0xEF191714);
-        graphics.renderOutline(x, y, w, height - 9 - y, 0xFFFFB84D);
+        int y = height - barH - 8;
+        graphics.fill(x, y, x + w, height - 8, 0xF0191714);
+        graphics.renderOutline(x, y, w, height - 8 - y, 0xFFFFB84D);
+
+        String stateLabel = switch (state.state) {
+            case "IMPEACHMENT_VOTE" -> "弹劾投票";
+            case "VACANCY_VOLUNTEER" -> "指挥官空缺·志愿";
+            case "VACANCY_VOTE" -> "空缺公投";
+            default -> state.state;
+        };
         graphics.drawCenteredString(font,
-            "§6治理投票 §f" + state.state + " §e" + governanceSecondsLeft(state) + "s",
-            width / 2, y + 5, 0xFFFFFF);
-        String candidates;
-        if ("IMPEACHMENT_VOTE".equals(state.state)) {
-            candidates = "原指挥官: " + nameFor(state.commander)
-                + "  |  挑战者: " + nameFor(state.challenger);
-        } else {
-            candidates = "志愿者: " + state.volunteers.stream()
-                .map(MatchScoreboardScreen::nameFor).reduce((a, b) -> a + ", " + b).orElse("无");
+            "§6" + stateLabel + " §e" + ClientGovernanceState.secondsLeft(state) + "s",
+            width / 2, y + 4, 0xFFFFFF);
+
+        if ("VACANCY_VOLUNTEER".equals(state.state)) {
+            graphics.drawCenteredString(font,
+                "§7小队长请按 J 打开战术面板点击「志愿补位」",
+                width / 2, y + 20, 0xFFE0E0E0);
+            graphics.drawCenteredString(font,
+                "志愿者: " + state.volunteers.stream()
+                    .map(MatchScoreboardScreen::nameFor).reduce((a, b) -> a + ", " + b).orElse("暂无"),
+                width / 2, y + 36, 0xFFB0B0B0);
+            return;
         }
-        graphics.drawCenteredString(font, candidates, width / 2, y + 18, 0xFFE0E0E0);
-        graphics.drawCenteredString(font, "点击候选人姓名所在区域投票；界面可随时关闭",
-            width / 2, y + 31, 0xFF999999);
+
+        List<UUID> candidates = new ArrayList<>();
+        List<String> prefixes = new ArrayList<>();
+        if ("IMPEACHMENT_VOTE".equals(state.state)) {
+            if (state.commander != null) {
+                candidates.add(state.commander);
+                prefixes.add("原指挥官");
+            }
+            if (state.challenger != null) {
+                candidates.add(state.challenger);
+                prefixes.add("挑战者");
+            }
+        } else if ("VACANCY_VOTE".equals(state.state)) {
+            for (UUID v : state.volunteers) {
+                candidates.add(v);
+                prefixes.add("志愿者");
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            graphics.drawCenteredString(font, "§7等待候选人…", width / 2, y + 28, 0xFF999999);
+            return;
+        }
+
+        int slotW = Math.min(180, (w - 16) / candidates.size());
+        int totalW = slotW * candidates.size();
+        int startX = x + (w - totalW) / 2;
+        int slotY = y + 18;
+        int slotH = 34;
+
+        GovernanceActionPacket.Action action = "IMPEACHMENT_VOTE".equals(state.state)
+            ? GovernanceActionPacket.Action.VOTE_IMPEACHMENT
+            : GovernanceActionPacket.Action.VOTE_VACANCY;
+
+        for (int i = 0; i < candidates.size(); i++) {
+            UUID candidate = candidates.get(i);
+            int sx = startX + i * slotW + 2;
+            int sw = slotW - 4;
+            boolean mine = ClientGovernanceState.isMyVote(state, candidate);
+            boolean hovered = mouseX >= sx && mouseX < sx + sw
+                && mouseY >= slotY && mouseY < slotY + slotH;
+            int bg = mine ? 0xE02A4A32 : (hovered ? 0xE0404048 : 0xE028282C);
+            int border = mine ? 0xFF6FCF97 : (hovered ? 0xFFFFB84D : 0xFF666666);
+            graphics.fill(sx, slotY, sx + sw, slotY + slotH, bg);
+            graphics.renderOutline(sx, slotY, sw, slotH, border);
+
+            int votes = ClientGovernanceState.voteCount(state, candidate);
+            String name = nameFor(candidate);
+            String title = (mine ? "§a✓ " : "") + "§f" + prefixes.get(i);
+            graphics.drawCenteredString(font, title, sx + sw / 2, slotY + 4, 0xFFFFFF);
+            graphics.drawCenteredString(font, "§e" + name, sx + sw / 2, slotY + 14, 0xFFFFFF);
+            graphics.drawCenteredString(font, "§b" + votes + " 票", sx + sw / 2, slotY + 24, 0xFFFFFF);
+
+            governanceHits.add(new GovernanceHit(sx, slotY, sw, slotH, action, candidate));
+        }
     }
 
     private void renderContextMenu(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -204,6 +278,7 @@ public final class MatchScoreboardScreen extends MutilScreen {
             }
             contextRow = null;
         }
+        if (button == 0 && handleGovernanceVote(mouseX, mouseY)) return true;
         if (button == 1) {
             for (HitRow hit : hitRows) {
                 if (hit.contains(mouseX, mouseY)) {
@@ -214,36 +289,17 @@ public final class MatchScoreboardScreen extends MutilScreen {
                 }
             }
         }
-        if (button == 0 && handleGovernanceVote(mouseX, mouseY)) return true;
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private boolean handleGovernanceVote(double mouseX, double mouseY) {
-        String myTeam = ClientGameState.getPlayerTeam();
-        GovernanceStatePacket.TeamState state = latestGovernance.teams.stream()
-            .filter(t -> Objects.equals(myTeam, t.team)).findFirst().orElse(null);
-        if (state == null || mouseY < height - 53) return false;
-        if ("IMPEACHMENT_VOTE".equals(state.state)) {
-            UUID target = mouseX < width / 2 ? state.commander : state.challenger;
-            if (target != null) {
-                NetworkManager.sendGovernanceAction(
-                    GovernanceActionPacket.Action.VOTE_IMPEACHMENT, target);
+        for (GovernanceHit hit : governanceHits) {
+            if (hit.contains(mouseX, mouseY) && hit.candidate != null) {
+                NetworkManager.sendGovernanceAction(hit.action, hit.candidate);
                 return true;
             }
-        } else if ("VACANCY_VOTE".equals(state.state) && !state.volunteers.isEmpty()) {
-            int index = Math.min(state.volunteers.size() - 1,
-                Math.max(0, (int) (mouseX * state.volunteers.size() / Math.max(1, width))));
-            NetworkManager.sendGovernanceAction(
-                GovernanceActionPacket.Action.VOTE_VACANCY, state.volunteers.get(index));
-            return true;
         }
         return false;
-    }
-
-    private static int governanceSecondsLeft(GovernanceStatePacket.TeamState state) {
-        int elapsed = (int) Math.max(0L,
-            (System.currentTimeMillis() - governanceReceivedAtMs) / 1000L);
-        return Math.max(0, state.remainingSeconds - elapsed);
     }
 
     private boolean canForceJoin(MatchStatsSyncPacket.Row row) {
@@ -275,6 +331,13 @@ public final class MatchScoreboardScreen extends MutilScreen {
     }
 
     private record HitRow(int x, int y, int w, int h, MatchStatsSyncPacket.Row row) {
+        boolean contains(double px, double py) {
+            return px >= x && px < x + w && py >= y && py < y + h;
+        }
+    }
+
+    private record GovernanceHit(int x, int y, int w, int h,
+                                 GovernanceActionPacket.Action action, UUID candidate) {
         boolean contains(double px, double py) {
             return px >= x && px < x + w && py >= y && py < y + h;
         }

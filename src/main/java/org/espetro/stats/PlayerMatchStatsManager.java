@@ -30,7 +30,10 @@ public final class PlayerMatchStatsManager {
         public int kills;
         public int deaths;
         public String classId;
+        /** Jar role slug, e.g. {@code rifleman}. */
         public String classIcon;
+        /** Optional absolute IconImage path for disk textures. */
+        public String classIconImage;
         public boolean online;
 
         public PlayerMatchStats(UUID uuid, String name) {
@@ -111,20 +114,36 @@ public final class PlayerMatchStatsManager {
     }
 
     public void onClassSelected(ServerPlayer player, String classId, @Nullable String icon) {
+        onClassSelected(player, classId, icon, null);
+    }
+
+    public void onClassSelected(ServerPlayer player, String classId,
+                                @Nullable String iconSlug, @Nullable String iconImage) {
         PlayerMatchStats s = ensure(player);
         s.classId = classId;
-        s.classIcon = icon;
+        s.classIcon = iconSlug;
+        s.classIconImage = iconImage;
+        // Legacy single-arg path may pass a disk path as "icon" — split for clients.
+        if ((s.classIcon == null || s.classIcon.isBlank())
+            && iconImage != null && !iconImage.isBlank()) {
+            s.classIconImage = iconImage;
+        } else if (s.classIcon != null
+            && (s.classIcon.contains("/") || s.classIcon.contains("\\"))) {
+            s.classIconImage = s.classIcon;
+            s.classIcon = null;
+        }
         dirty = true;
         broadcastIfDirty();
     }
 
     public void onClassCleared(UUID uuid) {
         PlayerMatchStats s = stats.get(uuid);
-        if (s == null || s.classId == null && s.classIcon == null) {
+        if (s == null || (s.classId == null && s.classIcon == null && s.classIconImage == null)) {
             return;
         }
         s.classId = null;
         s.classIcon = null;
+        s.classIconImage = null;
         dirty = true;
         broadcastIfDirty();
     }

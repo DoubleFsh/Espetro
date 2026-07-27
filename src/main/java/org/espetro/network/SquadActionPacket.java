@@ -107,11 +107,11 @@ public class SquadActionPacket {
                     ClassCountManager.getInstance().getPlayerFaction(player.getUUID())
                 );
                 // 入队/离队后刷新部署界面职业人数（小队作用域与禁用态依赖 mySquadId）。
-                NetworkManager.sendUnifiedDeployScreen(player, -1);
+                NetworkManager.syncUnifiedDeployScreen(player, -1);
             } else {
                 TeamPackManager.getInstance().syncTeamPackItem(player);
                 NetworkManager.sendSquadSync(player);
-                NetworkManager.sendUnifiedDeployScreen(player, -1);
+                NetworkManager.syncUnifiedDeployScreen(player, -1);
             }
         });
         ctx.get().setPacketHandled(true);

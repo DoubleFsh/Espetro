@@ -253,6 +253,7 @@ FOB 共享库存。编制载具 JSON 不需要配置后勤载具类型，Radio �
 
 - **Radio**：指挥/小队长右键建筑指令放置，**不消耗建材**；持有 construction/ammunition 库存；地图显示 `build_radius` 范围圈。
 - **兵站 HAB**：潜行右键（或径向「部署兵站」）仅在**己方** Radio 建造半径内可放；费用 `hab_construction_cost` 从**所有覆盖该点的己方 Radio** 扣除，**优先从建材最少的 Radio 开始**；总和不足则整笔失败。
-- **摧毁**：拆 HAB **不扣**兵力；拆 Radio 扣 `bastion.json` 的 `destroy_troop_penalty`。
+- **摧毁**：拆 HAB **不扣**兵力；敌方玩家靠近 Radio 后潜行左键启动 30 秒服务端拆除计时，完成后扣 `bastion.json` 的 `destroy_troop_penalty`。离开 6 格范围、死亡或阵营状态改变会取消。
+- **地图显示**：HAB 失去同阵营 Radio 的 `build_radius` 覆盖后会停止运作，并从 ESPoints 战术地图隐藏；覆盖恢复后重新显示。
 - **队友人数**：嵌套字段 `logistics.radio.teammate_count` 为权威（覆盖平铺 `radio_teammate_count`）。设为 `0` 关闭人数要求。
 - 弹药箱仍挂在 Radio 上，存入建材后自动支付 `ammo_crate_construction_cost`。

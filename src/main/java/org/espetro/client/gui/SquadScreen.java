@@ -113,6 +113,8 @@ public class SquadScreen extends MutilScreen {
             deployScreen.updateDeploymentState(
                 packet.isWaitingForDeploySelection(),
                 packet.getOutpostRedeployCooldownRemaining());
+            deployScreen.updateClassSwitchCooldown(
+                packet.getClassSwitchCooldownRemaining());
         }
     }
 

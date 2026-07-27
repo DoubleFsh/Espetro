@@ -330,6 +330,7 @@ public final class ExternalConfigBootstrap {
             "faction_reveal_seconds": 5,
             "round_end_seconds": 10,
             "respawn_invincibility_ticks": 60,
+            "class_switch_cooldown_seconds": 60,
             "teammate_name_tag_distance": 10.0,
             "waiting_y": 200.0
           },
@@ -342,8 +343,9 @@ public final class ExternalConfigBootstrap {
             "player_stamina": 100,
             "sprint_cost_per_second": 5,
             "jump_cost": 15,
-            "regen_delay_seconds": 4,
-            "regen_per_second": 2
+            "regen_delay_seconds": 2,
+            "regen_per_second": 2,
+            "full_recovery_seconds": 12
           },
           "governance": {
             "impeachment_vote_seconds": 60,

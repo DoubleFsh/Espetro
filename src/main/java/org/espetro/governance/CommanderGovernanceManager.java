@@ -79,6 +79,7 @@ public final class CommanderGovernanceManager {
             g.votes.clear();
             g.volunteers.clear();
             g.tickCounter = 0;
+            g.endGameTime = 0L;
         }
         NetworkManager.broadcastGovernanceState(this);
     }
@@ -119,6 +120,7 @@ public final class CommanderGovernanceManager {
         governance.votes.clear();
         governance.volunteers.clear();
         governance.tickCounter = 0;
+        governance.endGameTime = 0L;
         NetworkManager.syncSquadsToTeam(team);
         NetworkManager.broadcastGovernanceState(this);
         Espetro.LOGGER.info("指挥官选举结果已同步到治理状态: team={}, commander={}",
@@ -170,75 +172,185 @@ public final class CommanderGovernanceManager {
 
     public boolean castImpeachmentVote(ServerPlayer voter, UUID candidate) {
         String team = Espetro.getPlayerTeam(voter);
-        if (team == null) return false;
+        if (team == null) {
+            return fail(voter, "你尚未加入阵营");
+        }
         TeamGovernance g = getTeam(team);
-        if (g.state != State.IMPEACHMENT_VOTE) return false;
-        if (!candidate.equals(g.commander) && !candidate.equals(g.challenger)) return false;
+        if (g.state != State.IMPEACHMENT_VOTE) {
+            return fail(voter, "当前没有进行中的弹劾投票");
+        }
+        if (candidate == null
+            || (!candidate.equals(g.commander) && !candidate.equals(g.challenger))) {
+            return fail(voter, "无效的候选人");
+        }
         g.votes.put(voter.getUUID(), candidate);
+        String name = playerName(candidate);
+        voter.displayClientMessage(
+            net.minecraft.network.chat.Component.literal("§a已投票给 " + name), true);
         NetworkManager.broadcastGovernanceState(this);
         return true;
     }
 
     public boolean volunteerForVacancy(ServerPlayer player) {
         String team = Espetro.getPlayerTeam(player);
-        if (team == null) return false;
+        if (team == null) {
+            return fail(player, "你尚未加入阵营");
+        }
         TeamGovernance g = getTeam(team);
-        if (g.state != State.VACANCY_VOLUNTEER) return false;
+        if (g.state != State.VACANCY_VOLUNTEER) {
+            return fail(player, "当前不在指挥官空缺志愿阶段");
+        }
         if (!SquadManager.getInstance().isSquadLeader(player.getUUID())) {
             return fail(player, "只有小队长可以志愿补位");
         }
         g.volunteers.add(player.getUUID());
+        player.displayClientMessage(
+            net.minecraft.network.chat.Component.literal("§a已登记志愿补位"), true);
         NetworkManager.broadcastGovernanceState(this);
         return true;
     }
 
     public boolean castVacancyVote(ServerPlayer voter, UUID candidate) {
         String team = Espetro.getPlayerTeam(voter);
-        if (team == null) return false;
+        if (team == null) {
+            return fail(voter, "你尚未加入阵营");
+        }
         TeamGovernance g = getTeam(team);
-        if (g.state != State.VACANCY_VOTE) return false;
-        if (!g.volunteers.contains(candidate)) return false;
+        if (g.state != State.VACANCY_VOTE) {
+            return fail(voter, "当前没有进行中的空缺公投");
+        }
+        if (candidate == null || !g.volunteers.contains(candidate)) {
+            return fail(voter, "无效的候选人");
+        }
         g.votes.put(voter.getUUID(), candidate);
+        voter.displayClientMessage(
+            net.minecraft.network.chat.Component.literal("§a已投票给 " + playerName(candidate)), true);
         NetworkManager.broadcastGovernanceState(this);
         return true;
     }
 
+    /**
+     * Unified leave/disconnect handler for any battle player.
+     * Handles commander vacancy, challenger cancel, and volunteer/vote cleanup.
+     */
+    public void onPlayerLeft(@Nullable String team, UUID uuid) {
+        if (uuid == null) {
+            return;
+        }
+        if (team != null) {
+            handlePlayerLeftTeam(team, uuid);
+            return;
+        }
+        // Team unknown: scrub both sides.
+        for (String t : List.of("ATTACK", "DEFEND")) {
+            handlePlayerLeftTeam(t, uuid);
+        }
+    }
+
+    /** @deprecated use {@link #onPlayerLeft(String, UUID)} */
+    @Deprecated
     public void onCommanderDisconnected(String team, UUID commanderUuid) {
+        onPlayerLeft(team, commanderUuid);
+    }
+
+    private void handlePlayerLeftTeam(String team, UUID uuid) {
         TeamGovernance g = getTeam(team);
-        if (commanderUuid.equals(g.commander) || VoteManager.getInstance().isCommander(commanderUuid)) {
+        boolean isCommander = uuid.equals(g.commander)
+            || VoteManager.getInstance().isCommanderOf(uuid, team);
+
+        // Challenger left during impeachment → cancel, keep commander.
+        if (g.state == State.IMPEACHMENT_VOTE && uuid.equals(g.challenger) && !isCommander) {
+            cancelImpeachment(team, g, "§c弹劾发起者离线，弹劾失败，指挥官留任");
+            return;
+        }
+
+        if (isCommander) {
+            // Incumbent left (including mid-impeachment) → vacancy.
+            if (g.state == State.IMPEACHMENT_VOTE) {
+                g.challenger = null;
+                g.votes.clear();
+            }
             clearCommander(team, "disconnect");
             startVacancy(team);
+            return;
         }
-        if (g.state == State.IMPEACHMENT_VOTE && commanderUuid.equals(g.commander)) {
-            // Incumbent left during impeachment → vacancy
-            g.state = State.IDLE;
-            startVacancy(team);
+
+        // Non-commander: scrub volunteer / votes and maybe collapse vacancy vote.
+        boolean changed = g.volunteers.remove(uuid);
+        int beforeVotes = g.votes.size();
+        g.votes.entrySet().removeIf(e -> e.getKey().equals(uuid) || e.getValue().equals(uuid));
+        changed = changed || g.votes.size() != beforeVotes;
+
+        if (g.state == State.VACANCY_VOTE) {
+            collapseVacancyVoteIfNeeded(team, g);
+            return;
         }
-        if (g.state == State.IMPEACHMENT_VOTE && commanderUuid.equals(g.challenger)) {
-            // Challenger left → impeachment fails
-            g.state = State.IDLE;
-            g.challenger = null;
-            g.votes.clear();
-            Espetro.broadcastToTeam(team, "§c弹劾发起者离线，弹劾失败，指挥官留任");
+        if (changed) {
             NetworkManager.broadcastGovernanceState(this);
         }
-        // Remove from volunteers
-        g.volunteers.remove(commanderUuid);
-        g.votes.entrySet().removeIf(e -> e.getKey().equals(commanderUuid) || e.getValue().equals(commanderUuid));
     }
 
     public void onSquadLeaderLost(UUID uuid) {
         for (Map.Entry<String, TeamGovernance> e : byTeam.entrySet()) {
+            String team = e.getKey();
             TeamGovernance g = e.getValue();
-            if (g.state == State.IMPEACHMENT_VOTE && uuid.equals(g.challenger)) {
-                g.state = State.IDLE;
-                g.challenger = null;
-                g.votes.clear();
-                Espetro.broadcastToTeam(e.getKey(), "§c弹劾发起者失去队长资格，弹劾失败");
+            if (g.state == State.IMPEACHMENT_VOTE && uuid.equals(g.challenger)
+                && !uuid.equals(g.commander)) {
+                cancelImpeachment(team, g, "§c弹劾发起者失去队长资格，弹劾失败");
+                continue;
+            }
+            boolean removed = g.volunteers.remove(uuid);
+            g.votes.entrySet().removeIf(v -> v.getKey().equals(uuid) || v.getValue().equals(uuid));
+            if (g.state == State.VACANCY_VOTE) {
+                collapseVacancyVoteIfNeeded(team, g);
+            } else if (removed) {
                 NetworkManager.broadcastGovernanceState(this);
             }
-            g.volunteers.remove(uuid);
         }
+    }
+
+    private void cancelImpeachment(String team, TeamGovernance g, String message) {
+        g.state = State.IDLE;
+        g.challenger = null;
+        g.votes.clear();
+        g.tickCounter = 0;
+        g.endGameTime = 0L;
+        Espetro.broadcastToTeam(team, message);
+        NetworkManager.broadcastGovernanceState(this);
+    }
+
+    private void collapseVacancyVoteIfNeeded(String team, TeamGovernance g) {
+        if (g.state != State.VACANCY_VOTE) {
+            return;
+        }
+        // Drop offline candidates; keep online volunteers even if leadership transferred mid-vote.
+        List<UUID> remaining = new ArrayList<>(g.volunteers);
+        remaining.removeIf(u -> !isOnline(u));
+        g.volunteers.clear();
+        g.volunteers.addAll(remaining);
+
+        if (remaining.isEmpty()) {
+            UUID fallback = findSuccessor(team);
+            if (fallback != null) {
+                assignCommander(team, fallback, "vacancy_vote_all_left");
+            } else {
+                Espetro.broadcastToTeam(team, "§c空缺公投候选人全部离线，暂无指挥官");
+            }
+            g.state = State.IDLE;
+            g.votes.clear();
+            g.volunteers.clear();
+            NetworkManager.broadcastGovernanceState(this);
+            return;
+        }
+        if (remaining.size() == 1) {
+            assignCommander(team, remaining.get(0), "vacancy_vote_last_remaining");
+            g.state = State.IDLE;
+            g.votes.clear();
+            g.volunteers.clear();
+            NetworkManager.broadcastGovernanceState(this);
+            return;
+        }
+        NetworkManager.broadcastGovernanceState(this);
     }
 
     private void startVacancy(String team) {
@@ -258,12 +370,16 @@ public final class CommanderGovernanceManager {
     }
 
     public void onServerTick(MinecraftServer server) {
+        long now = server.overworld().getGameTime();
         for (Map.Entry<String, TeamGovernance> e : byTeam.entrySet()) {
             String team = e.getKey();
             TeamGovernance g = e.getValue();
             if (g.state == State.IDLE) continue;
             g.tickCounter++;
-            if (g.tickCounter >= g.timeoutSeconds * 20) {
+            boolean timedOut = g.endGameTime > 0
+                ? now >= g.endGameTime
+                : g.tickCounter >= g.timeoutSeconds * 20L;
+            if (timedOut) {
                 switch (g.state) {
                     case IMPEACHMENT_VOTE -> finishImpeachment(team, g);
                     case VACANCY_VOLUNTEER -> finishVacancyVolunteer(team, g);
@@ -276,19 +392,7 @@ public final class CommanderGovernanceManager {
     }
 
     private void finishImpeachment(String team, TeamGovernance g) {
-        Map<UUID, Integer> tally = new HashMap<>();
-        if (g.commander != null) tally.put(g.commander, 0);
-        if (g.challenger != null) tally.put(g.challenger, 0);
-        for (UUID c : g.votes.values()) {
-            tally.computeIfPresent(c, (k, v) -> v + 1);
-        }
-        int cmdVotes = g.commander != null ? tally.getOrDefault(g.commander, 0) : 0;
-        int chVotes = g.challenger != null ? tally.getOrDefault(g.challenger, 0) : 0;
-        // Incumbent stays on tie or no votes
-        UUID winner = g.commander;
-        if (chVotes > cmdVotes) {
-            winner = g.challenger;
-        }
+        UUID winner = resolveImpeachmentWinner(g.commander, g.challenger, g.votes);
         if (winner != null && !winner.equals(g.commander)) {
             assignCommander(team, winner, "impeachment");
             Espetro.broadcastToTeam(team, "§a弹劾成功，新指挥官已就任");
@@ -298,18 +402,91 @@ public final class CommanderGovernanceManager {
         g.state = State.IDLE;
         g.challenger = null;
         g.votes.clear();
+        g.endGameTime = 0L;
         NetworkManager.broadcastGovernanceState(this);
+    }
+
+    /**
+     * Incumbent stays on tie or no votes; challenger wins only with strictly more votes.
+     * Visible for unit tests.
+     */
+    static UUID resolveImpeachmentWinner(@Nullable UUID commander, @Nullable UUID challenger,
+                                         Map<UUID, UUID> votes) {
+        Map<UUID, Integer> tally = new HashMap<>();
+        if (commander != null) tally.put(commander, 0);
+        if (challenger != null) tally.put(challenger, 0);
+        if (votes != null) {
+            for (UUID c : votes.values()) {
+                tally.computeIfPresent(c, (k, v) -> v + 1);
+            }
+        }
+        int cmdVotes = commander != null ? tally.getOrDefault(commander, 0) : 0;
+        int chVotes = challenger != null ? tally.getOrDefault(challenger, 0) : 0;
+        if (chVotes > cmdVotes) {
+            return challenger;
+        }
+        return commander;
+    }
+
+    /**
+     * Highest vote wins; ties broken by earlier leaderSince then UUID order.
+     * Visible for unit tests.
+     */
+    static UUID resolveVacancyVoteWinner(Set<UUID> volunteers, Map<UUID, UUID> votes,
+                                         java.util.function.ToLongFunction<UUID> leaderSince) {
+        Map<UUID, Integer> tally = new HashMap<>();
+        if (volunteers != null) {
+            for (UUID v : volunteers) {
+                tally.put(v, 0);
+            }
+        }
+        if (votes != null) {
+            for (UUID c : votes.values()) {
+                tally.computeIfPresent(c, (k, v) -> v + 1);
+            }
+        }
+        int best = -1;
+        List<UUID> tied = new ArrayList<>();
+        for (Map.Entry<UUID, Integer> e : tally.entrySet()) {
+            if (e.getValue() > best) {
+                best = e.getValue();
+                tied.clear();
+                tied.add(e.getKey());
+            } else if (e.getValue() == best) {
+                tied.add(e.getKey());
+            }
+        }
+        if (tied.isEmpty()) {
+            return null;
+        }
+        if (tied.size() == 1) {
+            return tied.get(0);
+        }
+        return tied.stream()
+            .min((a, b) -> {
+                long la = leaderSince != null ? leaderSince.applyAsLong(a) : 0L;
+                long lb = leaderSince != null ? leaderSince.applyAsLong(b) : 0L;
+                int cmp = Long.compare(la, lb);
+                if (cmp != 0) return cmp;
+                return a.compareTo(b);
+            })
+            .orElse(null);
     }
 
     private void finishVacancyVolunteer(String team, TeamGovernance g) {
         List<UUID> vols = new ArrayList<>(g.volunteers);
-        vols.removeIf(u -> !SquadManager.getInstance().isSquadLeader(u));
+        vols.removeIf(u -> !SquadManager.getInstance().isSquadLeader(u) || !isOnline(u));
         if (vols.isEmpty()) {
-            UUID earliest = findEarliestSquadLeader(team);
-            if (earliest != null) {
-                assignCommander(team, earliest, "vacancy_auto_earliest");
+            UUID successor = findSuccessor(team);
+            if (successor != null) {
+                assignCommander(team, successor, "vacancy_auto_fallback");
+                Espetro.broadcastToTeam(team, "§e无人志愿，系统自动任命继任指挥官");
+            } else {
+                Espetro.broadcastToTeam(team, "§c无人可继任指挥官，职位暂时空缺");
             }
             g.state = State.IDLE;
+            g.volunteers.clear();
+            g.endGameTime = 0L;
             NetworkManager.broadcastGovernanceState(this);
             return;
         }
@@ -317,9 +494,12 @@ public final class CommanderGovernanceManager {
             assignCommander(team, vols.get(0), "vacancy_single_volunteer");
             g.state = State.IDLE;
             g.volunteers.clear();
+            g.endGameTime = 0L;
             NetworkManager.broadcastGovernanceState(this);
             return;
         }
+        g.volunteers.clear();
+        g.volunteers.addAll(vols);
         g.state = State.VACANCY_VOTE;
         g.votes.clear();
         g.tickCounter = 0;
@@ -333,47 +513,20 @@ public final class CommanderGovernanceManager {
     }
 
     private void finishVacancyVote(String team, TeamGovernance g) {
-        Map<UUID, Integer> tally = new HashMap<>();
-        for (UUID v : g.volunteers) {
-            tally.put(v, 0);
-        }
-        for (UUID c : g.votes.values()) {
-            tally.computeIfPresent(c, (k, v) -> v + 1);
-        }
-        int best = -1;
-        List<UUID> tied = new ArrayList<>();
-        for (Map.Entry<UUID, Integer> e : tally.entrySet()) {
-            if (e.getValue() > best) {
-                best = e.getValue();
-                tied.clear();
-                tied.add(e.getKey());
-            } else if (e.getValue() == best) {
-                tied.add(e.getKey());
-            }
-        }
-        UUID winner;
-        if (tied.isEmpty()) {
-            winner = findEarliestSquadLeader(team);
-        } else if (tied.size() == 1) {
-            winner = tied.get(0);
-        } else {
-            // earliest leaderSince, then UUID
-            winner = tied.stream()
-                .min((a, b) -> {
-                    long la = SquadManager.getInstance().getLeaderSinceTick(a);
-                    long lb = SquadManager.getInstance().getLeaderSinceTick(b);
-                    int cmp = Long.compare(la, lb);
-                    if (cmp != 0) return cmp;
-                    return a.compareTo(b);
-                })
-                .orElse(null);
+        UUID winner = resolveVacancyVoteWinner(g.volunteers, g.votes,
+            u -> SquadManager.getInstance().getLeaderSinceTick(u));
+        if (winner == null) {
+            winner = findSuccessor(team);
         }
         if (winner != null) {
             assignCommander(team, winner, "vacancy_vote");
+        } else {
+            Espetro.broadcastToTeam(team, "§c空缺公投未能产生指挥官");
         }
         g.state = State.IDLE;
         g.volunteers.clear();
         g.votes.clear();
+        g.endGameTime = 0L;
         NetworkManager.broadcastGovernanceState(this);
     }
 
@@ -411,13 +564,25 @@ public final class CommanderGovernanceManager {
         Espetro.LOGGER.info("清除 {} 指挥官 ({})", team, reason);
     }
 
+    /**
+     * Prefer earliest squad leader; if none, any online teammate (stable UUID order).
+     */
+    @Nullable
+    private UUID findSuccessor(String team) {
+        UUID leader = findEarliestSquadLeader(team);
+        if (leader != null) {
+            return leader;
+        }
+        return findAnyOnlineTeammate(team);
+    }
+
     @Nullable
     private UUID findEarliestSquadLeader(String team) {
         long best = Long.MAX_VALUE;
         UUID bestId = null;
         for (SquadManager.SquadSnapshot snap : SquadManager.getInstance().getSquadSnapshots(team)) {
             for (SquadManager.MemberSnapshot m : snap.members) {
-                if (m.leader) {
+                if (m.leader && isOnline(m.uuid)) {
                     long since = SquadManager.getInstance().getLeaderSinceTick(m.uuid);
                     if (since < best || (since == best && (bestId == null || m.uuid.compareTo(bestId) < 0))) {
                         best = since;
@@ -427,6 +592,40 @@ public final class CommanderGovernanceManager {
             }
         }
         return bestId;
+    }
+
+    @Nullable
+    private UUID findAnyOnlineTeammate(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return null;
+        }
+        UUID best = null;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!team.equals(Espetro.getPlayerTeam(player))) {
+                continue;
+            }
+            if (best == null || player.getUUID().compareTo(best) < 0) {
+                best = player.getUUID();
+            }
+        }
+        return best;
+    }
+
+    private boolean isOnline(UUID uuid) {
+        MinecraftServer server = Espetro.getServer();
+        return server != null && server.getPlayerList().getPlayer(uuid) != null;
+    }
+
+    private String playerName(UUID uuid) {
+        MinecraftServer server = Espetro.getServer();
+        if (server != null) {
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p != null) {
+                return p.getName().getString();
+            }
+        }
+        return uuid != null ? uuid.toString().substring(0, 8) : "?";
     }
 
     private boolean fail(ServerPlayer player, String msg) {

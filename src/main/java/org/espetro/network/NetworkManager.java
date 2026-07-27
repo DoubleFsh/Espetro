@@ -28,7 +28,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.14";
+    public static final String PROTOCOL_VERSION = "1.16";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -346,7 +346,7 @@ public class NetworkManager {
                     remaining = org.espetro.team.GameStateManager.getInstance()
                         .getDeployTimeRemainingSeconds();
                 }
-                sendUnifiedDeployScreen(player, remaining);
+                syncUnifiedDeployScreen(player, remaining);
             }
         }
     }
@@ -789,6 +789,18 @@ public class NetworkManager {
      * 集成：职业选择、复活点选择、载具部署、小队选择、地图
      */
     public static void sendUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining) {
+        sendUnifiedDeployScreen(player, deployTimeRemaining, true);
+    }
+
+    /**
+     * 静默同步统一部署数据。面板已经打开时就地刷新；面板关闭时不得主动弹出。
+     */
+    public static void syncUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining) {
+        sendUnifiedDeployScreen(player, deployTimeRemaining, false);
+    }
+
+    private static void sendUnifiedDeployScreen(
+            ServerPlayer player, int deployTimeRemaining, boolean openScreen) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
 
@@ -915,7 +927,10 @@ public class NetworkManager {
             bm.isWaitingForBastion(player.getUUID()),
             org.espetro.team.OutpostManager.getInstance()
                 .getRedeployCooldownRemaining(player.getUUID()),
-            squadCategories
+            squadCategories,
+            ClassCountManager.getInstance()
+                .getClassSwitchCooldownRemaining(player.getUUID()),
+            openScreen
         );
 
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);

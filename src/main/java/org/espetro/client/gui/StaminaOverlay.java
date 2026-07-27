@@ -10,6 +10,9 @@ public final class StaminaOverlay {
 
     private static final int BAR_WIDTH = 40;
     private static final int BAR_HEIGHT = 2;
+    /** 原版 Action Bar 文字基线约为屏幕底部上方 68px；体力条紧贴文字下方（约 62px），
+     *  位于文字与经验条/快捷栏之间，不与任一方重叠。 */
+    private static final int BAR_BOTTOM_OFFSET = 62;
 
     private static boolean enabled;
     private static int stamina;
@@ -44,7 +47,7 @@ public final class StaminaOverlay {
         }
 
         int x = (graphics.guiWidth() - BAR_WIDTH) / 2;
-        int y = graphics.guiHeight() / 2 + 12;
+        int y = Math.max(0, graphics.guiHeight() - BAR_BOTTOM_OFFSET);
         graphics.fill(x, y, x + filledWidth, y + BAR_HEIGHT, 0xE6FFFFFF);
     }
 }

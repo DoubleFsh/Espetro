@@ -73,6 +73,9 @@ public class GameStateManager {
     private String pendingRoundWinner = null;
     private ActiveMapConfig pendingMap = null;
     private boolean forceStopInProgress = false;
+    /** 主城状态广播：上次推送的在线人数与 tick，用于降频 */
+    private int lastHubBroadcastPlayerCount = -1;
+    private int lastHubBroadcastTick = Integer.MIN_VALUE;
 
     private GameStateManager() {
         INSTANCE = this;
@@ -444,6 +447,9 @@ public class GameStateManager {
 
         // 所有玩家先进入统一等待点，选择部署点后才进入战场。
         teleportAllToSpawnPoints();
+        // Bastion.reset() 会清除位置锁；只按未选边记录恢复受影响玩家，
+        // 不在服务器 tick 中扫描全部在线玩家。
+        restoreRecordedUnassignedHolds();
         deployInitialFactionVehicles();
         placeAttackWaitingBarrier();
 
@@ -745,11 +751,15 @@ public class GameStateManager {
         // 只有部署命令成功后才会由 BastionManager.clearWaiting() 解除。
         BastionManager bastionManager = BastionManager.getInstance();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (bastionManager.isWaitingForBastion(player.getUUID())) {
+            if (isRecordedUnassigned(player)) {
+                // 开战事件不得像普通已部署玩家一样摘除失明。
+                applyMatchHoldState(player, HoldAnchor.CURRENT_LOCK);
+            } else if (bastionManager.isWaitingForBastion(player.getUUID())) {
                 applyDeploymentWaitingState(player);
                 NetworkManager.sendUnifiedDeployScreen(player, -1);
             } else {
                 player.removeEffect(MobEffects.BLINDNESS);
+                applyBattlefieldMiningRestriction(player);
             }
         }
 
@@ -795,8 +805,9 @@ public class GameStateManager {
     public void onServerTick() {
         switch (currentPhase) {
             case LOBBY, WAITING_FOR_PLAYERS:
+                // 人数变化时立即推；否则最多 5 秒一次，降低主城挂机广播负载
                 if (deployTickCounter % TICKS_PER_SECOND == 0) {
-                    broadcastHubStatus();
+                    broadcastHubStatusThrottled();
                 }
                 break;
             case MAP_VOTE:
@@ -868,6 +879,42 @@ public class GameStateManager {
                 break;
         }
         deployTickCounter++;
+    }
+
+    /**
+     * 部署阶段重置 Bastion 记录后，按选边状态集合恢复未选阵营玩家的等待锁。
+     * 此方法只在阶段切换事件执行一次，复杂度与实际未选边人数相关。
+     */
+    private void restoreRecordedUnassignedHolds() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return;
+        }
+        for (UUID playerId : waitingForTeam) {
+            restoreUnassignedHold(server, playerId);
+        }
+        for (UUID playerId : midGameJoiners) {
+            restoreUnassignedHold(server, playerId);
+        }
+    }
+
+    private void restoreUnassignedHold(MinecraftServer server, UUID playerId) {
+        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+        if (player != null && isRecordedUnassigned(player)) {
+            applyMatchHoldState(player, HoldAnchor.AUTO);
+        }
+    }
+
+    private boolean isRecordedUnassigned(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        if (!waitingForTeam.contains(playerId) && !midGameJoiners.contains(playerId)) {
+            return false;
+        }
+        String team = ClassCountManager.getInstance().getPlayerTeam(playerId);
+        if (team == null) {
+            team = Espetro.getPlayerTeam(player);
+        }
+        return !"ATTACK".equals(team) && !"DEFEND".equals(team);
     }
 
     // ========== 工具方法 ==========
@@ -1117,10 +1164,108 @@ public class GameStateManager {
     /**
      * 主世界主城：持久维度，不随战场卸载重置。
      * 强制玩家回到 overworld 出生点（维度或坐标不对都会传送）。
-     * 合法解除 MatchHold：解锁 + 去失明 + survival。
+     * 合法解除 MatchHold：解锁 + 去失明；非管理员固定为冒险模式。
      */
     public void applyHubState(ServerPlayer player) {
         forcePlayerToHub(player);
+    }
+
+    /**
+     * 非管理员位于主世界主城时强制冒险模式（不可自行切生存/创造）。
+     * 管理员不强制锁定，但进主城时仍会先设为冒险（见 {@link #applyHubAdventureOnEnter}）。
+     */
+    public boolean shouldForceHubAdventure(ServerPlayer player) {
+        return player != null
+            && player.connection != null
+            && !player.hasPermissions(2)
+            && Level.OVERWORLD.equals(player.serverLevel().dimension());
+    }
+
+    /**
+     * 进入主城时：所有人（含管理员）设为冒险模式。
+     * 之后仅非管理员被 {@link #shouldForceHubAdventure} 持续锁定。
+     */
+    public void applyHubAdventureOnEnter(ServerPlayer player) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        if (!Level.OVERWORLD.equals(player.serverLevel().dimension())) {
+            return;
+        }
+        if (player.gameMode.getGameModeForPlayer() != GameType.ADVENTURE) {
+            player.setGameMode(GameType.ADVENTURE);
+        }
+    }
+
+    /**
+     * 持续收口：非管理员在主城若不是冒险则改回冒险。
+     * 管理员不在此强制，可自行切换创造等。
+     */
+    public void enforceHubAdventure(ServerPlayer player) {
+        if (shouldForceHubAdventure(player)
+                && player.gameMode.getGameModeForPlayer() != GameType.ADVENTURE) {
+            player.setGameMode(GameType.ADVENTURE);
+        }
+    }
+
+    /**
+     * 已实际部署到战场的玩家：通过挖掘等级/可收获判定禁止挖方块，
+     * 不再使用挖掘疲劳。真正拦截在 {@link #shouldRestrictBattlefieldMining} 驱动的事件里完成。
+     * 此方法只清理旧版疲劳效果，便于从疲劳方案平滑迁移。
+     */
+    public void applyBattlefieldMiningRestriction(ServerPlayer player) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        // 清除历史「战场挖掘疲劳」残留（旧版本施加的永久 DIG_SLOWDOWN）。
+        player.removeEffect(MobEffects.DIG_SLOWDOWN);
+    }
+
+    /** @deprecated use {@link #applyBattlefieldMiningRestriction(ServerPlayer)} */
+    @Deprecated
+    public void applyBattlefieldMiningFatigue(ServerPlayer player) {
+        applyBattlefieldMiningRestriction(player);
+    }
+
+    /**
+     * 战场部署/战斗中的非创造、非旁观玩家：视为挖掘等级不足，无法开采任何方块。
+     * 服务端权威；客户端用于 BreakSpeed 预判（避免裂纹动画）。
+     */
+    public boolean shouldRestrictBattlefieldMining(net.minecraft.world.entity.player.Player player) {
+        if (player == null || !player.isAlive()) {
+            return false;
+        }
+        if (player.isSpectator() || player.getAbilities().instabuild) {
+            return false;
+        }
+        if (!isDeployOrBattlePhaseForMining(player)) {
+            return false;
+        }
+        if (player.level() instanceof ServerLevel serverLevel) {
+            return BattlefieldContext.isActiveBattlefield(serverLevel);
+        }
+        // 客户端：若已有 ACTIVE 配置则严格对维度；否则用「非主城」近似（避免裂纹误显）。
+        if (BattlefieldContext.isActive()) {
+            return BattlefieldContext.isActiveBattlefield(player.level().dimension());
+        }
+        return !Level.OVERWORLD.equals(player.level().dimension());
+    }
+
+    private boolean isDeployOrBattlePhaseForMining(net.minecraft.world.entity.player.Player player) {
+        if (!player.level().isClientSide()) {
+            return currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE;
+        }
+        try {
+            Class<?> clientState = Class.forName("org.espetro.client.gui.ClientGameState");
+            Object phase = clientState.getMethod("getCurrentPhase").invoke(null);
+            if (phase == null) {
+                return false;
+            }
+            String name = phase.toString();
+            return "DEPLOYING".equals(name) || "BATTLE".equals(name);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**
@@ -1131,11 +1276,9 @@ public class GameStateManager {
             return;
         }
         player.removeEffect(MobEffects.BLINDNESS);
+        player.removeEffect(MobEffects.DIG_SLOWDOWN);
         BastionManager.getInstance().unlockPlayerPosition(player.getUUID());
         BastionManager.getInstance().clearWaiting(player.getUUID());
-        if (player.isSpectator()) {
-            player.setGameMode(GameType.SURVIVAL);
-        }
         // Natural regeneration is disabled globally by Espetro. Without an
         // explicit hub reset, damage saved in playerdata survives reconnects
         // and leaves players permanently below full health in the lobby.
@@ -1156,6 +1299,8 @@ public class GameStateManager {
         if (wrongDimension || farFromSpawn) {
             player.teleportTo(hub, x, y, z, 0f, 0f);
         }
+        // 回主城：所有人先进冒险；非管理员之后由 changeGameMode 事件持续锁定
+        applyHubAdventureOnEnter(player);
         player.setDeltaMovement(0, 0, 0);
         player.fallDistance = 0f;
     }
@@ -1178,8 +1323,9 @@ public class GameStateManager {
     public void onMidGameJoin(ServerPlayer player) {
         midGameJoiners.add(player.getUUID());
         clearPlayerRoundAssignment(player);
-        // 中途加入先留在主城选边，选完队伍后再进入战场部署流程
-        forcePlayerToHub(player);
+        // 中途加入先在主城高空等待点选边。未选边之前必须保持旁观、失明和位置锁，
+        // 不能通过关闭界面或长时间不选择来恢复移动。
+        applyMatchHoldState(player, HoldAnchor.HUB_HIGH);
 
         // 只给该玩家同步阶段信息，避免全局广播
         org.espetro.network.NetworkManager.NET.send(
@@ -1325,6 +1471,7 @@ public class GameStateManager {
 
     public void onMidGameDeployComplete(ServerPlayer player) {
         boolean wasMidGameJoiner = midGameJoiners.remove(player.getUUID());
+        applyBattlefieldMiningRestriction(player);
 
         String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
 
@@ -1420,12 +1567,27 @@ public class GameStateManager {
     private void broadcastHubStatus() {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
-        String text = "§6主城 §7| §e在线人数: §f" + server.getPlayerCount()
+        int count = server.getPlayerCount();
+        lastHubBroadcastPlayerCount = count;
+        lastHubBroadcastTick = deployTickCounter;
+        String text = "§6主城 §7| §e在线人数: §f" + count
             + " §7| §e等待管理员开始下一局";
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (player.serverLevel() == server.overworld()) {
                 NetworkManager.sendWaitingStatus(player, text, true);
             }
+        }
+    }
+
+    /** 人数变化立即推；否则至少间隔 5 秒。 */
+    private void broadcastHubStatusThrottled() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        int count = server.getPlayerCount();
+        boolean countChanged = count != lastHubBroadcastPlayerCount;
+        boolean intervalElapsed = deployTickCounter - lastHubBroadcastTick >= 5 * TICKS_PER_SECOND;
+        if (countChanged || intervalElapsed || lastHubBroadcastTick == Integer.MIN_VALUE) {
+            broadcastHubStatus();
         }
     }
 

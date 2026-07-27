@@ -39,17 +39,82 @@ final class RoleIconResources {
 
     /** 记分板等：classIcon 可能是磁盘路径或 slug。 */
     static ResourceLocation resolveDiskOrSlug(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
+        return resolve(value, value);
+    }
+
+    /**
+     * Resolve class icon for scoreboard / HUD.
+     * Tries disk {@code iconImage} first, then jar slug, then basename of a path,
+     * then {@code classId} as slug.
+     */
+    static ResourceLocation resolveForScoreboard(String iconImage, String iconSlug, String classId) {
+        ResourceLocation loc = resolve(iconImage, iconSlug);
+        if (loc != null) {
+            return loc;
         }
-        String v = value.trim();
-        if (v.startsWith("/") || v.contains(":\\") || v.contains("/") || v.contains("\\")) {
-            ResourceLocation disk = resolveDiskPath(v);
-            if (disk != null) {
-                return disk;
+        if (iconImage != null && !iconImage.isBlank()) {
+            String base = basenameSlug(iconImage);
+            loc = resolveSlug(base);
+            if (loc != null) {
+                return loc;
+            }
+            // Common Icon/ file names use camelCase while jar slugs use snake_case.
+            loc = resolveSlug(toSnakeSlug(base));
+            if (loc != null) {
+                return loc;
             }
         }
-        return resolveSlug(v);
+        if (classId != null && !classId.isBlank()) {
+            loc = resolveSlug(classId);
+            if (loc != null) {
+                return loc;
+            }
+            // classId may be "us_redone_rifleman" — try last segment
+            int idx = classId.lastIndexOf('_');
+            if (idx > 0 && idx < classId.length() - 1) {
+                // try progressive suffixes for multi-part role ids
+                for (int i = 0; i < classId.length(); i++) {
+                    if (classId.charAt(i) == '_' && i + 1 < classId.length()) {
+                        loc = resolveSlug(classId.substring(i + 1));
+                        if (loc != null) {
+                            return loc;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String basenameSlug(String pathText) {
+        String v = pathText.trim().replace('\\', '/');
+        int slash = v.lastIndexOf('/');
+        String name = slash >= 0 ? v.substring(slash + 1) : v;
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        return name;
+    }
+
+    /** lightAT / HeavyAT / machineGunner → light_at / heavy_at / machine_gunner (best-effort). */
+    private static String toSnakeSlug(String name) {
+        if (name == null || name.isBlank()) {
+            return name;
+        }
+        StringBuilder sb = new StringBuilder(name.length() + 4);
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) {
+                    sb.append('_');
+                }
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(Character.toLowerCase(c));
+            }
+        }
+        return sb.toString().replaceAll("_+", "_");
     }
 
     static ResourceLocation resolveSlug(String icon) {

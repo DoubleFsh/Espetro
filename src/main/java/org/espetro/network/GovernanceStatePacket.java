@@ -48,15 +48,36 @@ public class GovernanceStatePacket {
 
     public static GovernanceStatePacket from(CommanderGovernanceManager mgr, UUID viewer) {
         List<TeamState> list = new ArrayList<>();
+        long now = 0L;
+        try {
+            var server = org.espetro.Espetro.getServer();
+            if (server != null) {
+                now = server.overworld().getGameTime();
+            }
+        } catch (Exception ignored) {
+        }
         for (String team : List.of("ATTACK", "DEFEND")) {
             var g = mgr.getTeam(team);
             Map<String, Integer> counts = new HashMap<>();
+            // Ensure candidates appear with 0 when nobody has voted yet.
+            if (g.state == CommanderGovernanceManager.State.IMPEACHMENT_VOTE) {
+                if (g.commander != null) counts.putIfAbsent(g.commander.toString(), 0);
+                if (g.challenger != null) counts.putIfAbsent(g.challenger.toString(), 0);
+            } else if (g.state == CommanderGovernanceManager.State.VACANCY_VOTE) {
+                for (UUID v : g.volunteers) {
+                    counts.putIfAbsent(v.toString(), 0);
+                }
+            }
             for (UUID c : g.votes.values()) {
                 counts.merge(c.toString(), 1, Integer::sum);
             }
             int remaining = 0;
             if (g.state != CommanderGovernanceManager.State.IDLE) {
-                remaining = Math.max(0, g.timeoutSeconds - g.tickCounter / 20);
+                if (g.endGameTime > 0 && now > 0) {
+                    remaining = (int) Math.max(0L, (g.endGameTime - now + 19) / 20);
+                } else {
+                    remaining = Math.max(0, g.timeoutSeconds - g.tickCounter / 20);
+                }
             }
             UUID myVote = viewer != null ? g.votes.get(viewer) : null;
             list.add(new TeamState(team, g.state.name(), g.commander, g.challenger,

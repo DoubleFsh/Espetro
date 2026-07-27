@@ -98,7 +98,7 @@ public class BastionCommand {
                 onDeployComplete(player);
             } else {
                 // 刷新 GUI 上的个人冷却 n/m
-                org.espetro.network.NetworkManager.sendUnifiedDeployScreen(player, -1);
+                org.espetro.network.NetworkManager.syncUnifiedDeployScreen(player, -1);
             }
             return 1;
         }
