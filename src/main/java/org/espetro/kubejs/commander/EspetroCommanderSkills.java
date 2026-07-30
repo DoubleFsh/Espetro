@@ -43,7 +43,8 @@ public final class EspetroCommanderSkills {
             return definition;
         }
         DEFINITIONS.put(definition.id(), definition);
-        Espetro.LOGGER.info("已注册 KubeJS 指挥官技能: {} ({})", definition.id(), definition.displayName());
+        Espetro.LOGGER.info("已注册 KubeJS 技能: {} ({}) usableBy=[{}]",
+            definition.id(), definition.displayName(), definition.allowedRolesWire());
         return definition;
     }
 
@@ -208,8 +209,8 @@ public final class EspetroCommanderSkills {
 
         create("vehicle_supply_station")
             .displayName("载具补给站")
-            .description("在指挥官当前位置部署载具补给站")
-            .stats("§8生成载具补给实体和方块 | 冷却: 120秒")
+            .description("获得可放置的载具补给站物品，由指挥官自行摆放")
+            .stats("§8补给载具 | 冷却: 120秒")
             .icon("espetro:textures/gui/commander_skills/vehicle_supply_station.png")
             .activate()
             .cooldownSeconds(120)

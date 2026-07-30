@@ -6,10 +6,12 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.client.HcrTacticalMapBridge;
+import org.espetro.client.ClientEquipZones;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
 import org.espetro.network.GovernanceStatePacket;
 import org.espetro.network.GovernanceActionPacket;
+import org.espetro.team.Fireteam;
 import org.espetro.team.GamePhase;
 import org.lwjgl.glfw.GLFW;
 
@@ -36,6 +38,10 @@ public class UnifiedDeployScreen extends MutilScreen {
     private static final int SQUAD_ROW_H = 11;
     private static final int SQUAD_MEMBER_ROW_H = 9;
     private static final int SQUAD_ACTION_ROW_H = 10;
+    /** 身份色条与火力组色块同宽（像素），事件驱动静态绘制。 */
+    private static final int SQUAD_ACCENT_BAR_W = 2;
+    private static final int FIRETEAM_CONTEXT_W = 118;
+    private static final int FIRETEAM_CONTEXT_ROW_H = 12;
     private static final int VARIANT_POPUP_W = 180;
     private static final int VARIANT_HEADER_H = 18;
     private static final int VARIANT_ROW_H = 28;
@@ -92,6 +98,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     private long outpostRedeployCooldownEndsAt;
     private long classSwitchCooldownEndsAt;
     private int lastDisplayedClassSwitchCooldown = -1;
+    private boolean lastClassSelectionLocationAllowed;
     private GovernanceStatePacket governanceState = ClientGovernanceState.get();
     private long governanceReceivedAtMs = ClientGovernanceState.getReceivedAtMs();
     /** candidate UUID string → vote button, for in-place label refresh */
@@ -105,6 +112,14 @@ public class UnifiedDeployScreen extends MutilScreen {
         STATUS
     }
     private final EnumSet<Section> dirtySections = EnumSet.noneOf(Section.class);
+
+    /** 班组成员右键上下文菜单（仅数据变更/点击时重建，非 tick 驱动）。 */
+    private UUID fireteamContextTarget;
+    private int fireteamContextX;
+    private int fireteamContextY;
+    private final List<FireteamContextEntry> fireteamContextEntries = new ArrayList<>();
+    /** MUtil 弹出层；必须始终作为根节点最后一个子元素以拦截下层点击。 */
+    private GuiElement fireteamContextRoot;
 
     // ===== 按钮引用 =====
     private final List<EspButton> classButtons = new ArrayList<>();
@@ -266,15 +281,31 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     public void updateClassCounts(Map<String, Integer> counts) {
-        updateClassCounts(counts, null);
+        updateClassCounts(counts, null, null);
     }
 
     public void updateClassCounts(Map<String, Integer> counts,
                                   Map<String, Map<String, Integer>> updatedVariantCounts) {
+        updateClassCounts(counts, updatedVariantCounts, null);
+    }
+
+    public void updateClassCounts(Map<String, Integer> counts,
+                                  Map<String, Map<String, Integer>> updatedVariantCounts,
+                                  Map<String, Integer> updatedSquadCounts) {
         boolean countsChanged = counts != null && !counts.equals(this.classCounts);
         boolean variantsChanged = updatedVariantCounts != null
             && !variantCountsEqual(this.variantCounts, updatedVariantCounts);
-        if (!countsChanged && !variantsChanged) {
+        boolean squadCountsChanged = false;
+        if (updatedSquadCounts != null) {
+            for (UnifiedDeployScreenPacket.ClassInfo cls : classes) {
+                int next = Math.max(0, updatedSquadCounts.getOrDefault(cls.classId, 0));
+                if (cls.squadCurrentCount != next) {
+                    cls.squadCurrentCount = next;
+                    squadCountsChanged = true;
+                }
+            }
+        }
+        if (!countsChanged && !variantsChanged && !squadCountsChanged) {
             return;
         }
         if (countsChanged) {
@@ -453,6 +484,8 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
         expandedSquadIds.retainAll(availableSquadIds);
         this.mySquadId = updatedMySquadId;
+        // 成员/火力组变更后关闭上下文菜单，避免指向过时 UUID。
+        closeFireteamContextMenu();
         // 成员职业、人数或结构变化都只重建班组区域，其他区域保持原树不动。
         invalidateSections(Section.SQUAD);
         if (statusText != null) {
@@ -549,6 +582,8 @@ public class UnifiedDeployScreen extends MutilScreen {
         private String rightLabel = "";
         private float textScale = UI_TEXT_SCALE;
         private boolean centeredText = true;
+        /** 禁用态仍可点击以弹出原因说明（如选职拒绝）。 */
+        private Runnable disabledAction;
 
         EspButton(int x, int y, int w, int h, String label, Runnable action) {
             super(x, y, w, h);
@@ -565,6 +600,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             label = next;
         }
         boolean isEnabled() { return enabled; }
+        void setDisabledAction(Runnable r) { disabledAction = r; }
         void setIcon(ResourceLocation icon, int textureWidth, int textureHeight) {
             this.icon = icon;
             this.iconTextureWidth = textureWidth;
@@ -582,7 +618,14 @@ public class UnifiedDeployScreen extends MutilScreen {
 
         @Override
         public boolean onMouseClick(int mx, int my, int button) {
-            if (button != 0 || !enabled || !isVisible() || !hasFocus()) return false;
+            if (button != 0 || !isVisible() || !hasFocus()) return false;
+            if (!enabled) {
+                if (disabledAction != null) {
+                    disabledAction.run();
+                    return true;
+                }
+                return false;
+            }
             if (action != null) action.run();
             return true;
         }
@@ -636,14 +679,39 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
     }
 
-    private static class SquadMemberRow extends GuiElement {
+    /**
+     * 班组成员信息卡：最左火力组色块 + 身份色条（同宽）+ 文本。
+     * 静态 GuiElement，仅在班组数据 invalidate 后重建，不逐帧改结构。
+     */
+    private class SquadMemberRow extends GuiElement {
         private final String label;
-        private final int accentColor;
+        private final int fireteamColor;
+        private final int roleAccentColor;
+        private final UUID memberUuid;
+        private final int squadId;
 
-        SquadMemberRow(int x, int y, int width, String label, int accentColor) {
+        SquadMemberRow(int x, int y, int width, String label,
+                       int fireteamColor, int roleAccentColor,
+                       UUID memberUuid, int squadId) {
             super(x, y, width, SQUAD_MEMBER_ROW_H);
             this.label = label;
-            this.accentColor = accentColor;
+            this.fireteamColor = fireteamColor;
+            this.roleAccentColor = roleAccentColor;
+            this.memberUuid = memberUuid;
+            this.squadId = squadId;
+        }
+
+        @Override
+        public boolean onMouseClick(int mx, int my, int button) {
+            if (!isVisible() || !hasFocus() || memberUuid == null) {
+                return false;
+            }
+            // 右键打开火力组/队长上下文（用屏幕最后鼠标坐标，避免 GuiElement 相对坐标偏移）
+            if (button == 1) {
+                openFireteamContextMenu(memberUuid, squadId, lastMouseX, lastMouseY);
+                return true;
+            }
+            return false;
         }
 
         @Override
@@ -653,12 +721,16 @@ public class UnifiedDeployScreen extends MutilScreen {
             }
             int bx = x + getX();
             int by = y + getY();
+            int bar = SQUAD_ACCENT_BAR_W;
             graphics.fill(bx, by, bx + getWidth(), by + getHeight(),
                 hasFocus() ? 0xF0404743 : 0xE0141617);
-            graphics.fill(bx, by, bx + 1, by + getHeight(), accentColor);
+            // 最左：火力组色块
+            graphics.fill(bx, by, bx + bar, by + getHeight(), fireteamColor);
+            // 紧邻：阵营内身份色条（金指挥官 / 紫队长 / 蓝队员）
+            graphics.fill(bx + bar, by, bx + bar * 2, by + getHeight(), roleAccentColor);
 
-            int textX = bx + 4;
-            int availableWidth = Math.max(8, getWidth() - 7);
+            int textX = bx + bar * 2 + 3;
+            int availableWidth = Math.max(8, getWidth() - (bar * 2 + 5));
             String drawnLabel = EspetroMutilWidgets.trimToWidth(
                 label, (int) (availableWidth / SQUAD_MEMBER_TEXT_SCALE));
             int textHeight = Math.max(1,
@@ -668,6 +740,8 @@ public class UnifiedDeployScreen extends MutilScreen {
                 BTN_TEXT, SQUAD_MEMBER_TEXT_SCALE);
         }
     }
+
+    private record FireteamContextEntry(String label, boolean enabled, Runnable action) {}
 
     private static void drawScaledString(GuiGraphics graphics, String text, int x, int y,
                                          int color, float scale) {
@@ -758,6 +832,9 @@ public class UnifiedDeployScreen extends MutilScreen {
         buildMapPanel(mapControlsRoot);
         root.addChild(statusSectionRoot);
         buildStatusBar(statusSectionRoot);
+        fireteamContextRoot = new GuiElement(0, 0, this.width, this.height);
+        fireteamContextRoot.setVisible(false);
+        root.addChild(fireteamContextRoot);
     }
 
     private void invalidateSections(Section... sections) {
@@ -972,22 +1049,39 @@ public class UnifiedDeployScreen extends MutilScreen {
 
             if (squad.members.isEmpty()) {
                 squadScrollList.addChild(new SquadMemberRow(
-                    3, rowY, rowW - 3, "\u00a77暂无成员资料", 0xFF59605E));
+                    3, rowY, rowW - 3, "\u00a77暂无成员资料",
+                    0xFF59605E, 0xFF59605E, null, squad.id));
                 rowY += SQUAD_MEMBER_ROW_H + SQUAD_ROW_GAP;
             } else {
+                // 服务端已按 A→B→C 排序；同组聚集后插组标题（事件重建，非 tick）
+                byte lastFt = -1;
                 for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
+                    if (member.fireteam != lastFt) {
+                        lastFt = member.fireteam;
+                        Fireteam ft = Fireteam.fromIndex(member.fireteam);
+                        squadScrollList.addChild(new PlainText(
+                            5, rowY + 1,
+                            "\u00a78火力组 " + ft.label()
+                                + (member.fireteamLeader ? "" : ""),
+                            ft.color()));
+                        // PlainText 高度随字号；占一行间距
+                        rowY += SQUAD_MEMBER_ROW_H;
+                    }
                     String marker = member.commander
                         ? "\u00a76\u25c6"
-                        : member.leader ? "\u00a7d\u25c6" : "\u00a77\u00b7";
+                        : member.leader ? "\u00a7d\u25c6"
+                        : member.fireteamLeader ? "\u00a7b\u25b8" : "\u00a77\u00b7";
                     String role = member.className.isBlank()
                         ? ""
                         : " \u00a78| \u00a7b" + member.className;
-                    int accent = member.commander
+                    int roleAccent = member.commander
                         ? 0xFFFFC766
                         : member.leader ? 0xFFD48CFF : 0xFF67A7FF;
+                    Fireteam ft = Fireteam.fromIndex(member.fireteam);
                     squadScrollList.addChild(new SquadMemberRow(
                         3, rowY, rowW - 3,
-                        marker + " \u00a7f" + member.playerName + role, accent));
+                        marker + " \u00a7f" + member.playerName + role,
+                        ft.color(), roleAccent, member.uuid, squad.id));
                     rowY += SQUAD_MEMBER_ROW_H + SQUAD_ROW_GAP;
                 }
             }
@@ -1043,6 +1137,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         classTitleText = new PlainText(sx, sy, buildClassTitle(), 0xFFFFAA00);
         sectionRoot.addChild(classTitleText);
         lastDisplayedClassSwitchCooldown = getClassSwitchCooldownRemaining();
+        lastClassSelectionLocationAllowed = isClassSelectionLocationAllowed();
 
         // 滚轮列表区域：标题下方，占满剩余空间
         int listY = sy + SECTION_TITLE_H + 1;
@@ -1081,6 +1176,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             btn.setRightLabel(right);
             btn.setCenteredText(false);
             btn.setEnabled(!disabled);
+            btn.setDisabledAction(() -> selectClass(idx));
             if (disabled) {
                 boolean coolingDown = getClassSwitchCooldownRemaining() > 0;
                 btn.setDisabledStyle(
@@ -1160,6 +1256,9 @@ public class UnifiedDeployScreen extends MutilScreen {
                     ? formatWaveStatus(waveAt, b.waveSeconds)
                     : (b.status.isBlank() ? "" : " \u00a77[" + b.status + "]");
                 String deployLabel = nameCore + statusPart;
+                // HAB：仅「可部署」可选；启用倒计时/无覆盖等仍展示但禁用，点击提示原因。
+                // Rally 不受此限（冷却中仍可排队）。
+                boolean habReady = b.isRally() || "HAB 可部署".equals(b.status);
                 EspButton btn = new EspButton(
                     2, row * (BTN_H + btnSpacing), btnW, BTN_H,
                     deployLabel,
@@ -1167,7 +1266,16 @@ public class UnifiedDeployScreen extends MutilScreen {
                 );
                 btn.setIcon(b.isRally() ? RALLY_ICON : HAB_ICON,
                     b.isRally() ? 256 : 128, 128);
-                btn.setEnabled(waitingForDeploySelection);
+                btn.setEnabled(waitingForDeploySelection && habReady);
+                if (waitingForDeploySelection && !habReady) {
+                    final String reason = (b.status == null || b.status.isBlank())
+                        ? "该兵站当前不可用"
+                        : b.status;
+                    btn.setDisabledAction(() -> EspetroTipNotifier.showDenial(
+                        "无法部署到该兵站", reason));
+                } else {
+                    btn.setDisabledAction(null);
+                }
                 registerDeployButton(btn, b.pos, cmd, deployLabel, waveAt, nameCore, b.waveSeconds);
             }
             row++;
@@ -1253,6 +1361,10 @@ public class UnifiedDeployScreen extends MutilScreen {
         if (!waitingForDeploySelection) {
             return;
         }
+        if (!hasLocalPlayerSelectedClass()) {
+            EspetroTipNotifier.showDenial("未选择职业", "请先选择职业，再选择部署点。");
+            return;
+        }
 
         pendingDeployPosition = positionText;
         pendingDeployCommand = command;
@@ -1263,6 +1375,10 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     private void confirmDeploymentPoint() {
         if (!waitingForDeploySelection || pendingDeployCommand == null) {
+            return;
+        }
+        if (!hasLocalPlayerSelectedClass()) {
+            EspetroTipNotifier.showDenial("未选择职业", "请先选择职业，再确认部署。");
             return;
         }
         // 冷却中的 Rally 仍可确认排队，但确认按钮保持冷却文案。
@@ -1406,6 +1522,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         refreshRallyWaveLabels();
         refreshConfirmDeployButton();
         refreshClassSwitchCooldown();
+        refreshClassSelectionLocation();
         GovernanceStatePacket.TeamState governance = activeGovernance();
         if (governanceTimerText != null && governance != null) {
             governanceTimerText.setText("\u00a7e剩余 "
@@ -1582,12 +1699,40 @@ public class UnifiedDeployScreen extends MutilScreen {
         return teamColor + teamName + squadStr + " \u00a7f| " + factionName;
     }
 
+    /** 本地玩家是否已有职业（依据小队同步的 className，事件驱动更新）。 */
+    private boolean hasLocalPlayerSelectedClass() {
+        var player = Minecraft.getInstance().player;
+        if (player == null) {
+            return false;
+        }
+        UUID self = player.getUUID();
+        for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
+            for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
+                if (!self.equals(member.uuid)) {
+                    continue;
+                }
+                String cn = member.className;
+                return cn != null && !cn.isBlank() && !"未选择职业".equals(cn);
+            }
+        }
+        return false;
+    }
+
     private void refreshDeployButtonStates() {
         if (!waitingForDeploySelection) {
             clearPendingDeploySelection();
         }
+        boolean hasClass = hasLocalPlayerSelectedClass();
         for (EspButton button : deployButtons) {
-            button.setEnabled(waitingForDeploySelection);
+            String command = deployButtonCommands.get(button);
+            boolean ready = isDeployButtonSelectable(command);
+            button.setEnabled(waitingForDeploySelection && ready && hasClass);
+            if (waitingForDeploySelection && ready && !hasClass) {
+                button.setDisabledAction(() ->
+                    EspetroTipNotifier.showDenial("未选择职业", "请先选择职业，再选择部署点。"));
+            } else {
+                button.setDisabledAction(null);
+            }
         }
         refreshDeployButtonLabels();
         if (outpostRedeployButton != null) {
@@ -1595,6 +1740,30 @@ public class UnifiedDeployScreen extends MutilScreen {
             outpostRedeployButton.setEnabled(
                 !waitingForDeploySelection && getRedeployCooldownRemaining() == 0);
         }
+    }
+
+    /**
+     * HAB 仅在状态为「可部署」时可点；原部署点 / 前哨 / Rally 在等待部署时均可点。
+     */
+    private boolean isDeployButtonSelectable(String command) {
+        if (command == null || !command.startsWith("bastion select ")) {
+            return true;
+        }
+        String idText = command.substring("bastion select ".length()).trim();
+        try {
+            java.util.UUID id = java.util.UUID.fromString(idText);
+            for (UnifiedDeployScreenPacket.BastionItem item : bastions) {
+                if (item == null || item.id == null || !item.id.equals(id)) {
+                    continue;
+                }
+                if (item.isRally()) {
+                    return true;
+                }
+                return "HAB 可部署".equals(item.status);
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        return true;
     }
 
     private void refreshDeployButtonLabels() {
@@ -2075,6 +2244,10 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE && hasFireteamContextMenu()) {
+            closeFireteamContextMenu();
+            return true;
+        }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE && hasVariantPopup()) {
             closeVariantPopup();
             return true;
@@ -2098,6 +2271,18 @@ public class UnifiedDeployScreen extends MutilScreen {
         return mySquadId >= 0;
     }
 
+    private int mySquadSize() {
+        if (!inSquad()) {
+            return 0;
+        }
+        for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
+            if (squad.id == mySquadId) {
+                return squad.members.size();
+            }
+        }
+        return 0;
+    }
+
     /**
      * 职业按钮右侧人数文案（只显示一组 [当前/上限]）。
      * 未入队：不显示任何人数，避免在尚不能选职时造成可选错觉。
@@ -2115,6 +2300,38 @@ public class UnifiedDeployScreen extends MutilScreen {
         return color + "[" + squadCur + "/" + squadCap + "]";
     }
 
+    /** 客户端侧选职拒绝原因（与服务端规则对齐的展示层）。 */
+    private String resolveClassDenialMessage(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (!isClassSelectionLocationAllowed()) {
+            return "只能在选择部署点时、原部署点附近或己方 Radio 轮盘中选择职业。";
+        }
+        if (getClassSwitchCooldownRemaining() > 0) {
+            return "职业切换冷却中，还需等待 " + getClassSwitchCooldownRemaining() + " 秒。";
+        }
+        if (!inSquad()) {
+            return "请先加入班组小队后再选择职业。";
+        }
+        if (cls.teammatesNeed > 0 && mySquadSize() < cls.teammatesNeed) {
+            return "小队达到 " + cls.teammatesNeed + " 人后才能选择该职业。";
+        }
+        int squadCur = Math.max(0, cls.squadCurrentCount);
+        if (cls.teamCount) {
+            if (squadCur >= cls.maxPlayers) {
+                return "本小队该职业人数已满（" + squadCur + "/" + cls.maxPlayers + "）。";
+            }
+            return "";
+        }
+        int teamCur = classCounts.getOrDefault(cls.classId, cls.currentCount);
+        if (teamCur >= cls.maxPlayers) {
+            return "该职业全队人数已满（" + teamCur + "/" + cls.maxPlayers
+                + "），小队显示未满也不能再选。";
+        }
+        if (cls.maxPerSquad > 0 && squadCur >= cls.maxPerSquad) {
+            return "本小队该职业人数已满（" + squadCur + "/" + cls.maxPerSquad + "）。";
+        }
+        return "";
+    }
+
     /** 本小队该职业显示用上限。 */
     private int getSquadDisplayCap(UnifiedDeployScreenPacket.ClassInfo cls) {
         if (cls.teamCount) {
@@ -2130,10 +2347,16 @@ public class UnifiedDeployScreen extends MutilScreen {
      * 未入队全部禁用；入队后 team_count 看小队满，非 team_count 看编制总限 + max_per_squad。
      */
     private boolean isClassButtonDisabled(UnifiedDeployScreenPacket.ClassInfo cls) {
+        if (!isClassSelectionLocationAllowed()) {
+            return true;
+        }
         if (getClassSwitchCooldownRemaining() > 0) {
             return true;
         }
         if (!inSquad()) {
+            return true;
+        }
+        if (cls.teammatesNeed > 0 && mySquadSize() < cls.teammatesNeed) {
             return true;
         }
         int squadCur = Math.max(0, cls.squadCurrentCount);
@@ -2148,6 +2371,9 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private boolean isClassEmphasizeRed(UnifiedDeployScreenPacket.ClassInfo cls, boolean disabled) {
+        if (!isClassSelectionLocationAllowed()) {
+            return true;
+        }
         if (getClassSwitchCooldownRemaining() > 0) {
             return false;
         }
@@ -2155,6 +2381,9 @@ public class UnifiedDeployScreen extends MutilScreen {
             return false;
         }
         if (!inSquad()) {
+            return true;
+        }
+        if (cls.teammatesNeed > 0 && mySquadSize() < cls.teammatesNeed) {
             return true;
         }
         int squadCur = Math.max(0, cls.squadCurrentCount);
@@ -2168,6 +2397,33 @@ public class UnifiedDeployScreen extends MutilScreen {
         return cls.maxPerSquad > 0 && squadCur >= cls.maxPerSquad;
     }
 
+    /**
+     * J 键界面的本地即时灰显。服务端仍会在 ClassSelectPacket 中按同样规则复核。
+     * 等待选点时放行；落地后只认服务端同步的本方原部署点黄框。
+     */
+    private boolean isClassSelectionLocationAllowed() {
+        if (waitingForDeploySelection) {
+            return true;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return false;
+        }
+        for (var zone : ClientEquipZones.getZones()) {
+            if (!"spawn".equals(zone.type())) {
+                continue;
+            }
+            double dx = mc.player.getX() - zone.x();
+            double dy = mc.player.getY() - zone.y();
+            double dz = mc.player.getZ() - zone.z();
+            double range = Math.max(0.1, zone.range());
+            if (dx * dx + dy * dy + dz * dz < range * range) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void refreshClassButtons() {
         boolean coolingDown = getClassSwitchCooldownRemaining() > 0;
         for (int i = 0; i < classButtons.size() && i < classes.size(); i++) {
@@ -2179,12 +2435,15 @@ public class UnifiedDeployScreen extends MutilScreen {
                 RoleIconResources.TEXTURE_SIZE, RoleIconResources.TEXTURE_SIZE);
             classButtons.get(i).setRightLabel(buildClassCountRightLabel(cls, emphasizeRed));
             classButtons.get(i).setEnabled(!disabled);
+            final int classIndex = i;
+            classButtons.get(i).setDisabledAction(() -> selectClass(classIndex));
             if (disabled) {
                 classButtons.get(i).setDisabledStyle(
                     coolingDown ? BTN_BG_DISABLED : CLASS_BG_UNAVAILABLE,
                     coolingDown ? 0x60383848 : CLASS_BORDER_UNAVAILABLE,
                     coolingDown ? 0xFF777777 : 0xFFFF9A9A);
             } else {
+                classButtons.get(i).setDisabledAction(null);
                 classButtons.get(i).normalColor = BTN_BG_NORMAL;
                 classButtons.get(i).hoverColor = BTN_BG_HOVER;
             }
@@ -2218,10 +2477,27 @@ public class UnifiedDeployScreen extends MutilScreen {
         refreshClassButtons();
     }
 
+    private void refreshClassSelectionLocation() {
+        boolean allowed = isClassSelectionLocationAllowed();
+        if (allowed == lastClassSelectionLocationAllowed) {
+            return;
+        }
+        lastClassSelectionLocationAllowed = allowed;
+        if (!allowed) {
+            closeVariantPopup();
+        }
+        refreshClassButtons();
+    }
+
     private void selectClass(int index) {
         if (index >= 0 && index < classes.size()) {
             var cls = classes.get(index);
             if (isClassButtonDisabled(cls)) {
+                String reason = resolveClassDenialMessage(cls);
+                if (reason.isEmpty()) {
+                    reason = "当前无法选择该职业。";
+                }
+                EspetroTipNotifier.showDenial("无法选择职业", reason);
                 return;
             }
             if (cls.variants.size() == 1) {
@@ -2290,6 +2566,134 @@ public class UnifiedDeployScreen extends MutilScreen {
     private void closeVariantPopup() {
         variantPopupClassIndex = -1;
         variantPopupScroll = 0;
+    }
+
+    private boolean hasFireteamContextMenu() {
+        return fireteamContextTarget != null
+            && fireteamContextRoot != null
+            && fireteamContextRoot.isVisible()
+            && !fireteamContextEntries.isEmpty();
+    }
+
+    private void closeFireteamContextMenu() {
+        fireteamContextTarget = null;
+        fireteamContextEntries.clear();
+        if (fireteamContextRoot != null) {
+            fireteamContextRoot.clearChildren();
+            fireteamContextRoot.setVisible(false);
+        }
+    }
+
+    /**
+     * 右键成员卡：按本机权限构建静态菜单项（仅此时计算一次，直至关闭/数据刷新）。
+     */
+    private void openFireteamContextMenu(UUID targetUuid, int squadId, int mouseX, int mouseY) {
+        closeFireteamContextMenu();
+        if (targetUuid == null) {
+            return;
+        }
+        UnifiedDeployScreenPacket.SquadInfo squad = null;
+        for (UnifiedDeployScreenPacket.SquadInfo s : squads) {
+            if (s.id == squadId) {
+                squad = s;
+                break;
+            }
+        }
+        if (squad == null) {
+            return;
+        }
+        UnifiedDeployScreenPacket.SquadMemberInfo target = null;
+        UnifiedDeployScreenPacket.SquadMemberInfo self = null;
+        UUID localId = Minecraft.getInstance().player != null
+            ? Minecraft.getInstance().player.getUUID() : null;
+        for (UnifiedDeployScreenPacket.SquadMemberInfo m : squad.members) {
+            if (m.uuid.equals(targetUuid)) {
+                target = m;
+            }
+            if (localId != null && m.uuid.equals(localId)) {
+                self = m;
+            }
+        }
+        if (target == null || self == null) {
+            return;
+        }
+        // 只能管理本小队
+        if (squad.id != mySquadId) {
+            return;
+        }
+        boolean selfIsSquadLeader = self.leader;
+        boolean selfIsFtLeader = self.fireteamLeader;
+        boolean sameFireteam = self.fireteam == target.fireteam;
+        final UUID targetId = target.uuid;
+        final byte targetFt = target.fireteam;
+        boolean isSelf = targetId.equals(self.uuid);
+
+        List<FireteamContextEntry> entries = new ArrayList<>();
+        if (selfIsSquadLeader && !isSelf) {
+            entries.add(new FireteamContextEntry("转移队长？", true, () -> {
+                NetworkManager.transferSquadLeader(targetId);
+                closeFireteamContextMenu();
+            }));
+            for (Fireteam ft : Fireteam.values()) {
+                boolean already = targetFt == ft.toNetwork();
+                long targetCount = squad.members.stream()
+                    .filter(member -> member.fireteam == ft.toNetwork())
+                    .count();
+                boolean full = !already && targetCount >= Fireteam.CAPACITY;
+                final Fireteam assignFt = ft;
+                entries.add(new FireteamContextEntry(
+                    "将该玩家分配给" + ft.label() + "组",
+                    !already && !full,
+                    already || full ? null : () -> {
+                        NetworkManager.assignFireteam(targetId, assignFt);
+                        closeFireteamContextMenu();
+                    }));
+            }
+        }
+        // 小队长只交接“队长”；不能通过火力组菜单卸掉 A 组长身份。
+        if (!selfIsSquadLeader && selfIsFtLeader && sameFireteam && !isSelf) {
+            entries.add(new FireteamContextEntry("转移组长？", true, () -> {
+                NetworkManager.transferFireteamLeader(targetId);
+                closeFireteamContextMenu();
+            }));
+        }
+        if (entries.isEmpty()) {
+            return;
+        }
+        fireteamContextTarget = targetUuid;
+        fireteamContextEntries.clear();
+        fireteamContextEntries.addAll(entries);
+        int menuH = 6 + entries.size() * FIRETEAM_CONTEXT_ROW_H;
+        fireteamContextX = Math.max(3, Math.min(this.width - FIRETEAM_CONTEXT_W - 3, mouseX + 6));
+        fireteamContextY = Math.max(3, Math.min(this.height - menuH - 3, mouseY + 4));
+        if (fireteamContextRoot == null) {
+            return;
+        }
+        fireteamContextRoot.clearChildren();
+        fireteamContextRoot.setVisible(true);
+        // MUtil 反序遍历子元素：遮罩先添加，后添加的按钮优先响应。
+        fireteamContextRoot.addChild(new GuiElement(0, 0, this.width, this.height) {
+            @Override
+            public boolean onMouseClick(int mx, int my, int button) {
+                closeFireteamContextMenu();
+                return true;
+            }
+        });
+        fireteamContextRoot.addChild(new GuiRect(
+            fireteamContextX, fireteamContextY,
+            FIRETEAM_CONTEXT_W, menuH, 0xF0111418));
+        int y = fireteamContextY + 3;
+        for (FireteamContextEntry entry : fireteamContextEntries) {
+            EspButton button = new EspButton(
+                fireteamContextX + 2, y,
+                FIRETEAM_CONTEXT_W - 4, FIRETEAM_CONTEXT_ROW_H - 1,
+                entry.label, entry.action);
+            button.setEnabled(entry.enabled);
+            button.setTextScale(SQUAD_MEMBER_TEXT_SCALE);
+            button.setCenteredText(false);
+            fireteamContextRoot.addChild(button);
+            y += FIRETEAM_CONTEXT_ROW_H;
+        }
     }
 
     private static boolean inside(int x, int y, int left, int top, int width, int height) {

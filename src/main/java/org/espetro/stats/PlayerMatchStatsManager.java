@@ -46,6 +46,7 @@ public final class PlayerMatchStatsManager {
     private static PlayerMatchStatsManager INSTANCE;
     private final Map<UUID, PlayerMatchStats> stats = new LinkedHashMap<>();
     private boolean dirty;
+    private int ticksUntilBroadcast;
 
     private PlayerMatchStatsManager() {
         INSTANCE = this;
@@ -181,13 +182,29 @@ public final class PlayerMatchStatsManager {
     }
 
     private void broadcastIfDirty() {
-        if (!dirty) return;
-        dirty = false;
-        org.espetro.network.NetworkManager.broadcastMatchStats(this);
+        // Changes are coalesced by onServerTick. A class-selection burst from
+        // 100 players must produce one roster packet, not 100 full broadcasts.
+        if (ticksUntilBroadcast <= 0) {
+            ticksUntilBroadcast = 20;
+        }
     }
 
     public void markDirtyAndBroadcast() {
         dirty = true;
         broadcastIfDirty();
+    }
+
+    public void onServerTick() {
+        if (!dirty) {
+            ticksUntilBroadcast = 20;
+            return;
+        }
+        if (ticksUntilBroadcast > 0) {
+            ticksUntilBroadcast--;
+            return;
+        }
+        dirty = false;
+        ticksUntilBroadcast = 20;
+        org.espetro.network.NetworkManager.broadcastMatchStats(this);
     }
 }

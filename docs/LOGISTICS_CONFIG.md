@@ -46,7 +46,7 @@
     "hab_construction_cost": 500,
     "ammo_crate_construction_cost": 100,
     "default_resupply_ammo_cost": 50,
-    "hab_activation_seconds": 30,
+    "hab_activation_seconds": 0,
     "hab_reactivation_seconds": 30,
     "hab_disable_radio_health": 75,
     "sources": []
@@ -257,3 +257,5 @@ FOB 共享库存。编制载具 JSON 不需要配置后勤载具类型，Radio �
 - **地图显示**：HAB 失去同阵营 Radio 的 `build_radius` 覆盖后会停止运作，并从 ESPoints 战术地图隐藏；覆盖恢复后重新显示。
 - **队友人数**：嵌套字段 `logistics.radio.teammate_count` 为权威（覆盖平铺 `radio_teammate_count`）。设为 `0` 关闭人数要求。
 - 弹药箱仍挂在 Radio 上，存入建材后自动支付 `ammo_crate_construction_cost`。
+- 职业弹药补给按实际缺口发放；背包已达到各 `resupply.items[].max` 时不产生补给。
+  Radio 的 ammunition 必须足额覆盖该变体的 `ammo_cost` 才会提交，不能部分扣费或透支发放。

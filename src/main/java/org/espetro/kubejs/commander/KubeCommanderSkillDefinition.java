@@ -1,5 +1,11 @@
 package org.espetro.kubejs.commander;
 
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public final class KubeCommanderSkillDefinition {
     private final String id;
     private final String displayName;
@@ -9,6 +15,7 @@ public final class KubeCommanderSkillDefinition {
     private final String trigger;
     private final int cooldownSeconds;
     private final boolean enabled;
+    private final Set<SkillUserRole> allowedRoles;
 
     public KubeCommanderSkillDefinition(String id,
                                          String displayName,
@@ -18,14 +25,31 @@ public final class KubeCommanderSkillDefinition {
                                          String trigger,
                                          int cooldownSeconds,
                                          boolean enabled) {
+        this(id, displayName, description, stats, icon, trigger, cooldownSeconds, enabled,
+            SkillUserRole.defaultRoles());
+    }
+
+    public KubeCommanderSkillDefinition(String id,
+                                         String displayName,
+                                         String description,
+                                         String stats,
+                                         String icon,
+                                         String trigger,
+                                         int cooldownSeconds,
+                                         boolean enabled,
+                                         Set<SkillUserRole> allowedRoles) {
         this.id = sanitizeId(id);
         this.displayName = displayName == null || displayName.isBlank() ? this.id : displayName;
         this.description = description == null ? "" : description;
         this.stats = stats == null ? "" : stats;
         this.icon = icon == null ? "" : icon.trim();
-        this.trigger = trigger == null || trigger.isBlank() ? "activate" : trigger.trim().toLowerCase();
+        this.trigger = trigger == null || trigger.isBlank() ? "activate" : trigger.trim().toLowerCase(Locale.ROOT);
         this.cooldownSeconds = Math.max(0, cooldownSeconds);
         this.enabled = enabled;
+        Set<SkillUserRole> roles = allowedRoles == null || allowedRoles.isEmpty()
+            ? SkillUserRole.defaultRoles()
+            : new LinkedHashSet<>(allowedRoles);
+        this.allowedRoles = Collections.unmodifiableSet(roles);
     }
 
     public String id() {
@@ -90,6 +114,33 @@ public final class KubeCommanderSkillDefinition {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public Set<SkillUserRole> allowedRoles() {
+        return allowedRoles;
+    }
+
+    public Set<SkillUserRole> getAllowedRoles() {
+        return allowedRoles;
+    }
+
+    public boolean allows(SkillUserRole role) {
+        return role != null && allowedRoles.contains(role);
+    }
+
+    public boolean allowsCommander() {
+        return allows(SkillUserRole.COMMANDER);
+    }
+
+    public boolean allowsSquadLeader() {
+        return allows(SkillUserRole.SQUAD_LEADER);
+    }
+
+    /** 供日志/UI：commander,squad_leader */
+    public String allowedRolesWire() {
+        return allowedRoles.stream()
+            .map(SkillUserRole::wireName)
+            .collect(Collectors.joining(","));
     }
 
     public boolean isTargetMapTrigger() {

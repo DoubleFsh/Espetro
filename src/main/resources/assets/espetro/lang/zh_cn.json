@@ -13,8 +13,10 @@
   "radial.espetro.skills": "技能",
   "block.espetro.radio": "Radio 电台",
   "item.espetro.radio": "Radio 电台",
-  "block.espetro.supply_source": "后勤补给点",
-  "item.espetro.supply_source": "后勤补给点",
+  "block.espetro.supply_source": "补给站",
+  "item.espetro.supply_source": "补给站",
+  "item.espetro.construction_material": "建材",
+
   "tutorial.step.welcome.title": "欢迎来到 Espetro",
   "tutorial.step.welcome.body": "本模式用 AuraTip 提示讲解各阶段与界面。关闭当前提示会进入下一条；可用 /espetro tutorial skip 跳过本会话，之后可在主城或命令重开。",
   "tutorial.step.hub.title": "主城界面 Hub",

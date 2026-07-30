@@ -1,6 +1,6 @@
 # Espetro 类参考
 
-本页按包列出当前源码中的顶层类。业务开发优先使用 `org.espetro`；`com.example.hcrpoints` 是仓库内已排除构建的旧 HCR 副本。当前 HCR AAD 使用模组 ID `espoints` 和包名 `com.example.espoints`，源码位于独立 `ds` 项目。
+本页按包列出当前源码中的顶层类。业务开发优先使用 `org.espetro`；`com.example.hcrpoints` 是仓库内已排除构建的旧 HCR 副本。当前 HCR AAD 使用模组 ID `espoints` 和包名 `com.example.espoints`，源码位于 `/home/shu/IdeaProjects/espetro-HCR`。
 
 ## `org.espetro`
 
@@ -18,6 +18,8 @@
 | 类 | 职责 |
 | --- | --- |
 | `org.espetro.api.EspetroAPI` | 对外阵营、小队、队长、指挥官查询、指挥官技能选点提交/队列读取和冷却/状态查询 |
+| `org.espetro.api.ActiveBattlefieldSnapshot` | 当前冻结地图配置、背景内容 SHA-256、PNG 尺寸与只读内容 |
+| `org.espetro.api.TacticalMapStateSnapshot` | 带单调 revision/session 的不可变 Radio、HAB、Rally、原部署点、主基地与补给站快照 |
 | `org.espetro.config.GameConfig` | `game.json` 加载与 getter，包括游戏流程、兵力和秒制体力参数 |
 | `org.espetro.data.EspetroDataResources` | 数据包资源优先级、列表和 UTF-8 读取 |
 | `org.espetro.kubejs.EspetroKubeJSPlugin` | KubeJS 硬依赖插件入口，注册脚本绑定、类过滤、指挥官技能 API、ESPoints 可选绑定和 MUtil 绑定 |
@@ -27,6 +29,8 @@
 | `org.espetro.kubejs.commander.EspetroCommanderSkills` | KubeJS 指挥官技能注册、回调执行、战术地图打开和冷却/状态查询 |
 | `org.espetro.kubejs.commander.KubeCommanderSkillDefinition` | KubeJS 注册的单个指挥官技能定义 |
 | `org.espetro.kubejs.commander.KubeCommanderSkillEvent` | KubeJS 指挥官技能回调事件 |
+| `org.espetro.protection.MainBaseProtection` | 本方原部署点玩家/载具无敌区的阵营、半径与部署点判定 |
+| `org.espetro.protection.MainBaseProtectionEventHandler` | 事件驱动取消安全区内的 LivingAttack/Hurt/Damage |
 | `org.espetro.runtime.ServerRuntimeMaintenance` | 分摊运行时清理和维护任务 |
 
 ## 阵营、职业与状态
@@ -75,7 +79,7 @@
 | 类 | 职责 |
 | --- | --- |
 | `VehicleConfig` | 将编制 `vehicles` JSON 转换为运行时配置 |
-| `VehicleManager` | 部署、数量、冷却、实体追踪和清理 |
+| `VehicleManager` | 首批载具异步预热与幂等部署、指挥官部署、数量、冷却、实体追踪和清理 |
 | `VehicleItems` | 载具部署物品注册 |
 | `VehicleEventHandler` | 使用部署物品和载具实体事件 |
 | `VehicleCommand` | `/vehicle` 命令 |
@@ -92,7 +96,7 @@
 | 类 | 职责 |
 | --- | --- |
 | `ClientPacketHandlers` | 客户端网络包分派 |
-| `HcrTacticalMapBridge` | 通过反射桥接 HCR AAD / ESPoints 1.0.4+ 战术地图 |
+| `HcrTacticalMapBridge` | 通过反射桥接 HCR AAD / ESPoints 1.1.0+ 战术地图 |
 | `TeammateNameTagRenderer` | 战术队友名牌规则 |
 | `ClientGameState` | 客户端阶段/队伍/编制快照 |
 | `ClientTacticalState` | 客户端指挥官和小队快照 |

@@ -47,7 +47,8 @@ public final class ClientTacticalState {
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
             for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
                 markersByName.put(key(member.playerName),
-                    new MarkerInfo(squad.id, member.leader, member.commander));
+                    new MarkerInfo(squad.id, member.leader, member.fireteamLeader,
+                        member.commander));
                 if (member.commander) {
                     commanderNames.add(key(member.playerName));
                 }
@@ -94,10 +95,19 @@ public final class ClientTacticalState {
         return info != null && info.squadId == mySquadId && mySquadId != NO_SQUAD && info.leader;
     }
 
+    /** ESPoints 标点轮盘的客户端提示权限；服务端仍会再次权威校验。 */
+    public static boolean canLocalPlayerPlacePing(String playerName) {
+        String normalized = key(playerName);
+        MarkerInfo info = markersByName.get(normalized);
+        return commanderNames.contains(normalized)
+            || (info != null && (info.commander || info.leader || info.fireteamLeader));
+    }
+
     private static String key(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT);
     }
 
-    private record MarkerInfo(int squadId, boolean leader, boolean commander) {
+    private record MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
+                              boolean commander) {
     }
 }

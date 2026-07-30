@@ -13,6 +13,7 @@ class GameSettingsSnapshotTest {
             JsonParser.parseString("{}").getAsJsonObject());
 
         assertEquals(60, settings.classSwitchCooldownSeconds);
+        assertEquals(150.0, settings.mainBaseInvulnerabilityRadius);
         assertEquals(2, settings.regenDelaySeconds);
         assertEquals(12, settings.fullRecoverySeconds);
     }
@@ -40,6 +41,21 @@ class GameSettingsSnapshotTest {
                 """).getAsJsonObject());
 
         assertEquals(0, settings.classSwitchCooldownSeconds);
+    }
+
+    @Test
+    void mainBaseInvulnerabilityRadiusCanBeConfiguredOrDisabled() {
+        GameSettingsSnapshot configured = GameSettingsSnapshot.parse(
+            JsonParser.parseString("""
+                {"game":{"main_base_invulnerability_radius":225.5}}
+                """).getAsJsonObject());
+        GameSettingsSnapshot disabled = GameSettingsSnapshot.parse(
+            JsonParser.parseString("""
+                {"game":{"main_base_invulnerability_radius":-1}}
+                """).getAsJsonObject());
+
+        assertEquals(225.5, configured.mainBaseInvulnerabilityRadius);
+        assertEquals(0.0, disabled.mainBaseInvulnerabilityRadius);
     }
 
     @Test

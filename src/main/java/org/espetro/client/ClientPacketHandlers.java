@@ -135,19 +135,20 @@ public class ClientPacketHandlers {
     public static void handleClassCountSync(ClassCountSyncPacket packet) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (packet.isError()) {
+            String msg = packet.getErrorMessage();
             if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
-                screen.showError(packet.getErrorMessage());
-            } else if (mc.player != null) {
-                mc.player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal(packet.getErrorMessage()), false);
+                screen.showError(msg);
             }
+            // 右侧 AuraTip（无模组时降级聊天）
+            org.espetro.client.gui.EspetroTipNotifier.showRaw(msg);
             return;
         }
 
         if (mc.screen instanceof org.espetro.client.gui.ClassSelectionScreen screen) {
             screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
         } else if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
-            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
+            screen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts(),
+                packet.getSquadClassCounts());
         }
     }
 
@@ -159,6 +160,7 @@ public class ClientPacketHandlers {
             org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
             if (phase.isLobbyLike() || phase == GamePhase.ROUND_END || phase == GamePhase.CLEANUP) {
                 org.espetro.client.gui.ClientGovernanceState.clear();
+                org.espetro.client.ClientEquipZones.clear();
             }
 
             net.minecraft.client.Minecraft phaseMc = net.minecraft.client.Minecraft.getInstance();
@@ -360,6 +362,10 @@ public class ClientPacketHandlers {
                 packet.getSelectedFactionId(),
                 packet.isCommander());
         }
+    }
+
+    public static void handleEquipZoneSync(EquipZoneSyncPacket packet) {
+        org.espetro.client.ClientEquipZones.setZones(packet.getZones());
     }
 
     public static void handleMapVoteState(MapVoteStatePacket packet) {

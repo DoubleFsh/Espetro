@@ -1,6 +1,7 @@
 package org.espetro.kubejs.commander;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -195,6 +196,36 @@ public class KubeCommanderSkillEvent {
 
     public int blockZ() {
         return getBlockZ();
+    }
+
+    /**
+     * 指挥官水平朝向（南/西/北/东）。KubeJS 的 ServerPlayer 包装不暴露
+     * {@code getDirection()}，脚本请用本方法或 {@link #facingStepX()}/{@link #facingStepZ()}。
+     */
+    public Direction getFacing() {
+        return commander.getDirection();
+    }
+
+    public Direction facing() {
+        return getFacing();
+    }
+
+    /** 水平朝向前方的 X 步进（-1/0/1）。 */
+    public int getFacingStepX() {
+        return getFacing().getStepX();
+    }
+
+    public int facingStepX() {
+        return getFacingStepX();
+    }
+
+    /** 水平朝向前方的 Z 步进（-1/0/1）。 */
+    public int getFacingStepZ() {
+        return getFacing().getStepZ();
+    }
+
+    public int facingStepZ() {
+        return getFacingStepZ();
     }
 
     public void tell(String message) {

@@ -39,6 +39,9 @@ public class VehicleConfig {
         public DeploymentConfig deployment = new DeploymentConfig();
         /** Ordered entity slots; index matches the map's ordered spawn points. */
         public List<VehicleSlotConfig> slots = new ArrayList<>();
+        /** Type-level SNBT applied to every slot unless a slot overrides it. */
+        @Nullable
+        public String nbt;
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
             this.max = max;
@@ -68,6 +71,9 @@ public class VehicleConfig {
         public String entityTypeStr;
         public DeploymentPointConfig attack;
         public DeploymentPointConfig defend;
+        /** Optional SNBT merged onto the entity at deploy time (e.g. Energy). */
+        @Nullable
+        public String nbt;
 
         @Nullable
         public EntityType<?> getEntityType() {
@@ -158,6 +164,7 @@ public class VehicleConfig {
                 cfg.perMaxCount = perMax;
                 cfg.displayName = firstNonBlank(data.displayName, type);
                 cfg.troopValue = Math.max(0, data.troopValue);
+                cfg.nbt = firstNonBlank(data.nbt, null);
                 if (data.entityTags != null) {
                     for (String tag : data.entityTags) {
                         if (tag != null && !tag.isBlank()) cfg.entityTags.add(tag);
@@ -169,6 +176,7 @@ public class VehicleConfig {
                     slot.entityTypeStr = data.entities.get(i);
                     slot.attack = fromPose(points.get(i).attack());
                     slot.defend = fromPose(points.get(i).defend());
+                    slot.nbt = cfg.nbt;
                     cfg.slots.add(slot);
                 }
                 if (!cfg.slots.isEmpty()) {
@@ -203,6 +211,7 @@ public class VehicleConfig {
         cfg.entityTypeStr = vd.entityTypeStr;
         cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
         cfg.troopValue = Math.max(0, vd.troopValue);
+        cfg.nbt = firstNonBlank(vd.nbt, null);
         if (vd.entityTags != null) {
             for (String tag : vd.entityTags) {
                 if (tag != null && !tag.isBlank()) {

@@ -88,8 +88,14 @@ public class TeamSelectionScreen extends MutilScreen {
     }
 
     @Override
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 静态不透明纯黑底（与部署/其他阶段 GUI 一致），不依赖失明层。
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    }
+
+    @Override
     protected void buildMutilRoot(GuiElement root) {
-        // 无全屏 BACKDROP / 无顶栏灰底 / 无色条分割线；仅文字 + 图标。
+        // 全屏黑底由 renderBeforeMutil 绘制；此处仅文字 + 图标，无半透明色块。
         // 计数/倒计时在 renderAfterMutil 绘制，避免每秒重建。
         root.addChild(EspetroMutilWidgets.centeredText(
             6, HEADER_TITLE_Y, Math.max(1, this.width - 12),

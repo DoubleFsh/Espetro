@@ -18,6 +18,7 @@ public final class GameSettingsSnapshot {
     public final int factionRevealSeconds;
     public final int roundEndSeconds;
     public final int respawnInvincibilityTicks;
+    public final double mainBaseInvulnerabilityRadius;
     public final int classSwitchCooldownSeconds;
     public final double teammateNameTagDistance;
     public final double waitingY;
@@ -52,6 +53,7 @@ public final class GameSettingsSnapshot {
         int factionRevealSeconds,
         int roundEndSeconds,
         int respawnInvincibilityTicks,
+        double mainBaseInvulnerabilityRadius,
         int classSwitchCooldownSeconds,
         double teammateNameTagDistance,
         double waitingY,
@@ -81,6 +83,7 @@ public final class GameSettingsSnapshot {
         this.factionRevealSeconds = factionRevealSeconds;
         this.roundEndSeconds = roundEndSeconds;
         this.respawnInvincibilityTicks = respawnInvincibilityTicks;
+        this.mainBaseInvulnerabilityRadius = mainBaseInvulnerabilityRadius;
         this.classSwitchCooldownSeconds = classSwitchCooldownSeconds;
         this.teammateNameTagDistance = teammateNameTagDistance;
         this.waitingY = waitingY;
@@ -102,7 +105,7 @@ public final class GameSettingsSnapshot {
 
     public static GameSettingsSnapshot defaults() {
         return new GameSettingsSnapshot(
-            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 60, 10.0, 200.0,
+            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 150.0, 60, 10.0, 200.0,
             280, 1200, 2,
             100, 5, 15, 2, 2, 12,
             60, 600, 180,
@@ -126,6 +129,7 @@ public final class GameSettingsSnapshot {
         int reveal = d.factionRevealSeconds;
         int roundEnd = d.roundEndSeconds;
         int invuln = d.respawnInvincibilityTicks;
+        double mainBaseInvulnerabilityRadius = d.mainBaseInvulnerabilityRadius;
         int classSwitchCooldown = d.classSwitchCooldownSeconds;
         double nameTag = d.teammateNameTagDistance;
         double waitingY = d.waitingY;
@@ -161,6 +165,8 @@ public final class GameSettingsSnapshot {
             reveal = getInt(game, "faction_reveal_seconds", reveal);
             roundEnd = getInt(game, "round_end_seconds", roundEnd);
             invuln = getInt(game, "respawn_invincibility_ticks", invuln);
+            mainBaseInvulnerabilityRadius = getDouble(
+                game, "main_base_invulnerability_radius", mainBaseInvulnerabilityRadius);
             classSwitchCooldown = getInt(
                 game, "class_switch_cooldown_seconds", classSwitchCooldown);
             nameTag = getDouble(game, "teammate_name_tag_distance", nameTag);
@@ -205,6 +211,7 @@ public final class GameSettingsSnapshot {
             Math.max(1, reveal),
             Math.max(1, roundEnd),
             Math.max(0, invuln),
+            Math.max(0.0, mainBaseInvulnerabilityRadius),
             Math.max(0, classSwitchCooldown),
             nameTag,
             waitingY,

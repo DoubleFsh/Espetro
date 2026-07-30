@@ -58,4 +58,24 @@ class ExampleContentInstallerTest {
         assertTrue(ExampleContentInstaller.isSafeRelativePath(
             "EsWorld/test_flat/EsConfig/game.json"));
     }
+
+    @Test
+    void existingOperatorFactionDirectoryIsNeverExtended(@TempDir Path gameDir)
+            throws Exception {
+        Path factions = gameDir.resolve("EsFactions");
+        Files.createDirectories(factions);
+        Files.writeString(factions.resolve("operator_formation.json"),
+            "{\"name\":\"operator-owned\"}", StandardCharsets.UTF_8);
+
+        ExampleContentInstaller.Result result =
+            ExampleContentInstaller.installMissing(gameDir);
+
+        assertTrue(result.successful(), () -> String.join("; ", result.errors()));
+        assertEquals(1, Files.list(factions)
+            .filter(path -> path.getFileName().toString().endsWith(".json"))
+            .count());
+        assertFalse(Files.exists(factions.resolve("example_attack.json")));
+        assertTrue(Files.isRegularFile(gameDir.resolve(
+            "EsWorld/test_flat/EsConfig/game.json")));
+    }
 }

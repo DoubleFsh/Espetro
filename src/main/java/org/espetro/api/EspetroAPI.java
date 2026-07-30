@@ -22,6 +22,8 @@ import org.espetro.mapconfig.ActiveMapConfig;
 import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.stats.PlayerMatchStatsManager;
 import org.espetro.team.GameStateManager;
+import org.espetro.vehicle.VehicleManager;
+import org.espetro.team.SpawnPointConfig;
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -29,6 +31,12 @@ import net.minecraft.server.MinecraftServer;
  * 供其他模组查询玩家的阵营、小队、指挥官信息
  */
 public class EspetroAPI {
+    private static ActiveMapConfig cachedActiveMap;
+    private static ActiveBattlefieldSnapshot cachedBattlefieldSnapshot;
+    private static long tacticalRevision;
+    private static long tacticalSnapshotSession = Long.MIN_VALUE;
+    private static TacticalContent lastTacticalContent;
+    private static TacticalMapStateSnapshot lastTacticalSnapshot;
 
     public static Optional<String> getActiveMapId() {
         return BattlefieldContext.get().map(map -> map.mapFolder);
@@ -54,8 +62,18 @@ public class EspetroAPI {
             .map(server::getLevel);
     }
 
-    public static Optional<ActiveBattlefieldSnapshot> getActiveBattlefieldSnapshot() {
-        return BattlefieldContext.get().map(EspetroAPI::toPublicSnapshot);
+    public static synchronized Optional<ActiveBattlefieldSnapshot> getActiveBattlefieldSnapshot() {
+        ActiveMapConfig active = BattlefieldContext.getOrNull();
+        if (active == null) {
+            cachedActiveMap = null;
+            cachedBattlefieldSnapshot = null;
+            return Optional.empty();
+        }
+        if (active != cachedActiveMap || cachedBattlefieldSnapshot == null) {
+            cachedActiveMap = active;
+            cachedBattlefieldSnapshot = toPublicSnapshot(active);
+        }
+        return Optional.of(cachedBattlefieldSnapshot);
     }
 
     public static boolean endRound(String winner) {
@@ -152,6 +170,44 @@ public class EspetroAPI {
         return false;
     }
 
+    /** 是否为所在火力组组长。 */
+    public static boolean isFireteamLeader(UUID playerId) {
+        return playerId != null && SquadManager.getInstance().isFireteamLeader(playerId);
+    }
+
+    /** 玩家所在火力组；无小队返回 null。 */
+    public static org.espetro.team.Fireteam getPlayerFireteam(UUID playerId) {
+        return playerId == null ? null : SquadManager.getInstance().getPlayerFireteam(playerId);
+    }
+
+    /**
+     * 是否可发起战术/Ping 标点：指挥官、小队长、火力组组长，或合法载具座位。
+     */
+    public static boolean canPlacePing(UUID playerId) {
+        if (playerId == null) {
+            return false;
+        }
+        if (isCommander(playerId) || isSquadLeader(playerId) || isFireteamLeader(playerId)) {
+            return true;
+        }
+        return org.espetro.ping.VehicleSeatPingCache.canPingFromVehicle(playerId);
+    }
+
+    /**
+     * 服务端权威标点权限。与 UUID 兼容入口不同，本方法会实时复核载具类型与座位，
+     * ESPoints 等服务端调用方应优先使用该重载。
+     */
+    public static boolean canPlacePing(ServerPlayer player) {
+        if (player == null || getPlayerTeam(player) == null) {
+            return false;
+        }
+        UUID playerId = player.getUUID();
+        return isCommander(playerId)
+            || isSquadLeader(playerId)
+            || isFireteamLeader(playerId)
+            || org.espetro.ping.VehicleSeatPingCache.canPingFromVehicle(player);
+    }
+
     /**
      * 检查玩家是否是指挥官
      */
@@ -240,9 +296,14 @@ public class EspetroAPI {
     }
 
     public static List<FobSnapshot> getFobs() {
+        return getTacticalMapStateSnapshot().structures();
+    }
+
+    private static List<FobSnapshot> collectFobs() {
         return BastionManager.getInstance().getAllBastions().stream()
             .filter(BastionData::isActive)
             .map(EspetroAPI::toFobSnapshot)
+            .sorted(java.util.Comparator.comparing(snapshot -> snapshot.id().toString()))
             .toList();
     }
 
@@ -276,7 +337,88 @@ public class EspetroAPI {
     }
 
     public static List<TeamPackManager.RallySnapshot> getRallies() {
-        return TeamPackManager.getInstance().getRallySnapshots();
+        return getTacticalMapStateSnapshot().rallies().stream()
+            .map(rally -> new TeamPackManager.RallySnapshot(
+                rally.id(), rally.team(), rally.squadId(), rally.dimension(),
+                rally.x(), rally.y(), rally.z(), rally.nextWaveAtMillis()))
+            .toList();
+    }
+
+    /**
+     * 返回战术地图使用的载具补给站快照，不遍历世界实体，也不会加载区块。
+     */
+    public static List<VehicleManager.SupplyStationSnapshot> getVehicleSupplyStations() {
+        return getTacticalMapStateSnapshot().vehicleSupplyStations().stream()
+            .map(station -> new VehicleManager.SupplyStationSnapshot(
+                station.id(), station.name(), station.team(), station.dimension(),
+                station.x(), station.y(), station.z()))
+            .toList();
+    }
+
+    /**
+     * Returns a reusable tactical snapshot. Repeated reads with unchanged
+     * structures return the same immutable instance and revision.
+     */
+    public static synchronized TacticalMapStateSnapshot getTacticalMapStateSnapshot() {
+        long session = BattlefieldContext.getSessionId();
+        String dimension = getActiveBattlefieldDimension()
+            .map(key -> key.location().toString())
+            .orElse("");
+
+        List<FobSnapshot> structures = collectFobs();
+        List<TacticalMapStateSnapshot.RallySnapshot> rallies =
+            TeamPackManager.getInstance().getRallySnapshots().stream()
+                .map(rally -> new TacticalMapStateSnapshot.RallySnapshot(
+                    rally.id(), rally.team(), rally.squadId(), rally.dimension(),
+                    rally.x(), rally.y(), rally.z(), rally.nextWaveAtMillis()))
+                .sorted(java.util.Comparator.comparing(snapshot -> snapshot.id().toString()))
+                .toList();
+        List<TacticalMapStateSnapshot.TeamBaseSnapshot> teamBases =
+            SpawnPointConfig.getAllSpawnPoints().entrySet().stream()
+                .map(entry -> new TacticalMapStateSnapshot.TeamBaseSnapshot(
+                    entry.getKey(),
+                    entry.getKey() + " Main Base",
+                    dimension,
+                    (int) Math.floor(entry.getValue().x),
+                    (int) Math.floor(entry.getValue().y),
+                    (int) Math.floor(entry.getValue().z),
+                    entry.getValue().yaw))
+                .sorted(java.util.Comparator.comparing(TacticalMapStateSnapshot.TeamBaseSnapshot::team))
+                .toList();
+        List<TacticalMapStateSnapshot.PlayerDeployPointSnapshot> deployPoints =
+            BastionManager.getInstance().getPlayerDeployPointSnapshots().stream()
+                .map(point -> new TacticalMapStateSnapshot.PlayerDeployPointSnapshot(
+                    point.playerId(), point.dimension(), point.x(), point.y(), point.z()))
+                .toList();
+        List<TacticalMapStateSnapshot.VehicleSupplyStationSnapshot> stations =
+            VehicleManager.getInstance().getMappedSupplyStationSnapshots().stream()
+                .map(station -> new TacticalMapStateSnapshot.VehicleSupplyStationSnapshot(
+                    station.id(), station.name(), station.team(), station.dimension(),
+                    station.x(), station.y(), station.z()))
+                .sorted(java.util.Comparator.comparing(snapshot -> snapshot.id().toString()))
+                .toList();
+
+        TacticalContent content = new TacticalContent(
+            structures, rallies, teamBases, deployPoints, stations);
+        if (lastTacticalSnapshot == null
+            || tacticalSnapshotSession != session
+            || !content.equals(lastTacticalContent)) {
+            tacticalSnapshotSession = session;
+            lastTacticalContent = content;
+            tacticalRevision++;
+            lastTacticalSnapshot = new TacticalMapStateSnapshot(
+                tacticalRevision, session, structures, rallies, teamBases, deployPoints, stations);
+        }
+        return lastTacticalSnapshot;
+    }
+
+    private record TacticalContent(
+        List<FobSnapshot> structures,
+        List<TacticalMapStateSnapshot.RallySnapshot> rallies,
+        List<TacticalMapStateSnapshot.TeamBaseSnapshot> teamBases,
+        List<TacticalMapStateSnapshot.PlayerDeployPointSnapshot> playerDeployPoints,
+        List<TacticalMapStateSnapshot.VehicleSupplyStationSnapshot> vehicleSupplyStations
+    ) {
     }
 
     public record FobSnapshot(UUID id, String team, String name, String dimension,
@@ -318,7 +460,10 @@ public class EspetroAPI {
             map.esPoints.tacticalMapJson,
             map.esPoints.capturePointsJson,
             map.esPoints.backgroundImage,
-            map.esPoints.backgroundBytes()
+            map.esPoints.backgroundBytes(),
+            map.esPoints.backgroundSha256,
+            map.esPoints.backgroundWidth,
+            map.esPoints.backgroundHeight
         );
     }
 

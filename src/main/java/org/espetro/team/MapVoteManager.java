@@ -30,6 +30,8 @@ public final class MapVoteManager {
     private final List<ActiveMapConfig> candidates = new ArrayList<>();
     private final Map<UUID, String> votes = new HashMap<>(); // player -> mapFolder
     private ActiveMapConfig winner;
+    private boolean voteStateDirty;
+    private static final int VOTE_BROADCAST_INTERVAL_TICKS = 4;
 
     private MapVoteManager() {
         INSTANCE = this;
@@ -115,6 +117,7 @@ public final class MapVoteManager {
         timeoutSeconds = ExternalConfigBootstrap.getMapVoteSeconds();
         tickCounter = 0;
         active = true;
+        voteStateDirty = false;
         Espetro.LOGGER.info("地图投票开始: {} 个候选, {} 秒", candidates.size(), timeoutSeconds);
         NetworkManager.broadcastMapVoteState(this);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -128,19 +131,23 @@ public final class MapVoteManager {
         boolean ok = candidates.stream().anyMatch(c -> c.mapFolder.equals(mapFolder));
         if (!ok) return false;
         votes.put(player.getUUID(), mapFolder);
-        NetworkManager.broadcastMapVoteState(this);
+        voteStateDirty = true;
         return true;
     }
 
     public void onPlayerLeave(UUID playerId) {
         if (playerId != null && votes.remove(playerId) != null && active) {
-            NetworkManager.broadcastMapVoteState(this);
+            voteStateDirty = true;
         }
     }
 
     public void onServerTick(MinecraftServer server) {
         if (!active) return;
         tickCounter++;
+        if (voteStateDirty && tickCounter % VOTE_BROADCAST_INTERVAL_TICKS == 0) {
+            voteStateDirty = false;
+            NetworkManager.broadcastMapVoteState(this);
+        }
         if (tickCounter >= timeoutSeconds * 20) {
             finish(server);
         }
@@ -149,6 +156,7 @@ public final class MapVoteManager {
     public void finish(MinecraftServer server) {
         if (!active) return;
         active = false;
+        voteStateDirty = false;
         Map<String, Integer> tally = getTally();
         int best = -1;
         List<ActiveMapConfig> tied = new ArrayList<>();
@@ -191,6 +199,7 @@ public final class MapVoteManager {
         candidates.clear();
         votes.clear();
         winner = null;
+        voteStateDirty = false;
     }
 
     /** Pure logic for unit tests. */

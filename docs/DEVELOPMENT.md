@@ -40,6 +40,8 @@ boolean leader = EspetroAPI.isSquadLeader(serverPlayer.getUUID());
 boolean commander = EspetroAPI.isCommander(serverPlayer.getUUID());
 boolean accepted = EspetroAPI.submitCommanderSkillTarget(serverPlayer, x, z);
 var status = EspetroAPI.getCommanderSkillStatus(serverPlayer, "artillery_155");
+var battlefield = EspetroAPI.getActiveBattlefieldSnapshot();
+var tactical = EspetroAPI.getTacticalMapStateSnapshot();
 ```
 
 调用约束：
@@ -48,6 +50,10 @@ var status = EspetroAPI.getCommanderSkillStatus(serverPlayer, "artillery_155");
 - 玩家未在线或尚未选队时可能返回 `null`/`-1`/`false`。
 - 不要缓存权限超过一个 tick；指挥官和队长可能在运行时变更。
 - `submitCommanderSkillTarget` 是 ESPoints 选点后的服务端入口，Espetro 会重新校验指挥官权限、阶段和冷却，并用 `ServerLevel#getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)` 补出 Y 坐标；`submitArtillerySupportTarget` 保留为旧名称兼容别名。
+- `ActiveBattlefieldSnapshot` 已预计算底图 SHA-256 与宽高；不要再次克隆整图来扫描哈希。
+- `TacticalMapStateSnapshot` 是不可变快照。内容与战场 session 未变时返回相同 revision；
+  消费方应按 revision 缓存阵营视图。旧 `getFobs()`、`getRallies()` 和
+  `getVehicleSupplyStations()` 仍兼容，但内部复用同一快照。
 
 ### `Espetro`
 
@@ -325,11 +331,12 @@ GUI 基类是 `MutilScreen`，常用组件在 `EspetroMutilWidgets`。`Scrollabl
 
 仓库中的 `com.example.hcrpoints` 是旧副本且已从构建排除；独立项目
 `/home/shu/IdeaProjects/espetro-HCR` 才是当前 ESPoints 源码。其模组 ID 是 `espoints`，
-包名是 `com.example.espoints`，并依赖 Espetro 1.0.9-alpha 的公开地图快照和生命周期事件。
+包名是 `com.example.espoints`，并依赖 Espetro 1.1.0-alpha 的公开地图快照和生命周期事件。
 Espetro 将 ESPoints 声明为可选依赖，通过 `HcrTacticalMapBridge` 打开客户端战术地图，避免把
 ESPoints 变成 Espetro 的强制运行依赖。
 
-本地存在 `../ds/build/libs/espoints-${espoints_version}.jar` 时，Gradle 会自动把它加入 Espetro 开发运行环境。开发规则：
+本地兄弟项目默认不加入 Espetro 开发运行环境；需要联调时传入
+`-PespetroIncludeLocalEspoints=true`。开发规则：
 
 - Espetro 阵营/职业/小队功能修改 `org.espetro`。
 - 据点/战术地图/标点功能修改 `ds`。

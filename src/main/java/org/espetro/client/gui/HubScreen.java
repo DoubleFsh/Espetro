@@ -30,6 +30,12 @@ public final class HubScreen extends MutilScreen {
     }
 
     @Override
+    protected void renderBeforeMutil(net.minecraft.client.gui.GuiGraphics graphics,
+                                     int mouseX, int mouseY, float partialTick) {
+        // 主城保留世界透视，不铺阶段全黑底。
+    }
+
+    @Override
     protected void buildMutilRoot(GuiElement root) {
         int panelW = Math.min(260, width - 24);
         int panelH = 126;

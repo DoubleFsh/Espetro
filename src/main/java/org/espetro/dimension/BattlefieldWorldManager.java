@@ -8,11 +8,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.server.level.progress.LoggerChunkProgressListener;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.border.BorderChangeListener;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.storage.DerivedLevelData;
 import net.minecraft.world.level.storage.LevelResource;
@@ -21,12 +24,15 @@ import net.minecraft.world.level.storage.WorldData;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.LevelEvent;
 import org.espetro.Espetro;
+import org.espetro.bastion.BastionManager;
 import org.espetro.mapconfig.ActiveMapConfig;
 import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.mapconfig.ExternalConfigBootstrap;
+import org.espetro.vehicle.VehicleManager;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -35,6 +41,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,10 +77,8 @@ public final class BattlefieldWorldManager {
     });
 
     private final AtomicBoolean busy = new AtomicBoolean(false);
-    /** Templates that passed startup copying and remain eligible for voting. */
+    /** Templates that passed startup validation and remain eligible for voting. */
     private final Set<ResourceLocation> availableDimensions = new LinkedHashSet<>();
-    /** Startup-created levels that have not yet been used by a match. */
-    private final Set<ResourceLocation> freshDimensions = new LinkedHashSet<>();
     private volatile ImportState state = ImportState.IDLE;
     private volatile String lastError = null;
     private volatile ActiveMapConfig lastLoaded = null;
@@ -80,6 +86,17 @@ public final class BattlefieldWorldManager {
     private boolean pendingCleanupRequested;
     private ActiveMapConfig pendingCleanupMap;
     private final List<Consumer<Result>> pendingCleanupCallbacks = new ArrayList<>();
+    private static final int ACTIVATION_CHUNKS_STARTED_PER_TICK = 2;
+    private static final int ACTIVATION_MAX_IN_FLIGHT = 8;
+    private final ArrayDeque<ChunkPos> pendingActivationChunks = new ArrayDeque<>();
+    private final Set<ChunkPos> activationChunks = new HashSet<>();
+    private int activationChunksInFlight;
+    private int activationChunksTotal;
+    private String activationChunkFailure;
+    private ServerLevel activationLevel;
+    private ActiveMapConfig activationMap;
+    private Consumer<Result> activationCallback;
+    private long activationGeneration;
 
     private BattlefieldWorldManager() {
     }
@@ -101,9 +118,50 @@ public final class BattlefieldWorldManager {
     }
 
     /**
-     * Copies all accepted templates before vanilla creates its initial
-     * ServerLevels. Once a map has been used, cleanup removes this disposable
-     * copy and later rounds import only the selected template again.
+     * Starts only a bounded number of chunk futures per server tick. Chunk I/O
+     * remains asynchronous and the completion work is returned to the server
+     * executor, so a map with many distant vehicle pits cannot stall one tick.
+     */
+    public void onServerTick() {
+        ServerLevel level = activationLevel;
+        if (level == null) {
+            return;
+        }
+
+        int started = 0;
+        while (started < ACTIVATION_CHUNKS_STARTED_PER_TICK
+            && activationChunksInFlight < ACTIVATION_MAX_IN_FLIGHT
+            && !pendingActivationChunks.isEmpty()) {
+            ChunkPos chunk = pendingActivationChunks.poll();
+            activationChunksInFlight++;
+            started++;
+            long generation = activationGeneration;
+            level.getChunkSource().addRegionTicket(
+                TicketType.PORTAL, chunk, 1, chunk.getWorldPosition());
+            level.getChunkSource()
+                .getChunkFuture(chunk.x, chunk.z, ChunkStatus.FULL, true)
+                .whenComplete((loaded, error) -> level.getServer().execute(() -> {
+                    if (generation != activationGeneration) {
+                        return;
+                    }
+                    activationChunksInFlight--;
+                    if (error != null || loaded == null || loaded.left().isEmpty()) {
+                        activationChunkFailure = "无法预载区块 " + chunk
+                            + (error == null ? "" : ": " + error.getMessage());
+                    }
+                    finishActivationPreparationIfReady();
+                }));
+        }
+        finishActivationPreparationIfReady();
+    }
+
+    /**
+     * Validates accepted templates without copying their region data.
+     *
+     * Large production maps can contain gigabytes of region files. Copying
+     * every candidate synchronously in ServerAboutToStartEvent blocked the
+     * server thread even though only one map can win the vote. The selected
+     * map is imported later on the dedicated battlefield I/O executor.
      */
     public int prepareAllAtStartup(MinecraftServer server) {
         if (!busy.compareAndSet(false, true)) {
@@ -111,28 +169,21 @@ public final class BattlefieldWorldManager {
             return 0;
         }
         availableDimensions.clear();
-        freshDimensions.clear();
         lastError = null;
         lastLoaded = null;
-        state = ImportState.COPYING;
+        state = ImportState.IDLE;
         try {
             ExternalConfigBootstrap.bootstrapIfNeeded();
             for (ActiveMapConfig map : ExternalConfigBootstrap.getUsableMaps()) {
-                Path dimPath = dimensionDirectory(server, map.dimensionKey);
-                Path tempPath = dimPath.resolveSibling(
-                    dimPath.getFileName().toString() + ".importing");
-                long startedNanos = System.nanoTime();
-                Result result = copyTemplate(map, dimPath, tempPath);
-                if (result.success()) {
+                Path template = map.templateWorldDir.toAbsolutePath().normalize();
+                if (Files.isDirectory(template) && Files.isDirectory(template.resolve("region"))) {
                     availableDimensions.add(map.dimensionId);
-                    freshDimensions.add(map.dimensionId);
-                    long millis = (System.nanoTime() - startedNanos) / 1_000_000L;
-                    Espetro.LOGGER.info("启动时已准备战场地图: {} -> {} ({} ms)",
-                        map.displayName, dimPath, millis);
+                    Espetro.LOGGER.info("启动时已验证战场地图: {} -> {}",
+                        map.displayName, template);
                 } else {
-                    lastError = result.error();
-                    Espetro.LOGGER.error("地图 {} 启动准备失败: {}",
-                        map.displayName, result.error());
+                    lastError = "缺少 region 目录: " + template;
+                    Espetro.LOGGER.error("地图 {} 启动验证失败: {}",
+                        map.displayName, lastError);
                 }
             }
             return availableDimensions.size();
@@ -164,10 +215,6 @@ public final class BattlefieldWorldManager {
                     return;
                 }
                 ServerLevel level = server.getLevel(map.dimensionKey);
-                if (level != null && freshDimensions.remove(map.dimensionId)) {
-                    activate(server, map, onComplete);
-                    return;
-                }
                 rebuildSelectedMap(server, map, level, onComplete);
             } catch (Exception e) {
                 Espetro.LOGGER.error("战场导入启动失败", e);
@@ -212,6 +259,11 @@ public final class BattlefieldWorldManager {
             ActiveMapConfig target = map != null ? map
                 : lastLoaded != null ? lastLoaded : BattlefieldContext.getOrNull();
             try {
+                // 卸载维度前摧毁全部兵站（核心实体 / Radio 方块），避免仅清 map 残留
+                BastionManager.getInstance().destroyAllBastionsForMatchEnd();
+                // 载具与坑位补给站一并清掉（若回合清理已做过则幂等）
+                VehicleManager.getInstance().reset();
+
                 BattlefieldContext.clear();
                 lastLoaded = null;
                 if (target == null) {
@@ -219,7 +271,6 @@ public final class BattlefieldWorldManager {
                     return;
                 }
 
-                freshDimensions.remove(target.dimensionId);
                 ServerLevel discarded = detachForDiscard(server, target.dimensionKey);
                 Path dimPath = dimensionDirectory(server, target.dimensionKey);
                 Path tempPath = importingPath(dimPath);
@@ -246,7 +297,6 @@ public final class BattlefieldWorldManager {
     ) {
         state = existing == null ? ImportState.COPYING : ImportState.UNLOADING;
         ServerLevel discarded = existing == null ? null : detachForDiscard(server, map.dimensionKey);
-        freshDimensions.remove(map.dimensionId);
         Path dimPath = dimensionDirectory(server, map.dimensionKey);
         Path tempPath = importingPath(dimPath);
 
@@ -288,13 +338,132 @@ public final class BattlefieldWorldManager {
             fail(server, "战场维度未挂载: " + map.dimensionId, onComplete);
             return;
         }
+        beginActivationPreparation(level, map, onComplete);
+    }
+
+    private void beginActivationPreparation(
+        ServerLevel level,
+        ActiveMapConfig map,
+        Consumer<Result> onComplete
+    ) {
+        clearActivationPreparation();
+        activationLevel = level;
+        activationMap = map;
+        activationCallback = onComplete;
+        collectCriticalChunks(map, activationChunks);
+        pendingActivationChunks.addAll(activationChunks);
+        activationChunksTotal = activationChunks.size();
+        Espetro.LOGGER.info("战场关键区块开始分批预载: {} 个", activationChunksTotal);
+        if (pendingActivationChunks.isEmpty()) {
+            finishActivationPreparationIfReady();
+        }
+    }
+
+    private static void collectCriticalChunks(ActiveMapConfig map, Set<ChunkPos> output) {
+        if (map.spawnPoints != null) {
+            addSpawnArea(map.spawnPoints.attack, output);
+            addSpawnArea(map.spawnPoints.defend, output);
+        }
+        if (map.vehSpawn == null) {
+            return;
+        }
+        for (List<org.espetro.mapconfig.VehSpawnSnapshot.SpawnPoint> points
+                : map.vehSpawn.spawnPointsByType.values()) {
+            for (org.espetro.mapconfig.VehSpawnSnapshot.SpawnPoint point : points) {
+                addVehiclePose(point.attack(), output);
+                addVehiclePose(point.defend(), output);
+            }
+        }
+    }
+
+    private static void addSpawnArea(
+        @Nullable org.espetro.mapconfig.SpawnPointsSnapshot.Point point,
+        Set<ChunkPos> output
+    ) {
+        if (point == null) {
+            return;
+        }
+        ChunkPos center = new ChunkPos(BlockPos.containing(point.x(), point.y(), point.z()));
+        // Radius one covers player view bootstrap and the side-offset supply block.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                output.add(new ChunkPos(center.x + dx, center.z + dz));
+            }
+        }
+    }
+
+    private static void addVehiclePose(
+        @Nullable org.espetro.mapconfig.VehSpawnSnapshot.Pose pose,
+        Set<ChunkPos> output
+    ) {
+        if (pose == null) {
+            return;
+        }
+        output.add(new ChunkPos(BlockPos.containing(pose.x(), pose.y(), pose.z())));
+        output.add(new ChunkPos(VehicleManager.getSupplyStationPosition(pose)));
+    }
+
+    private void finishActivationPreparationIfReady() {
+        if (activationLevel == null
+            || !pendingActivationChunks.isEmpty()
+            || activationChunksInFlight > 0) {
+            return;
+        }
+
+        ServerLevel level = activationLevel;
+        ActiveMapConfig map = activationMap;
+        Consumer<Result> onComplete = activationCallback;
+        String failure = activationChunkFailure;
+        int total = activationChunksTotal;
+        clearActivationPreparation();
+        if (failure != null) {
+            fail(level.getServer(), failure, onComplete);
+            return;
+        }
+
         BattlefieldContext.activate(map);
         lastLoaded = map;
+        // Pre-place Dragonrise ammo supply stations beside every VehSpawn pit
+        // (attack + defend). Runs after GameConfigBridge.apply / VehicleConfig.
+        try {
+            if (map.vehSpawn != null) {
+                int stations = VehicleManager.getInstance().spawnPadSupplyStations(level, map.vehSpawn);
+                Espetro.LOGGER.info("战场载具坑补给站: {} 个", stations);
+            }
+        } catch (Exception e) {
+            Espetro.LOGGER.error("预放载具坑补给站失败", e);
+        }
+        // 原部署点旁预放 espetro:supply_source +「补给站」标题（spawn 已由 GameConfigBridge 写入）
+        try {
+            int deployStations = org.espetro.logistics.DeploySupplyStationPlacer.placeAtSpawnPoints(level);
+            Espetro.LOGGER.info("战场原部署点补给站: {} 个", deployStations);
+        } catch (Exception e) {
+            Espetro.LOGGER.error("预放原部署点补给站失败", e);
+        }
         state = ImportState.READY;
         busy.set(false);
-        Espetro.LOGGER.info("战场地图已从只读模板副本就绪: {}", map.dimensionId);
+        Espetro.LOGGER.info("战场地图已从只读模板副本就绪: {}（预载{}个关键区块）",
+            map.dimensionId, total);
         safeAccept(onComplete, Result.ok());
-        drainPendingCleanup(server);
+        drainPendingCleanup(level.getServer());
+    }
+
+    private void clearActivationPreparation() {
+        if (activationLevel != null) {
+            for (ChunkPos chunk : activationChunks) {
+                activationLevel.getChunkSource().removeRegionTicket(
+                    TicketType.PORTAL, chunk, 1, chunk.getWorldPosition());
+            }
+        }
+        activationGeneration++;
+        pendingActivationChunks.clear();
+        activationChunks.clear();
+        activationChunksInFlight = 0;
+        activationChunksTotal = 0;
+        activationChunkFailure = null;
+        activationLevel = null;
+        activationMap = null;
+        activationCallback = null;
     }
 
     private void finishCleanup(
@@ -361,9 +530,9 @@ public final class BattlefieldWorldManager {
     }
 
     public void resetAfterServerStop() {
+        clearActivationPreparation();
         busy.set(false);
         availableDimensions.clear();
-        freshDimensions.clear();
         state = ImportState.IDLE;
         lastError = null;
         lastLoaded = null;
@@ -538,7 +707,93 @@ public final class BattlefieldWorldManager {
     }
 
     private Result copyTemplate(ActiveMapConfig map, Path dimPath, Path tempPath) {
-        return replaceSaveCopy(map.templateWorldDir, dimPath, tempPath);
+        return replaceSaveCopyFast(map.templateWorldDir, dimPath, tempPath);
+    }
+
+    /**
+     * Runtime copy path: prefer a copy-on-write clone on Linux/Btrfs/XFS and
+     * fall back to the portable NIO copy. ProcessBuilder passes every path as
+     * a literal argument (no shell), and the caller has already constrained
+     * both source and destination to trusted roots.
+     */
+    static Result replaceSaveCopyFast(Path template, Path dimPath, Path tempPath) {
+        Result reflink = replaceSaveCopyUsingReflink(template, dimPath, tempPath);
+        if (reflink.success()) {
+            Espetro.LOGGER.info("战场地图使用写时复制完成: {}", template.getFileName());
+            return reflink;
+        }
+        Espetro.LOGGER.info("写时复制不可用，回退到 Java 文件复制: {}", reflink.error());
+        return replaceSaveCopy(template, dimPath, tempPath);
+    }
+
+    private static Result replaceSaveCopyUsingReflink(
+        Path template,
+        Path dimPath,
+        Path tempPath
+    ) {
+        try {
+            deleteRecursively(tempPath);
+            Files.createDirectories(tempPath);
+            for (String child : List.of("region", "entities", "poi", "data", "EsConfig")) {
+                Path source = template.resolve(child);
+                if (!Files.exists(source)) {
+                    continue;
+                }
+                Path target = tempPath.resolve(child);
+                if (Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS)) {
+                    Files.createDirectories(target);
+                    Result copied = runReflinkCopy(source.resolve("."), target);
+                    if (!copied.success()) {
+                        deleteRecursively(tempPath);
+                        return copied;
+                    }
+                } else {
+                    Result copied = runReflinkCopy(source, target);
+                    if (!copied.success()) {
+                        deleteRecursively(tempPath);
+                        return copied;
+                    }
+                }
+            }
+            deleteRecursively(dimPath);
+            Files.createDirectories(dimPath.getParent());
+            try {
+                Files.move(tempPath, dimPath, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(tempPath, dimPath);
+            }
+            return Result.ok();
+        } catch (Exception e) {
+            try {
+                deleteRecursively(tempPath);
+            } catch (Exception ignored) {
+            }
+            return Result.fail("reflink 复制失败: " + e.getMessage());
+        }
+    }
+
+    private static Result runReflinkCopy(Path source, Path target) {
+        try {
+            Process process = new ProcessBuilder(
+                "cp",
+                "--archive",
+                "--reflink=always",
+                "--",
+                source.toString(),
+                target.toString()
+            ).redirectErrorStream(true).start();
+            byte[] output = process.getInputStream().readAllBytes();
+            int exit = process.waitFor();
+            return exit == 0
+                ? Result.ok()
+                : Result.fail("cp --reflink 退出码 " + exit + ": "
+                    + new String(output, StandardCharsets.UTF_8).trim());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Result.fail("reflink 复制被中断");
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     /**

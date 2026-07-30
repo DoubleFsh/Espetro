@@ -15,6 +15,8 @@
   "item.espetro.radio": "Radio",
   "block.espetro.supply_source": "Logistics Supply Point",
   "item.espetro.supply_source": "Logistics Supply Point",
+  "item.espetro.construction_material": "Construction Material",
+
   "tutorial.step.welcome.title": "Welcome to Espetro",
   "tutorial.step.welcome.body": "AuraTip tips explain each phase and GUI. Close a tip to continue. Use /espetro tutorial skip to skip this session; reopen from the hub or command.",
   "tutorial.step.hub.title": "Hub screen",

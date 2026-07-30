@@ -39,6 +39,17 @@ public class SquadCreateWithCategoryPacket {
                 (result.success ? "§a" : "§c") + result.message));
             if (result.success && result.team != null) {
                 org.espetro.team.TeamPackManager.getInstance().reconcileTeam(result.team);
+                // 创建小队即成为队长：推送 usableBy 含 squad_leader 的技能列表
+                org.espetro.team.TeamPackManager.getInstance().handleSquadLeaderTransition(
+                    player,
+                    result.team,
+                    org.espetro.team.SquadManager.NO_SQUAD,
+                    false,
+                    result.team,
+                    org.espetro.team.SquadManager.getInstance().getPlayerSquadId(player.getUUID()),
+                    true
+                );
+                NetworkManager.sendCommanderSkillSync(player);
                 NetworkManager.syncSquadsToTeam(result.team);
                 NetworkManager.broadcastClassCounts(result.team,
                     org.espetro.team.ClassCountManager.getInstance().getPlayerFaction(player.getUUID()));

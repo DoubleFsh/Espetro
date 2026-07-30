@@ -1,6 +1,7 @@
 {
   "totalBatches": 1,
   "endBehavior": "terminate",
+  "attackBatchCompletionReinforcement": 200,
   "teamReinforcements": {
     "ATTACK": 280,
     "DEFEND": 1200
@@ -9,8 +10,16 @@
     {
       "name": "A",
       "batch": 1,
-      "pos1": {"x": -24, "y": 60, "z": -24},
-      "pos2": {"x": 24, "y": 72, "z": 24}
+      "pos1": {
+        "x": -24,
+        "y": 60,
+        "z": -24
+      },
+      "pos2": {
+        "x": 24,
+        "y": 72,
+        "z": 24
+      }
     }
   ]
 }

@@ -110,6 +110,7 @@ public class FactionDataLoader {
         }
         rebuildLookupCaches();
         this.loaded = true;
+        ClassLoadoutPreviewResolver.clearCache();
         Espetro.LOGGER.info("EsFactions 已冻结: {} 个编制, {} 个职业", factions.size(), classKits.size());
     }
 
@@ -181,6 +182,10 @@ public class FactionDataLoader {
             }
             vehicle.entities = normalizedEntities;
             vehicle.perMaxCount = Math.max(1, vehicle.perMaxCount);
+            if (vehicle.nbt != null) {
+                String trimmedNbt = vehicle.nbt.trim();
+                vehicle.nbt = trimmedNbt.isEmpty() ? null : trimmedNbt;
+            }
             normalizedVehicles.put(type, vehicle);
         }
         data.vehicles = normalizedVehicles;
@@ -563,6 +568,12 @@ public class FactionDataLoader {
         @SerializedName(value = "max_per_squad", alternate = {"maxPerSquad"})
         public int maxPerSquad = 0;
 
+        /**
+         * 选择该职业时，小队至少需要的人数（含自己）。0 = 不限制。
+         */
+        @SerializedName(value = "teammates_need", alternate = {"teammatesNeed"})
+        public int teammatesNeed = 0;
+
         public int maxPlayers = 5;
         public int healthBonus = 0;
         public float speedBonus = 0f;
@@ -675,6 +686,12 @@ public class FactionDataLoader {
         /** 生成实体时附加的通用 scoreboard tags。 */
         @SerializedName(value = "entity_tags", alternate = {"entityTags"})
         public String[] entityTags;
+        /**
+         * 部署时合并到实体的 SNBT（如 "{Energy:2147483647}"）。
+         * 由 VehicleManager 在 Entity#load 前应用；不依赖载具模组 API。
+         */
+        @SerializedName(value = "nbt", alternate = {"entity_nbt", "entityNbt"})
+        public String nbt;
         /** 单类载具的固定部署坐标配置。 */
         public VehicleDeploymentData deployment;
     }

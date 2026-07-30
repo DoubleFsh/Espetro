@@ -18,7 +18,9 @@ import org.espetro.team.SquadManager;
 import org.espetro.team.VoteManager;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,7 +30,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.16";
+    public static final String PROTOCOL_VERSION = "1.20";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -38,9 +40,39 @@ public class NetworkManager {
     );
 
     private static int packetId = 0;
+    private static final int FULL_DEPLOY_PACKETS_PER_TICK = 8;
+    private static final Map<UUID, Integer> QUEUED_FULL_DEPLOY_SCREENS = new LinkedHashMap<>();
 
     public static int nextId() {
         return packetId++;
+    }
+
+    public static void queueUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining) {
+        if (player != null) {
+            QUEUED_FULL_DEPLOY_SCREENS.put(player.getUUID(), deployTimeRemaining);
+        }
+    }
+
+    public static void drainQueuedFullScreens() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || QUEUED_FULL_DEPLOY_SCREENS.isEmpty()) {
+            return;
+        }
+        int sent = 0;
+        var iterator = QUEUED_FULL_DEPLOY_SCREENS.entrySet().iterator();
+        while (iterator.hasNext() && sent < FULL_DEPLOY_PACKETS_PER_TICK) {
+            Map.Entry<UUID, Integer> entry = iterator.next();
+            iterator.remove();
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player != null) {
+                sendUnifiedDeployScreen(player, entry.getValue());
+                sent++;
+            }
+        }
+    }
+
+    public static void clearQueuedFullScreens() {
+        QUEUED_FULL_DEPLOY_SCREENS.clear();
     }
 
     public static void registerNetwork() {
@@ -294,6 +326,35 @@ public class NetworkManager {
         NET.registerMessage(nextId(), TutorialActionPacket.class, TutorialActionPacket::write, TutorialActionPacket::read, TutorialActionPacket::handle);
         // 编制选择倒计时轻量包（避免每秒全量 ClassSelectScreenPacket）
         NET.registerMessage(nextId(), ClassSelectTimerPacket.class, ClassSelectTimerPacket::write, ClassSelectTimerPacket::read, ClassSelectTimerPacket::handle);
+        NET.registerMessage(nextId(), EquipZoneSyncPacket.class, EquipZoneSyncPacket::write, EquipZoneSyncPacket::read, EquipZoneSyncPacket::handle);
+        NET.registerMessage(nextId(), RadioRadialPacket.class,
+            RadioRadialPacket::write, RadioRadialPacket::read, RadioRadialPacket::handle);
+    }
+
+    public static void sendRadioOpen(net.minecraft.core.BlockPos pos) {
+        NET.sendToServer(RadioRadialPacket.openRequest(pos));
+    }
+
+    public static void sendRadioResupply(net.minecraft.core.BlockPos pos) {
+        NET.sendToServer(RadioRadialPacket.resupply(pos));
+    }
+
+    /** 同步同阵营换装黄框区域。 */
+    public static void sendEquipZones(ServerPlayer player) {
+        if (player == null) return;
+        List<EquipZoneSyncPacket.Zone> zones =
+            org.espetro.team.ClassEquipmentZones.collectForPlayer(player);
+        NET.send(PacketDistributor.PLAYER.with(() -> player), new EquipZoneSyncPacket(zones));
+    }
+
+    public static void broadcastEquipZonesForTeam(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || team == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (team.equals(Espetro.getPlayerTeam(player))) {
+                sendEquipZones(player);
+            }
+        }
     }
 
     /**
@@ -305,6 +366,12 @@ public class NetworkManager {
 
     public static void sendClassSelect(String factionId, String classId, String variantId) {
         NET.sendToServer(new ClassSelectPacket(factionId, classId, variantId));
+    }
+
+    public static void sendRadioClassSelect(String factionId, String classId, String variantId,
+                                            net.minecraft.core.BlockPos radioPos) {
+        NET.sendToServer(ClassSelectPacket.fromRadio(
+            factionId, classId, variantId, radioPos));
     }
 
     /**
@@ -329,23 +396,26 @@ public class NetworkManager {
     }
 
     /**
-     * 将某阵营当前编制的职业人数立即广播给同阵营全员。
-     */
-    /**
-     * 向同队在线玩家刷新统一部署面板数据（职业人数含小队作用域）。
-     * 客户端在小队结构未变时不会整页 rebuild。
+     * 向同队在线玩家刷新部署面板数据（openScreen=false，不强制弹窗）。
+     * <p>
+     * 必须带上每人的 {@code squadCurrentCount} 等小队作用域字段，否则 J 面板灰显/人数错误。
+     * 装备预览走 {@link ClassLoadoutPreviewResolver} 缓存，避免旧版「N×ItemParser」尖峰；
+     * 仍比无缓存的 full 风暴轻一个数量级。打开面板仍用 {@link #sendUnifiedDeployScreen}。
      */
     public static void refreshUnifiedDeployScreensForTeam(String team) {
         MinecraftServer server = Espetro.getServer();
-        if (server == null || team == null) return;
+        if (server == null || team == null) {
+            return;
+        }
+        int remaining = -1;
+        if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase()
+            == org.espetro.team.GamePhase.DEPLOYING) {
+            remaining = org.espetro.team.GameStateManager.getInstance()
+                .getDeployTimeRemainingSeconds();
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (team.equals(Espetro.getPlayerTeam(player))) {
-                int remaining = -1;
-                if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase()
-                    == org.espetro.team.GamePhase.DEPLOYING) {
-                    remaining = org.espetro.team.GameStateManager.getInstance()
-                        .getDeployTimeRemainingSeconds();
-                }
+                // 预览已缓存：主要成本是组包；保证小队人数/满员态正确
                 syncUnifiedDeployScreen(player, remaining);
             }
         }
@@ -357,11 +427,16 @@ public class NetworkManager {
 
         ClassCountManager countManager = ClassCountManager.getInstance();
         java.util.Map<String, Integer> counts = countManager.getCountsForFaction(team, factionId);
-        java.util.Map<String, java.util.Map<String, Integer>> variants =
-            countManager.getVariantCountsForFaction(team, factionId);
-        ClassCountSyncPacket packet = new ClassCountSyncPacket(counts, variants, factionId);
+        java.util.Map<Integer, ClassCountSyncPacket> packetsBySquad = new java.util.HashMap<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (team.equals(countManager.getEffectivePlayerTeam(player.getUUID()))) {
+                int squadId = SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+                ClassCountSyncPacket packet = packetsBySquad.computeIfAbsent(squadId, ignored ->
+                    new ClassCountSyncPacket(
+                        counts,
+                        countManager.getSquadCountsForViewer(player.getUUID(), team, factionId),
+                        countManager.getVariantCountsForViewer(player.getUUID(), team, factionId),
+                        factionId));
                 NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
             }
         }
@@ -433,6 +508,24 @@ public class NetworkManager {
      */
     public static void deleteSquad(int squadId) {
         NET.sendToServer(SquadActionPacket.delete(squadId));
+    }
+
+    public static void transferSquadLeader(java.util.UUID targetUuid) {
+        if (targetUuid != null) {
+            NET.sendToServer(SquadActionPacket.transferSquadLeader(targetUuid));
+        }
+    }
+
+    public static void transferFireteamLeader(java.util.UUID targetUuid) {
+        if (targetUuid != null) {
+            NET.sendToServer(SquadActionPacket.transferFireteamLeader(targetUuid));
+        }
+    }
+
+    public static void assignFireteam(java.util.UUID targetUuid, org.espetro.team.Fireteam fireteam) {
+        if (targetUuid != null && fireteam != null) {
+            NET.sendToServer(SquadActionPacket.assignFireteam(targetUuid, fireteam));
+        }
     }
 
     /**
@@ -853,7 +946,8 @@ public class NetworkManager {
                 classList.add(new UnifiedDeployScreenPacket.ClassInfo(
                     kit.id, kit.name, kit.description, kit.role, kit.icon, kit.iconImage,
                     kit.maxPlayers, kit.strictCount, count, kit.troopValue, kit.healthBonus, kit.speedBonus,
-                    kit.teamCount, kit.maxPerSquad, squadCount, variants
+                    kit.teamCount, kit.maxPerSquad, squadCount,
+                    Math.max(0, kit.teammatesNeed), variants
                 ));
                 classCountMap.put(kit.id, count);
             }
@@ -869,6 +963,7 @@ public class NetworkManager {
         }
 
         java.util.List<UnifiedDeployScreenPacket.BastionItem> bastionList = new java.util.ArrayList<>();
+        // 列出全部己方 HAB（含启用倒计时/无覆盖等），状态文案供 UI 展示；选择时再 isHabOperational
         for (org.espetro.bastion.BastionData bd : bm.getTeamBastions(team)) {
             net.minecraft.core.BlockPos armorStandPos = bm.getRecordedArmorStandPosition(bd);
             if (armorStandPos == null) {
@@ -940,7 +1035,7 @@ public class NetworkManager {
             GovernanceStatePacket.from(
                 org.espetro.governance.CommanderGovernanceManager.getInstance(),
                 player.getUUID()));
-
+        sendEquipZones(player);
     }
 
     /**
@@ -990,7 +1085,8 @@ public class NetworkManager {
             for (SquadManager.MemberSnapshot member : squad.members) {
                 members.add(new UnifiedDeployScreenPacket.SquadMemberInfo(
                     member.uuid, member.playerName, member.className,
-                    member.leader, commanderUuids.contains(member.uuid)));
+                    member.leader, commanderUuids.contains(member.uuid),
+                    member.fireteam.toNetwork(), member.fireteamLeader));
             }
             squadList.add(new UnifiedDeployScreenPacket.SquadInfo(
                 squad.id, squad.name, members.size(), squad.maxMembers, squad.locked,
@@ -1091,12 +1187,16 @@ public class NetworkManager {
      */
     public static void sendCommanderSkillSync(ServerPlayer player) {
         boolean isCommander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
-        java.util.Map<String, Integer> cooldowns =
-            org.espetro.team.CommanderSkillManager.getInstance().getCooldownData(player.getUUID());
-        CommanderSkillSyncPacket packet = new CommanderSkillSyncPacket(isCommander, cooldowns,
-            org.espetro.team.CommanderSkillManager.getInstance().getSkillViews());
+        org.espetro.team.CommanderSkillManager skills =
+            org.espetro.team.CommanderSkillManager.getInstance();
+        // 仅同步该玩家 usableBy 允许的技能；冷却仍按个人 UUID
+        java.util.Map<String, Integer> cooldowns = skills.getCooldownData(player.getUUID());
+        java.util.List<org.espetro.team.CommanderSkillManager.SkillView> views =
+            skills.getSkillViewsFor(player);
+        // isCommander 字段：有可用技能或是指挥官时客户端显示技能入口
+        boolean showSkillsEntry = isCommander || !views.isEmpty();
+        CommanderSkillSyncPacket packet = new CommanderSkillSyncPacket(showSkillsEntry, cooldowns, views);
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
-
     }
 
     // ===== multi-dimension helpers =====

@@ -27,8 +27,9 @@ import java.util.Map;
  *   <li>Overlay 活跃期间绝不调用 {@code RadialMenuRegistry.setMenus}、close/open Overlay。</li>
  *   <li>菜单重建延迟到 Alt 已松开且 Overlay 已关闭后执行；每次关闭最多重建一次。</li>
  *   <li>技能同步由服务端在入服/指挥官变更/技能激活时主动推送，不依赖首次 Alt 长按。</li>
- *   <li>根菜单仅依据 {@code cachedIsCommander} 决定是否加入技能槽位，不以技能列表是否为空作为条件。</li>
+ *   <li>根菜单：指挥官，或已同步到可用技能列表时显示「技能」槽。</li>
  *   <li>冷却值更新仅影响下次打开时的菜单内容，不触发 Overlay 内重建。</li>
+ *   <li>每次开始按住 Alt 会请求一次技能同步，避免「后成为队长」仍无入口。</li>
  * </ul>
  */
 public final class AuraTipRadialController {
@@ -233,6 +234,10 @@ public final class AuraTipRadialController {
             return;
         }
 
+        // 刚按下 Alt：向服务端拉一次技能列表（队长身份可能在入服同步之后才获得）
+        if (!keyWasDown) {
+            NetworkManager.requestCommanderSkillSync();
+        }
         keyWasDown = true;
         if (consumedUntilRelease) {
             return;
@@ -329,7 +334,8 @@ public final class AuraTipRadialController {
             .slot("espetro.logistics", CONSTRUCTION,
                 Actions.script(OPEN_SUBMENU_ACTION, Map.of("menu", "logistics")),
                 Component.translatable("radial.espetro.logistics"), "#FF6EA07A");
-        if (cachedIsCommander) {
+        // 指挥官或同步到了可用技能（含小队长 usableBy）时显示入口
+        if (cachedIsCommander || (hasSkillSnapshot && !cachedSkills.isEmpty())) {
             builder = builder.slot("espetro.skills", COMMAND_ICON,
                 Actions.script(OPEN_SUBMENU_ACTION, Map.of("menu", "skills")),
                 Component.translatable("radial.espetro.skills"), "#FFD5A25C");
@@ -355,9 +361,6 @@ public final class AuraTipRadialController {
 
     private static cc.sighs.auratip.data.RadialMenuData logisticsMenu() {
         return base(LOGISTICS_MENU)
-            .slot("espetro.deposit", CONSTRUCTION,
-                action(RadialActionPacket.Action.DEPOSIT_SUPPLIES),
-                Component.translatable("radial.espetro.deposit"), "#FFD5B25C")
             .slot("espetro.fob_status", AMMO, action(RadialActionPacket.Action.FOB_STATUS),
                 Component.translatable("radial.espetro.fob_status"), "#FF6B9DB5")
             .build();
@@ -372,16 +375,11 @@ public final class AuraTipRadialController {
                 Component.literal("§7加载中…"), "#FF4A3030");
             return builder.build();
         }
-        if (!cachedIsCommander) {
-            builder = builder.slot("espetro.not_commander", UNAVAILABLE_ICON,
-                Actions.script(EXECUTE_ACTION, Map.of("action", "FOB_STATUS")),
-                Component.literal("§c你不是指挥官"), "#FF4A3030");
-            return builder.build();
-        }
+        // 服务端已按 usableBy 过滤；列表空 = 当前角色无可用技能
         if (cachedSkills.isEmpty()) {
             builder = builder.slot("espetro.no_skills", UNAVAILABLE_ICON,
                 Actions.script(EXECUTE_ACTION, Map.of("action", "FOB_STATUS")),
-                Component.literal("§7暂无已注册技能"), "#FF4A3030");
+                Component.literal("§7无可用技能"), "#FF4A3030");
             return builder.build();
         }
 

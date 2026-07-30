@@ -132,6 +132,13 @@ public final class HabChannelManager {
         boolean bypass = player.isCreative()
             && LogisticsConfig.get().getRadio().creativeBypassesPlanks;
 
+        // 战局已结束 / 清理后不再生成 HAB（destroyAll 会 reset channels，但 tick 竞态下仍可能走到这里）
+        org.espetro.team.GamePhase phase = org.espetro.team.GameStateManager.getInstance().getCurrentPhase();
+        if (phase != org.espetro.team.GamePhase.DEPLOYING && phase != org.espetro.team.GamePhase.BATTLE) {
+            player.sendSystemMessage(Component.literal("§c当前阶段无法建成兵站，建造已取消。"));
+            return;
+        }
+
         if (!manager.isInsideFriendlyRadioBuildRadius(channel.level, channel.targetPos, channel.team)) {
             player.sendSystemMessage(Component.literal("§c覆盖此处的己方 Radio 已失效，建造取消。"));
             return;

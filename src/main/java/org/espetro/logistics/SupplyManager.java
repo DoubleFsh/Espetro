@@ -47,9 +47,32 @@ public final class SupplyManager {
 
     public void reset() {
         pickupCooldowns.clear();
+        // 战场轮次结束时清理原部署点自动补给站（若维度仍在）
+        try {
+            var server = Espetro.getServer();
+            if (server != null) {
+                for (ServerLevel level : server.getAllLevels()) {
+                    DeploySupplyStationPlacer.clear(level);
+                }
+            }
+        } catch (Throwable t) {
+            Espetro.LOGGER.warn("清理部署点补给站失败: {}", t.toString());
+        }
     }
 
     public boolean handleSourceInteraction(ServerPlayer player, ServerLevel level, BlockPos pos) {
+        try {
+            return handleSourceInteractionInner(player, level, pos);
+        } catch (Throwable t) {
+            Espetro.LOGGER.error("handleSourceInteraction 失败 at {}", pos, t);
+            if (player != null) {
+                player.sendSystemMessage(Component.literal("§c补给站暂时不可用，请重启游戏后重试。"));
+            }
+            return true; // 吞掉交互，避免事件冒泡再炸
+        }
+    }
+
+    private boolean handleSourceInteractionInner(ServerPlayer player, ServerLevel level, BlockPos pos) {
         LogisticsConfig.SupplySource source = findSource(player, level, pos);
         if (source == null) {
             return false;

@@ -11,9 +11,9 @@ import java.util.regex.Pattern;
 
 final class EspetroMutilWidgets {
 
-    // 阶段 UI 默认透明：玩家在高空旁观+失明时背后已近似全黑，不再铺不透明遮罩防闪。
-    // BACKDROP 仍保留常量供主城等少数 opt-in 场景使用，但 drawScreenShade 默认不绘制。
-    static final int BACKDROP = 0xFF121517;
+    // 阶段 UI 全屏静态底：不透明纯黑，避免世界/失明层穿透或闪烁。
+    // 主城等需透视世界的界面请覆盖 renderBeforeMutil，勿调用 drawScreenShade。
+    static final int BACKDROP = 0xFF000000;
     static final int PANEL = 0x00191C1E;
     static final int PANEL_SOFT = 0x00212527;
     static final int BORDER = 0xFF5B6260;
@@ -44,9 +44,12 @@ final class EspetroMutilWidgets {
         return new GuiRect(x, y, width, height, color);
     }
 
-    /** 默认不绘制全屏遮罩；个别 Screen 需要暗角时自行 opt-in fill。 */
+    /** 阶段 GUI 全屏静态不透明黑底（与部署界面一致）。 */
     static void drawScreenShade(GuiGraphics graphics, int width, int height) {
-        // no-op: MatchHold 失明黑底替代全屏 BACKDROP
+        if (graphics == null || width <= 0 || height <= 0) {
+            return;
+        }
+        graphics.fill(0, 0, width, height, BACKDROP);
     }
 
     static Panel panel(int x, int y, int width, int height) {

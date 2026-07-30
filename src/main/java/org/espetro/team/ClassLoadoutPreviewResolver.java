@@ -14,10 +14,12 @@ import net.minecraft.world.item.ItemStack;
 import org.espetro.Espetro;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 服务端权威装备预览解析器。
@@ -37,6 +39,19 @@ import java.util.Map;
  * </ul>
  */
 public final class ClassLoadoutPreviewResolver {
+
+    /** 按编制/职业/变体缓存预览，避免选职时对同队 N 人重复 ItemParser。 */
+    private static final Map<String, Preview> PREVIEW_CACHE = new LinkedHashMap<>();
+    private static final Set<String> WARNED_PARSE_KEYS = new HashSet<>();
+    private static final int MAX_CACHE_ENTRIES = 512;
+
+    /**
+     * 编制重载或服务器重置时清空缓存。
+     */
+    public static void clearCache() {
+        PREVIEW_CACHE.clear();
+        WARNED_PARSE_KEYS.clear();
+    }
 
     /**
      * 6 槽位预览数据。所有 ItemStack 都已 {@link ItemStack#copy() 复制}，
@@ -64,6 +79,17 @@ public final class ClassLoadoutPreviewResolver {
             return new Preview(
                 ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY,
                 ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY);
+        }
+
+        /** 返回各槽位 copy，避免缓存实例被写包/客户端逻辑改脏。 */
+        public Preview copy() {
+            return new Preview(
+                head.isEmpty() ? ItemStack.EMPTY : head.copy(),
+                chest.isEmpty() ? ItemStack.EMPTY : chest.copy(),
+                legs.isEmpty() ? ItemStack.EMPTY : legs.copy(),
+                feet.isEmpty() ? ItemStack.EMPTY : feet.copy(),
+                mainHand.isEmpty() ? ItemStack.EMPTY : mainHand.copy(),
+                offHand.isEmpty() ? ItemStack.EMPTY : offHand.copy());
         }
 
         public ItemStack bySlot(EquipmentSlot slot) {
@@ -113,6 +139,32 @@ public final class ClassLoadoutPreviewResolver {
             return Preview.empty();
         }
 
+        String cacheKey = cacheKey(kit, variant);
+        Preview cached = PREVIEW_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached.copy();
+        }
+
+        Preview built = resolveUncached(lookup, kit, variant);
+        if (PREVIEW_CACHE.size() >= MAX_CACHE_ENTRIES) {
+            // 简单淘汰：清半表，避免无界增长
+            PREVIEW_CACHE.clear();
+        }
+        PREVIEW_CACHE.put(cacheKey, built);
+        return built.copy();
+    }
+
+    private static String cacheKey(FactionDataLoader.ClassKitData kit,
+                                   FactionDataLoader.ClassVariantData variant) {
+        String faction = kit.factionId != null ? kit.factionId : "";
+        String classId = kit.id != null ? kit.id : "";
+        String variantId = variant.id != null ? variant.id : "";
+        return faction + "\0" + classId + "\0" + variantId;
+    }
+
+    private static Preview resolveUncached(HolderLookup.Provider lookup,
+                                           FactionDataLoader.ClassKitData kit,
+                                           FactionDataLoader.ClassVariantData variant) {
         // 复用 ClassEquipment 中已有的小工具，保证别名一致。
         ItemStack head = ItemStack.EMPTY;
         ItemStack chest = ItemStack.EMPTY;
@@ -288,8 +340,12 @@ public final class ClassLoadoutPreviewResolver {
             stack.setCount(count);
             return new ParsedItem(stack);
         } catch (Exception e) {
-            Espetro.LOGGER.warn("[预览解析] 职业 {} 变体 {} 物品参数解析失败: {} ({})",
-                kit.id, variant.id, itemArgs, e.getMessage());
+            String warnKey = (kit != null ? kit.id : "?") + "/"
+                + (variant != null ? variant.id : "?") + ":" + itemArgs;
+            if (WARNED_PARSE_KEYS.add(warnKey)) {
+                Espetro.LOGGER.warn("[预览解析] 职业 {} 变体 {} 物品参数解析失败: {} ({})",
+                    kit.id, variant.id, itemArgs, e.getMessage());
+            }
             return null;
         }
     }

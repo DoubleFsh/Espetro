@@ -31,7 +31,7 @@ glintStrength:0.75
 damageTiltStrength:1.0
 highContrast:false
 gamma:0.5
-renderDistance:12
+renderDistance:3
 simulationDistance:12
 entityDistanceScaling:1.0
 guiScale:0
@@ -127,10 +127,6 @@ key_key.auratip.dev.trigger_showtip:key.keyboard.f10
 key_key.espetro.team:key.keyboard.k
 key_key.espetro.class:key.keyboard.b
 key_key.espetro.radial:key.keyboard.left.alt
-key_key.espoints.open_gui:key.keyboard.j
-key_key.espoints.tactical_map:key.keyboard.v
-key_key.espoints.map_config:key.keyboard.x
-key_key.espoints.open_md_reader:key.keyboard.unknown
 soundCategory_master:0.2039735099337748
 soundCategory_music:0.0
 soundCategory_record:1.0

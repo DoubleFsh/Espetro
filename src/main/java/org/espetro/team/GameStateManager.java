@@ -53,12 +53,21 @@ public class GameStateManager {
     // 双方编制揭示阶段计时器
     private int factionRevealTickCounter = 0;
     private static final int TICKS_PER_SECOND = 20;
-    private static final int ATTACK_WAITING_BARRIER_SIDE = 200;
-    private static final int ATTACK_WAITING_BARRIER_HEIGHT = 20;
+    /** 硬上限：防止配置/默认值过大导致单 tick 上万 setBlock（S100 尖峰）。 */
+    private static final int ATTACK_WAITING_BARRIER_SIDE = 80;
+    private static final int ATTACK_WAITING_BARRIER_HEIGHT = 12;
+    /** 每 tick 最多放置/恢复的屏障块数（分帧，避免开战假死）。 */
+    private static final int BARRIER_BLOCKS_PER_TICK = 400;
 
     // 攻方等待防守部署时临时放置的屏障，记录原方块以便开战后恢复
     private final Map<BlockPos, BlockState> attackWaitingBarrierBlocks = new HashMap<>();
     private ResourceKey<Level> attackWaitingBarrierDimension;
+    /** 分帧放置队列：pos → 写入前的方块（AIR 占位则存 AIR） */
+    private final ArrayDeque<BlockPos> pendingBarrierPlace = new ArrayDeque<>();
+    private final ArrayDeque<Map.Entry<BlockPos, BlockState>> pendingBarrierRemove = new ArrayDeque<>();
+    private ServerLevel barrierWorkLevel;
+    /** Deployment timer expired; wait for the bounded barrier-removal queue before BATTLE. */
+    private boolean battleStartPending;
 
     // 等待选择队伍的玩家
     private final Set<UUID> waitingForTeam = new HashSet<>();
@@ -430,13 +439,13 @@ public class GameStateManager {
      * 开始部署阶段
      */
     private void startDeploying() {
+        battleStartPending = false;
         setPhase(GamePhase.DEPLOYING);
         deployTickCounter = 0;
         factionRevealTickCounter = 0;
         deployClassSelected.clear();
         BastionManager.getInstance().reset();
         TeamPackManager.getInstance().reset();
-        VehicleManager.getInstance().reset();
         removeAttackWaitingBarrier();
 
         // 激活前哨基地（部署阶段防守方可用）
@@ -445,12 +454,14 @@ public class GameStateManager {
         // 编制选择最终处理
         ClassSelectManager.getInstance().finalizeSelection();
 
+        // 玩家进入战场前，放下双方编制在 JSON 中声明的整批首发载具。
+        deployInitialFactionVehicles();
+
         // 所有玩家先进入统一等待点，选择部署点后才进入战场。
         teleportAllToSpawnPoints();
         // Bastion.reset() 会清除位置锁；只按未选边记录恢复受影响玩家，
         // 不在服务器 tick 中扫描全部在线玩家。
         restoreRecordedUnassignedHolds();
-        deployInitialFactionVehicles();
         placeAttackWaitingBarrier();
 
         // 广播职业选择界面给所有玩家（部署阶段可选职业）
@@ -468,6 +479,7 @@ public class GameStateManager {
         factionRevealTickCounter = 0;
 
         ClassSelectManager selectManager = ClassSelectManager.getInstance();
+        prepareInitialFactionVehicleChunks();
         NetworkManager.broadcastFactionRevealScreen(
             selectManager.getFinalAttackClass(),
             selectManager.getFinalDefendClass(),
@@ -489,13 +501,31 @@ public class GameStateManager {
             if (team == null) continue;
 
             // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
-            NetworkManager.sendUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
+            NetworkManager.queueUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
         }
         // 职业选择界面已通过 UnifiedDeployScreen 自动打开，不再发送聊天消息
     }
 
+    /** 编制揭示期间异步预热首批载具出生区块，不提前生成实体。 */
+    private void prepareInitialFactionVehicleChunks() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        ServerLevel level = BattlefieldContext.requireBattlefield(server);
+        ClassSelectManager selectManager = ClassSelectManager.getInstance();
+        VehicleManager vehicleManager = VehicleManager.getInstance();
+        int attackCount = prepareInitialFactionVehiclesForTeam(
+            "ATTACK", selectManager.getFinalAttackClass(), level);
+        int defendCount = prepareInitialFactionVehiclesForTeam(
+            "DEFEND", selectManager.getFinalDefendClass(), level);
+        vehicleManager.processInitialVehicleDeployments();
+
+        Espetro.LOGGER.info("首批载具出生区块开始预热: 攻方{}辆，守方{}辆",
+            attackCount, defendCount);
+    }
+
     /**
-     * 部署阶段开始时，为本局最终攻守编制各预部署一轮 JSON 中配置的载具。
+     * 布防阶段开始时，为本局最终攻守编制生成一整批 JSON 中配置的载具。
      */
     private void deployInitialFactionVehicles() {
         MinecraftServer server = Espetro.getServer();
@@ -503,18 +533,31 @@ public class GameStateManager {
 
         ServerLevel level = BattlefieldContext.requireBattlefield(server);
         ClassSelectManager selectManager = ClassSelectManager.getInstance();
-        int attackCount = deployInitialFactionVehiclesForTeam("ATTACK", selectManager.getFinalAttackClass(), level);
-        int defendCount = deployInitialFactionVehiclesForTeam("DEFEND", selectManager.getFinalDefendClass(), level);
+        VehicleManager vehicleManager = VehicleManager.getInstance();
+        // 兼容揭示时间配置为 0 或预热尚未启动的情况；ledger 会去重。
+        int attackCount = prepareInitialFactionVehiclesForTeam(
+            "ATTACK", selectManager.getFinalAttackClass(), level);
+        int defendCount = prepareInitialFactionVehiclesForTeam(
+            "DEFEND", selectManager.getFinalDefendClass(), level);
+        int deployedNow = vehicleManager.activateInitialVehicleDeployment();
+        VehicleManager.InitialDeploymentStatus status =
+            vehicleManager.getInitialDeploymentStatus();
 
-        Espetro.LOGGER.info("初始载具预部署完成: 攻方{}辆，守方{}辆", attackCount, defendCount);
+        Espetro.LOGGER.info(
+            "布防首批载具已激活: 新安排攻方{}辆，守方{}辆，立即落地{}辆，待落地{}辆",
+            attackCount, defendCount, deployedNow, status.pending());
     }
 
-    private int deployInitialFactionVehiclesForTeam(String team, String factionId, ServerLevel level) {
+    private int prepareInitialFactionVehiclesForTeam(
+        String team,
+        String factionId,
+        ServerLevel level
+    ) {
         if (factionId == null || factionId.isBlank()) {
             return 0;
         }
 
-        return VehicleManager.getInstance().deployInitialVehicles(factionId, team, level);
+        return VehicleManager.getInstance().prepareInitialVehicles(factionId, team, level);
     }
 
     /** 将所有已选队玩家放入统一部署等待状态。 */
@@ -562,12 +605,13 @@ public class GameStateManager {
      * 部署阶段Tick处理
      */
     public void onDeployTick() {
+        processBarrierWork();
         // 每秒更新一次
         if (deployTickCounter % TICKS_PER_SECOND == 0) {
             broadcastDefenseSetupActionBar(getDeployTimeRemainingSeconds());
         }
 
-        // 部署阶段结束 -> 对战开始
+        // 部署阶段结束后先分帧移除已放置屏障，再进入 BATTLE。
         if (deployTickCounter >= GameConfig.getDeployTimeoutSeconds() * TICKS_PER_SECOND) {
             startBattle();
         }
@@ -614,6 +658,7 @@ public class GameStateManager {
             return;
         }
         attackWaitingBarrierDimension = level.dimension();
+        barrierWorkLevel = level;
         SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint("ATTACK");
         BlockPos center = new BlockPos((int) Math.floor(spawn.x), (int) Math.floor(spawn.y), (int) Math.floor(spawn.z));
 
@@ -623,21 +668,24 @@ public class GameStateManager {
         int minZ = center.getZ() - half;
         int maxZ = minZ + ATTACK_WAITING_BARRIER_SIDE - 1;
         int baseY = center.getY();
-        // Only build the perimeter. A full 200x200 roof previously forced
-        // tens of thousands of chunk/block updates and stalled all entities.
+        // 仅外壳；入队分帧放置，避免单 tick 上万 setBlock
+        pendingBarrierPlace.clear();
         for (int y = baseY; y < baseY + ATTACK_WAITING_BARRIER_HEIGHT; y++) {
             for (int x = minX; x <= maxX; x++) {
-                setTemporaryBarrier(level, new BlockPos(x, y, minZ));
-                setTemporaryBarrier(level, new BlockPos(x, y, maxZ));
+                pendingBarrierPlace.add(new BlockPos(x, y, minZ));
+                pendingBarrierPlace.add(new BlockPos(x, y, maxZ));
             }
             for (int z = minZ + 1; z < maxZ; z++) {
-                setTemporaryBarrier(level, new BlockPos(minX, y, z));
-                setTemporaryBarrier(level, new BlockPos(maxX, y, z));
+                pendingBarrierPlace.add(new BlockPos(minX, y, z));
+                pendingBarrierPlace.add(new BlockPos(maxX, y, z));
             }
         }
 
-        Espetro.LOGGER.info("已创建攻方等待屏障: center={}, side={}, height={}, blocks={}",
-            center, ATTACK_WAITING_BARRIER_SIDE, ATTACK_WAITING_BARRIER_HEIGHT, attackWaitingBarrierBlocks.size());
+        int queued = pendingBarrierPlace.size();
+        processBarrierWork();
+        Espetro.LOGGER.info("已排队攻方等待屏障: center={}, side={}, height={}, queued={}, placedNow={}",
+            center, ATTACK_WAITING_BARRIER_SIDE, ATTACK_WAITING_BARRIER_HEIGHT,
+            queued, attackWaitingBarrierBlocks.size());
     }
 
     private void setTemporaryBarrier(ServerLevel level, BlockPos pos) {
@@ -649,6 +697,40 @@ public class GameStateManager {
             attackWaitingBarrierBlocks.put(pos.immutable(), previous);
         }
         level.setBlock(pos, Blocks.BARRIER.defaultBlockState(), 18);
+    }
+
+    /** 分帧放置/恢复屏障；部署 tick 与开战清理共用。 */
+    private void processBarrierWork() {
+        ServerLevel level = barrierWorkLevel;
+        if (level == null && attackWaitingBarrierDimension != null) {
+            MinecraftServer server = Espetro.getServer();
+            if (server != null) {
+                level = server.getLevel(attackWaitingBarrierDimension);
+                barrierWorkLevel = level;
+            }
+        }
+        if (level == null) {
+            pendingBarrierPlace.clear();
+            pendingBarrierRemove.clear();
+            return;
+        }
+
+        int budget = BARRIER_BLOCKS_PER_TICK;
+        while (budget > 0 && !pendingBarrierPlace.isEmpty()) {
+            setTemporaryBarrier(level, pendingBarrierPlace.poll());
+            budget--;
+        }
+        while (budget > 0 && !pendingBarrierRemove.isEmpty()) {
+            Map.Entry<BlockPos, BlockState> entry = pendingBarrierRemove.poll();
+            BlockPos pos = entry.getKey();
+            if (level.getBlockState(pos).is(Blocks.BARRIER)) {
+                level.setBlock(pos, entry.getValue(), 3);
+            }
+            budget--;
+        }
+        if (pendingBarrierPlace.isEmpty() && pendingBarrierRemove.isEmpty()) {
+            // 放置队列清空后保留 barrierWorkLevel 直到 remove 完成
+        }
     }
 
     private int removeAttackWaitingBarrier() {
@@ -664,9 +746,12 @@ public class GameStateManager {
     }
 
     private int removeAttackWaitingBarrier(MinecraftServer server) {
+        pendingBarrierPlace.clear();
         if (server == null) {
             attackWaitingBarrierBlocks.clear();
             attackWaitingBarrierDimension = null;
+            pendingBarrierRemove.clear();
+            barrierWorkLevel = null;
             return 0;
         }
 
@@ -675,25 +760,28 @@ public class GameStateManager {
         if (level == null || Level.OVERWORLD.equals(level.dimension())) {
             attackWaitingBarrierBlocks.clear();
             attackWaitingBarrierDimension = null;
+            pendingBarrierRemove.clear();
+            barrierWorkLevel = null;
             return 0;
         }
-        int restored = 0;
+        barrierWorkLevel = level;
+        pendingBarrierRemove.clear();
         for (Map.Entry<BlockPos, BlockState> entry : attackWaitingBarrierBlocks.entrySet()) {
-            BlockPos pos = entry.getKey();
-            if (level.getBlockState(pos).is(Blocks.BARRIER)) {
-                level.setBlock(pos, entry.getValue(), 3);
-                restored++;
-            }
+            pendingBarrierRemove.add(Map.entry(entry.getKey(), entry.getValue()));
         }
+        int queued = pendingBarrierRemove.size();
         attackWaitingBarrierBlocks.clear();
-        int orphaned = removeOrphanedAttackWaitingBarriers(level);
-        attackWaitingBarrierDimension = null;
-        int total = restored + orphaned;
-        if (total > 0) {
-            Espetro.LOGGER.info("已清理攻方等待屏障: 恢复{}个记录方块, 删除{}个残留屏障",
-                restored, orphaned);
+        // 即使管理员强制终止也只消耗一帧预算；战场副本随后会整体删除。
+        processBarrierWork();
+        if (pendingBarrierRemove.isEmpty()) {
+            attackWaitingBarrierDimension = null;
+            barrierWorkLevel = null;
         }
-        return total;
+        if (queued > 0) {
+            Espetro.LOGGER.info("已清理攻方等待屏障: 排队恢复{}个, 本批处理剩余{}",
+                queued, pendingBarrierRemove.size());
+        }
+        return queued;
     }
 
     private int removeOrphanedAttackWaitingBarriers(ServerLevel level) {
@@ -734,7 +822,28 @@ public class GameStateManager {
      * 开始对战
      */
     private void startBattle() {
-        removeAttackWaitingBarrier();
+        VehicleManager vehicleManager = VehicleManager.getInstance();
+        if (!vehicleManager.isInitialVehicleDeploymentSettled()) {
+            vehicleManager.processInitialVehicleDeployments();
+            if (deployTickCounter % (TICKS_PER_SECOND * 20) == 0) {
+                VehicleManager.InitialDeploymentStatus status =
+                    vehicleManager.getInitialDeploymentStatus();
+                Espetro.LOGGER.warn(
+                    "布防计时已结束，等待首批载具落地后开战: spawned={}, failed={}, pending={}",
+                    status.spawned(), status.failed(), status.pending());
+            }
+            return;
+        }
+        if (!battleStartPending) {
+            battleStartPending = true;
+            queueAttackWaitingBarrierRemoval();
+        }
+        if (!pendingBarrierPlace.isEmpty() || !pendingBarrierRemove.isEmpty()) {
+            return;
+        }
+        battleStartPending = false;
+        attackWaitingBarrierDimension = null;
+        barrierWorkLevel = null;
 
         // 开战前先销毁虚拟前哨，确保 BATTLE 阶段的任何请求都无法再使用。
         boolean hadActiveOutposts = OutpostManager.getInstance().isAvailable();
@@ -756,7 +865,7 @@ public class GameStateManager {
                 applyMatchHoldState(player, HoldAnchor.CURRENT_LOCK);
             } else if (bastionManager.isWaitingForBastion(player.getUUID())) {
                 applyDeploymentWaitingState(player);
-                NetworkManager.sendUnifiedDeployScreen(player, -1);
+                NetworkManager.queueUnifiedDeployScreen(player, -1);
             } else {
                 player.removeEffect(MobEffects.BLINDNESS);
                 applyBattlefieldMiningRestriction(player);
@@ -791,6 +900,22 @@ public class GameStateManager {
         Espetro.broadcastToAll("§6========================================");
 
         Espetro.LOGGER.info("===== 对战开始 =====");
+    }
+
+    /**
+     * Stop placing the deployment shell and queue restoration of only the
+     * blocks that were actually changed. Unlike the administrative cleanup
+     * path this never drains thousands of setBlock calls in one tick.
+     */
+    private void queueAttackWaitingBarrierRemoval() {
+        pendingBarrierPlace.clear();
+        pendingBarrierRemove.clear();
+        for (Map.Entry<BlockPos, BlockState> entry : attackWaitingBarrierBlocks.entrySet()) {
+            pendingBarrierRemove.add(Map.entry(entry.getKey(), entry.getValue()));
+        }
+        int queued = pendingBarrierRemove.size();
+        attackWaitingBarrierBlocks.clear();
+        Espetro.LOGGER.info("部署结束：已分帧排队恢复攻方等待屏障 {} 个", queued);
     }
 
     private void onFactionRevealTick() {
@@ -862,6 +987,13 @@ public class GameStateManager {
                 onDeployTick();
                 break;
             case BATTLE:
+                // 开战瞬间可能仍有屏障分帧恢复队列
+                processBarrierWork();
+                if (pendingBarrierRemove.isEmpty() && pendingBarrierPlace.isEmpty()
+                    && attackWaitingBarrierDimension != null && barrierWorkLevel != null) {
+                    attackWaitingBarrierDimension = null;
+                    barrierWorkLevel = null;
+                }
                 MinecraftServer battleServer = Espetro.getServer();
                 if (battleServer != null) {
                     CommanderGovernanceManager.getInstance().onServerTick(battleServer);
@@ -1083,7 +1215,10 @@ public class GameStateManager {
         ClassCountManager.getInstance().resetAll();
         VehicleManager.getInstance().reset();
         TroopCountManager.getInstance().resetTroops();
-        BastionManager.getInstance().reset();
+        // 回城 / 回合清理：摧毁全部兵站（不扣兵力），在卸载战场维度前清掉运行时结构
+        // （内部会取消 HAB 读条并临时加载卸载区核心后清理）
+        BastionManager.getInstance().destroyAllBastionsForMatchEnd();
+        org.espetro.runtime.ServerRuntimeMaintenance.getInstance().reset();
         if (clearStats) {
             PlayerMatchStatsManager.getInstance().resetMatch();
         }
@@ -1305,9 +1440,72 @@ public class GameStateManager {
         player.fallDistance = 0f;
     }
 
-    /** 等待部署点选择时使用；统一 MatchHold（旁观/失明/战场等待点锁）。 */
+    /**
+     * 等待部署点选择：只要已经选择阵营，就统一以冒险模式、失明并锁在
+     * 本方原部署点。首次部署、死亡重新部署与主动重新部署使用同一规则。
+     * 尚未选择阵营时仍使用战场高空旁观等待态。
+     */
     public void applyDeploymentWaitingState(ServerPlayer player) {
-        applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+        applyAdventureDeploymentWaitingState(player);
+    }
+
+    /**
+     * 首次/死亡/主动重新部署的临时落点。这里只传送和锁定，绝不
+     * clearWaiting，因而玩家站在原部署点坐标并不等于已经选择
+     * “原部署点”。
+     */
+    public void applyAdventureDeploymentWaitingState(ServerPlayer player) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null || !BattlefieldContext.isActive()) {
+            applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+            return;
+        }
+        SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
+        ServerLevel battlefield = BattlefieldContext.requireBattlefield(player.server);
+        BastionManager.DeployPoint original =
+            BastionManager.getInstance().getPlayerDeployPoint(player.getUUID());
+        BlockPos originalPos = original != null && original.pos != null
+            ? original.pos
+            : new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
+        Vec3 hold = new Vec3(
+            originalPos.getX() + 0.5,
+            originalPos.getY() + 0.1,
+            originalPos.getZ() + 0.5);
+        if (player.serverLevel() != battlefield || player.distanceToSqr(hold) > 0.01) {
+            player.teleportTo(
+                battlefield, hold.x, hold.y, hold.z, spawn.yaw, 0f);
+        }
+        BastionManager.getInstance().lockPlayerPosition(player.getUUID(), hold);
+        enforceAdventureBlindness(player, true);
+    }
+
+    /** 已选阵营的部署等待态：冒险、失明、无敌和零速度；不会切换为旁观者。 */
+    public static void enforceAdventureBlindness(
+            ServerPlayer player, boolean forceClientResync) {
+        if (player == null) {
+            return;
+        }
+        if (player.gameMode.getGameModeForPlayer() != GameType.ADVENTURE) {
+            player.setGameMode(GameType.ADVENTURE);
+        }
+        if (forceClientResync) {
+            player.removeEffect(MobEffects.BLINDNESS);
+            player.addEffect(new MobEffectInstance(
+                MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+        } else if (!player.hasEffect(MobEffects.BLINDNESS)) {
+            player.addEffect(new MobEffectInstance(
+                MobEffects.BLINDNESS, Integer.MAX_VALUE, 0, false, false, false));
+        }
+        if (!player.hasEffect(MobEffects.DAMAGE_RESISTANCE)) {
+            player.addEffect(new MobEffectInstance(
+                MobEffects.DAMAGE_RESISTANCE, Integer.MAX_VALUE, 127,
+                false, false, false));
+        }
+        player.setDeltaMovement(0, 0, 0);
+        player.fallDistance = 0f;
     }
 
     // ========== 战局中加入 ==========
@@ -1472,6 +1670,9 @@ public class GameStateManager {
     public void onMidGameDeployComplete(ServerPlayer player) {
         boolean wasMidGameJoiner = midGameJoiners.remove(player.getUUID());
         applyBattlefieldMiningRestriction(player);
+
+        // 落地后若已选职却未发装（等待点选职失败 / 背包被清），补发一次
+        ClassEquipment.ensureEquippedIfNeeded(player);
 
         String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
 

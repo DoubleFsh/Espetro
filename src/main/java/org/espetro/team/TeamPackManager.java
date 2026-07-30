@@ -249,6 +249,12 @@ public class TeamPackManager {
             return false;
         }
 
+        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
+        if (classId == null || classId.isEmpty()) {
+            player.sendSystemMessage(Component.literal("§c请先选择职业后再选择部署点！"));
+            return false;
+        }
+
         TeamPackData teamPack = getTeamPack(teamPackId);
         if (teamPack == null || !team.equals(teamPack.team)) {
             player.sendSystemMessage(Component.literal("§c无效的队伍集结点！"));
@@ -579,7 +585,6 @@ public class TeamPackManager {
     }
 
     public List<RallySnapshot> getRallySnapshots() {
-        long now = System.currentTimeMillis();
         return teamPacks.values().stream()
             .filter(teamPack -> teamPack.active)
             .map(teamPack -> new RallySnapshot(
@@ -590,13 +595,18 @@ public class TeamPackManager {
                 teamPack.pos.getX(),
                 teamPack.pos.getY(),
                 teamPack.pos.getZ(),
-                Math.max(0L, (teamPack.nextWaveAt - now + 999L) / 1000L)
+                teamPack.nextWaveAt
             ))
             .toList();
     }
 
     public record RallySnapshot(UUID id, String team, int squadId, String dimension,
-                                int x, int y, int z, long nextWaveSeconds) {
+                                int x, int y, int z, long nextWaveAtMillis) {
+        /** Compatibility accessor for integrations predating absolute wave timestamps. */
+        public long nextWaveSeconds() {
+            return Math.max(0L,
+                (nextWaveAtMillis - System.currentTimeMillis() + 999L) / 1000L);
+        }
     }
 
     /**

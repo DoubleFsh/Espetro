@@ -104,7 +104,7 @@ public class FactionRevealScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 默认无全屏遮罩：依赖 MatchHold 失明黑底。
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
     @Override

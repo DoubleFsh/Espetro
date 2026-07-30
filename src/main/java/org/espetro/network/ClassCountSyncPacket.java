@@ -23,6 +23,7 @@ public class ClassCountSyncPacket {
 
     private String factionId;
     private Map<String, Integer> classCounts;
+    private Map<String, Integer> squadClassCounts;
     private Map<String, Map<String, Integer>> variantCounts;
     private boolean isError;
     private String errorMessage;
@@ -31,6 +32,7 @@ public class ClassCountSyncPacket {
     public ClassCountSyncPacket(String factionId) {
         this.factionId = factionId;
         this.classCounts = new HashMap<>();
+        this.squadClassCounts = new HashMap<>();
         this.variantCounts = new HashMap<>();
         this.isError = false;
         this.errorMessage = "";
@@ -44,8 +46,16 @@ public class ClassCountSyncPacket {
     public ClassCountSyncPacket(Map<String, Integer> counts,
                                 Map<String, Map<String, Integer>> variantCounts,
                                 String factionId) {
+        this(counts, new HashMap<>(), variantCounts, factionId);
+    }
+
+    public ClassCountSyncPacket(Map<String, Integer> counts,
+                                Map<String, Integer> squadCounts,
+                                Map<String, Map<String, Integer>> variantCounts,
+                                String factionId) {
         this.factionId = factionId;
         this.classCounts = counts;
+        this.squadClassCounts = squadCounts;
         this.variantCounts = variantCounts;
         this.isError = false;
         this.errorMessage = "";
@@ -55,6 +65,7 @@ public class ClassCountSyncPacket {
     public ClassCountSyncPacket(String message, boolean isError) {
         this.factionId = "";
         this.classCounts = new HashMap<>();
+        this.squadClassCounts = new HashMap<>();
         this.variantCounts = new HashMap<>();
         this.isError = true;
         this.errorMessage = message;
@@ -77,6 +88,12 @@ public class ClassCountSyncPacket {
             counts.put(classId, count);
         }
 
+        Map<String, Integer> squadCounts = new HashMap<>();
+        int squadSize = buf.readInt();
+        for (int i = 0; i < squadSize; i++) {
+            squadCounts.put(buf.readUtf(), buf.readInt());
+        }
+
         Map<String, Map<String, Integer>> variantCounts = new HashMap<>();
         int classVariantSize = buf.readInt();
         for (int i = 0; i < classVariantSize; i++) {
@@ -89,7 +106,7 @@ public class ClassCountSyncPacket {
             variantCounts.put(classId, perClass);
         }
 
-        return new ClassCountSyncPacket(counts, variantCounts, factionId);
+        return new ClassCountSyncPacket(counts, squadCounts, variantCounts, factionId);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -101,6 +118,11 @@ public class ClassCountSyncPacket {
         } else {
             buf.writeInt(classCounts.size());
             for (Map.Entry<String, Integer> entry : classCounts.entrySet()) {
+                buf.writeUtf(entry.getKey());
+                buf.writeInt(entry.getValue());
+            }
+            buf.writeInt(squadClassCounts.size());
+            for (Map.Entry<String, Integer> entry : squadClassCounts.entrySet()) {
                 buf.writeUtf(entry.getKey());
                 buf.writeInt(entry.getValue());
             }
@@ -125,9 +147,12 @@ public class ClassCountSyncPacket {
                 ClassCountManager countManager = ClassCountManager.getInstance();
                 String team = countManager.getEffectivePlayerTeam(player.getUUID());
                 Map<String, Integer> counts = countManager.getCountsForFaction(team, factionId);
+                Map<String, Integer> squadCounts =
+                    countManager.getSquadCountsForViewer(player.getUUID(), team, factionId);
                 Map<String, Map<String, Integer>> variants =
-                    countManager.getVariantCountsForFaction(team, factionId);
-                ClassCountSyncPacket response = new ClassCountSyncPacket(counts, variants, factionId);
+                    countManager.getVariantCountsForViewer(player.getUUID(), team, factionId);
+                ClassCountSyncPacket response =
+                    new ClassCountSyncPacket(counts, squadCounts, variants, factionId);
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);
             } else {
                 // 客户端处理：通过反射调用客户端handler（避免服务端类加载）
@@ -146,5 +171,6 @@ public class ClassCountSyncPacket {
     public boolean isError() { return isError; }
     public String getErrorMessage() { return errorMessage; }
     public Map<String, Integer> getClassCounts() { return classCounts; }
+    public Map<String, Integer> getSquadClassCounts() { return squadClassCounts; }
     public Map<String, Map<String, Integer>> getVariantCounts() { return variantCounts; }
 }

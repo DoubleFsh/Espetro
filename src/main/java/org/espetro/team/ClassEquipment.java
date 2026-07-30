@@ -6,6 +6,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,6 +33,55 @@ import java.util.UUID;
 public class ClassEquipment {
 
     private static final Set<UUID> EQUIPMENT_MUTATION_PLAYERS = new HashSet<>();
+    /** Stable IDs make class changes replace modifiers instead of stacking them. */
+    static final UUID CLASS_HEALTH_BONUS_ID =
+        UUID.fromString("dd348d6d-91e3-4f54-aa7a-cd6847dad14a");
+    static final UUID CLASS_SPEED_BONUS_ID =
+        UUID.fromString("2a836d60-7e0b-4518-81f9-4f038fe51a35");
+
+    /**
+     * 是否看起来尚未发过职业装（护甲全空且背包几乎无物）。
+     * 用于「选上了职业但装备被清掉/从未发出」时的补发。
+     */
+    public static boolean needsLoadout(Player player) {
+        if (player == null) {
+            return false;
+        }
+        if (!player.getItemBySlot(EquipmentSlot.HEAD).isEmpty()
+            || !player.getItemBySlot(EquipmentSlot.CHEST).isEmpty()
+            || !player.getItemBySlot(EquipmentSlot.LEGS).isEmpty()
+            || !player.getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
+            return false;
+        }
+        int nonEmpty = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            if (!player.getInventory().getItem(i).isEmpty()) {
+                nonEmpty++;
+                if (nonEmpty >= 4) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 若玩家已有职业记录且当前像未发装，则按当前职业补发。
+     * 落地部署后调用，避免「面板上已选职但背包空」。
+     */
+    public static void ensureEquippedIfNeeded(ServerPlayer player) {
+        if (player == null || !needsLoadout(player)) {
+            return;
+        }
+        ClassCountManager counts = ClassCountManager.getInstance();
+        String classId = counts.getPlayerClass(player.getUUID());
+        String variantId = counts.getPlayerVariant(player.getUUID());
+        String factionId = counts.getPlayerFaction(player.getUUID());
+        if (classId == null || variantId == null || factionId == null) {
+            return;
+        }
+        equipPlayer(player, factionId, classId, variantId);
+    }
 
     /**
      * 清空玩家背包及装备栏
@@ -37,6 +89,7 @@ public class ClassEquipment {
     public static void clearEquipment(Player player) {
         beginEquipmentMutation(player);
         try {
+            clearClassBonuses(player);
             player.getInventory().clearContent();
             player.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);
             player.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
@@ -140,6 +193,7 @@ public class ClassEquipment {
 
         boolean hasCommands = variant.commands != null && variant.commands.length > 0;
         boolean hasConfiguredEquipment = hasConfiguredEquipment(variant);
+        applyBonus(player, kit);
         if (!hasCommands && !hasConfiguredEquipment) {
             Espetro.LOGGER.warn("职业 {} 变体 {} 无 commands/equipment 配置", kit.id, variant.id);
             return;
@@ -167,7 +221,6 @@ public class ClassEquipment {
         if (shouldAutoEquipWearables(variant)) {
             equipWearableItems(player);
         }
-        applyBonus(player, kit);
     }
 
     private static void beginEquipmentMutation(Player player) {
@@ -401,15 +454,60 @@ public class ClassEquipment {
         }
     }
 
-    /**
-     * 应用属性加成（TODO）
-     */
-    private static void applyBonus(Player player, FactionDataLoader.ClassKitData kit) {
-        if (kit.healthBonus > 0) {
-            Espetro.LOGGER.debug("应用生命加成: {} -> {}", kit.name, kit.healthBonus);
+    /** Apply the selected class' non-stacking transient attribute modifiers. */
+    public static void applyClassBonuses(Player player, FactionDataLoader.ClassKitData kit) {
+        applyBonus(player, kit);
+    }
+
+    public static void clearClassBonuses(Player player) {
+        if (player == null) {
+            return;
         }
-        if (kit.speedBonus > 0) {
-            Espetro.LOGGER.debug("应用速度加成: {} -> {}", kit.name, kit.speedBonus);
+        float previousHealth = player.getHealth();
+        removeModifier(player.getAttribute(Attributes.MAX_HEALTH), CLASS_HEALTH_BONUS_ID);
+        removeModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), CLASS_SPEED_BONUS_ID);
+        // Losing maximum health must never heal; only clamp an over-cap current value.
+        if (player.getHealth() > player.getMaxHealth()) {
+            player.setHealth(Math.min(previousHealth, player.getMaxHealth()));
+        }
+    }
+
+    private static void applyBonus(Player player, FactionDataLoader.ClassKitData kit) {
+        if (player == null || kit == null) {
+            return;
+        }
+        float previousHealth = player.getHealth();
+        AttributeInstance maxHealth = player.getAttribute(Attributes.MAX_HEALTH);
+        AttributeInstance movementSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        removeModifier(maxHealth, CLASS_HEALTH_BONUS_ID);
+        removeModifier(movementSpeed, CLASS_SPEED_BONUS_ID);
+
+        double healthBonus = ClassAttributeBonusPolicy.healthAmount(kit.healthBonus);
+        if (maxHealth != null && healthBonus != 0.0D) {
+            maxHealth.addTransientModifier(new AttributeModifier(
+                CLASS_HEALTH_BONUS_ID,
+                "Espetro class health bonus",
+                healthBonus,
+                AttributeModifier.Operation.ADDITION));
+        }
+        double speedBonus = ClassAttributeBonusPolicy.speedMultiplier(kit.speedBonus);
+        if (movementSpeed != null && speedBonus != 0.0D) {
+            movementSpeed.addTransientModifier(new AttributeModifier(
+                CLASS_SPEED_BONUS_ID,
+                "Espetro class speed bonus",
+                speedBonus,
+                AttributeModifier.Operation.MULTIPLY_BASE));
+        }
+        // A class switch is not a heal. Deployment code remains responsible for full health.
+        player.setHealth(ClassAttributeBonusPolicy.clampCurrentHealth(
+            previousHealth, player.getMaxHealth()));
+        Espetro.LOGGER.debug("应用职业属性: {} -> 生命 +{}, 速度 {}%",
+            kit.name, healthBonus, speedBonus * 100.0D);
+    }
+
+    private static void removeModifier(AttributeInstance attribute, UUID id) {
+        if (attribute != null && attribute.getModifier(id) != null) {
+            attribute.removeModifier(id);
         }
     }
 }

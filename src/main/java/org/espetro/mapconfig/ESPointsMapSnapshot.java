@@ -11,8 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -28,19 +31,29 @@ public final class ESPointsMapSnapshot {
     public static final String TACTICAL_MAP_FILE = "TacticalMap.json";
     public static final String CAPTURE_POINTS_FILE = "CapturePoints.json";
     public static final int MAX_BACKGROUND_BYTES = 16 * 1024 * 1024;
+    public static final long MAX_BACKGROUND_PIXELS = 64L * 1024L * 1024L;
+    public static final int MAX_BACKGROUND_DIMENSION = 32_768;
     public static final int MAX_POINTS_PER_BATCH = 7;
 
     public final String tacticalMapJson;
     public final String capturePointsJson;
     public final String backgroundImage;
+    public final String backgroundSha256;
+    public final int backgroundWidth;
+    public final int backgroundHeight;
     private final byte[] backgroundBytes;
 
     private ESPointsMapSnapshot(String tacticalMapJson, String capturePointsJson,
-                                String backgroundImage, byte[] backgroundBytes) {
+                                String backgroundImage, byte[] backgroundBytes,
+                                String backgroundSha256, int backgroundWidth,
+                                int backgroundHeight) {
         this.tacticalMapJson = tacticalMapJson;
         this.capturePointsJson = capturePointsJson;
         this.backgroundImage = backgroundImage == null ? "" : backgroundImage;
         this.backgroundBytes = backgroundBytes == null ? new byte[0] : backgroundBytes.clone();
+        this.backgroundSha256 = backgroundSha256 == null ? "" : backgroundSha256;
+        this.backgroundWidth = Math.max(0, backgroundWidth);
+        this.backgroundHeight = Math.max(0, backgroundHeight);
     }
 
     public static ESPointsMapSnapshot load(Path esConfigDir) throws IOException {
@@ -55,7 +68,17 @@ public final class ESPointsMapSnapshot {
 
         String image = optionalString(tactical, "backgroundImage", "").trim();
         byte[] imageBytes = image.isEmpty() ? new byte[0] : readBackground(esConfigDir, image);
-        return new ESPointsMapSnapshot(tacticalJson, captureJson, image, imageBytes);
+        PngMetadata metadata = imageBytes.length == 0
+            ? PngMetadata.EMPTY
+            : inspectPng(imageBytes, image);
+        return new ESPointsMapSnapshot(
+            tacticalJson,
+            captureJson,
+            image,
+            imageBytes,
+            metadata.sha256(),
+            metadata.width(),
+            metadata.height());
     }
 
     public byte[] backgroundBytes() {
@@ -178,13 +201,49 @@ public final class ESPointsMapSnapshot {
             throw new IOException("战术地图底图大小必须在 1-" + MAX_BACKGROUND_BYTES + " 字节之间");
         }
         byte[] bytes = Files.readAllBytes(real);
-        if (bytes.length < 8
+        if (bytes.length < 24
             || bytes[0] != (byte) 0x89 || bytes[1] != 0x50 || bytes[2] != 0x4E
             || bytes[3] != 0x47 || bytes[4] != 0x0D || bytes[5] != 0x0A
             || bytes[6] != 0x1A || bytes[7] != 0x0A) {
             throw new IOException("战术地图底图不是有效的 PNG 文件: " + relativeName);
         }
         return bytes;
+    }
+
+    private static PngMetadata inspectPng(byte[] bytes, String relativeName) throws IOException {
+        // PNG 第一块必须是长度 13 的 IHDR；读取头部即可限制像素数，无需在启动主线程解码。
+        if (readInt(bytes, 8) != 13
+            || bytes[12] != 'I' || bytes[13] != 'H'
+            || bytes[14] != 'D' || bytes[15] != 'R') {
+            throw new IOException("战术地图底图缺少有效 IHDR: " + relativeName);
+        }
+        int width = readInt(bytes, 16);
+        int height = readInt(bytes, 20);
+        long pixels = (long) width * (long) height;
+        if (width <= 0 || height <= 0
+            || width > MAX_BACKGROUND_DIMENSION || height > MAX_BACKGROUND_DIMENSION
+            || pixels <= 0 || pixels > MAX_BACKGROUND_PIXELS) {
+            throw new IOException("战术地图底图像素数超限（最多 "
+                + MAX_BACKGROUND_PIXELS + "，单边最多 "
+                + MAX_BACKGROUND_DIMENSION + "）: " + relativeName);
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            return new PngMetadata(width, height, HexFormat.of().formatHex(digest));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("JVM 缺少 SHA-256", impossible);
+        }
+    }
+
+    private static int readInt(byte[] bytes, int offset) {
+        return (bytes[offset] & 0xff) << 24
+            | (bytes[offset + 1] & 0xff) << 16
+            | (bytes[offset + 2] & 0xff) << 8
+            | bytes[offset + 3] & 0xff;
+    }
+
+    private record PngMetadata(int width, int height, String sha256) {
+        private static final PngMetadata EMPTY = new PngMetadata(0, 0, "");
     }
 
     private static JsonObject requireObject(String json, String fileName) {

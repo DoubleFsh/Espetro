@@ -330,6 +330,7 @@ public final class ExternalConfigBootstrap {
             "faction_reveal_seconds": 5,
             "round_end_seconds": 10,
             "respawn_invincibility_ticks": 60,
+            "main_base_invulnerability_radius": 150.0,
             "class_switch_cooldown_seconds": 60,
             "teammate_name_tag_distance": 10.0,
             "waiting_y": 200.0
@@ -411,7 +412,7 @@ public final class ExternalConfigBootstrap {
             "hab_construction_cost": 500,
             "ammo_crate_construction_cost": 100,
             "default_resupply_ammo_cost": 50,
-            "hab_activation_seconds": 30,
+            "hab_activation_seconds": 0,
             "hab_reactivation_seconds": 30,
             "hab_disable_radio_health": 75,
             "sources": []

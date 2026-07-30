@@ -15,11 +15,24 @@ public final class ActiveBattlefieldSnapshot {
     private final String capturePointsJson;
     private final String backgroundImage;
     private final byte[] backgroundBytes;
+    private final String backgroundSha256;
+    private final int backgroundWidth;
+    private final int backgroundHeight;
 
     public ActiveBattlefieldSnapshot(String mapId, String displayName,
                                      ResourceKey<Level> dimension,
                                      String tacticalMapJson, String capturePointsJson,
                                      String backgroundImage, byte[] backgroundBytes) {
+        this(mapId, displayName, dimension, tacticalMapJson, capturePointsJson,
+            backgroundImage, backgroundBytes, "", 0, 0);
+    }
+
+    public ActiveBattlefieldSnapshot(String mapId, String displayName,
+                                     ResourceKey<Level> dimension,
+                                     String tacticalMapJson, String capturePointsJson,
+                                     String backgroundImage, byte[] backgroundBytes,
+                                     String backgroundSha256,
+                                     int backgroundWidth, int backgroundHeight) {
         this.mapId = mapId;
         this.displayName = displayName;
         this.dimension = dimension;
@@ -27,6 +40,9 @@ public final class ActiveBattlefieldSnapshot {
         this.capturePointsJson = capturePointsJson;
         this.backgroundImage = backgroundImage == null ? "" : backgroundImage;
         this.backgroundBytes = backgroundBytes == null ? new byte[0] : backgroundBytes.clone();
+        this.backgroundSha256 = backgroundSha256 == null ? "" : backgroundSha256;
+        this.backgroundWidth = Math.max(0, backgroundWidth);
+        this.backgroundHeight = Math.max(0, backgroundHeight);
     }
 
     public String mapId() {
@@ -55,5 +71,17 @@ public final class ActiveBattlefieldSnapshot {
 
     public byte[] backgroundBytes() {
         return backgroundBytes.clone();
+    }
+
+    public String backgroundSha256() {
+        return backgroundSha256;
+    }
+
+    public int backgroundWidth() {
+        return backgroundWidth;
+    }
+
+    public int backgroundHeight() {
+        return backgroundHeight;
     }
 }

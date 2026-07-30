@@ -18,15 +18,16 @@ class ESPointsMapSnapshotTest {
 
     @Test
     void loadsValidFrozenSnapshotAndDefensivelyCopiesBackground(@TempDir Path dir) throws Exception {
-        byte[] png = new byte[]{
-            (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3
-        };
+        byte[] png = minimalPngHeader(5904, 6720);
         writeValidFiles(dir, "map.png");
         Files.write(dir.resolve("map.png"), png);
 
         ESPointsMapSnapshot snapshot = ESPointsMapSnapshot.load(dir);
         assertEquals("map.png", snapshot.backgroundImage);
         assertTrue(snapshot.hasBackground());
+        assertEquals(5904, snapshot.backgroundWidth);
+        assertEquals(6720, snapshot.backgroundHeight);
+        assertEquals(64, snapshot.backgroundSha256.length());
         assertArrayEquals(png, snapshot.backgroundBytes());
 
         byte[] exposed = snapshot.backgroundBytes();
@@ -69,6 +70,26 @@ class ESPointsMapSnapshotTest {
     }
 
     @Test
+    void rejectsPngPixelBombBeforeDecode(@TempDir Path dir) throws Exception {
+        writeValidFiles(dir, "map.png");
+        Files.write(dir.resolve("map.png"), minimalPngHeader(100_000, 100_000));
+
+        IOException error = assertThrows(IOException.class,
+            () -> ESPointsMapSnapshot.load(dir));
+        assertTrue(error.getMessage().contains("像素数超限"));
+    }
+
+    @Test
+    void rejectsPathologicalSingleDimensionBeforeDecode(@TempDir Path dir) throws Exception {
+        writeValidFiles(dir, "map.png");
+        Files.write(dir.resolve("map.png"), minimalPngHeader(40_000, 1));
+
+        IOException error = assertThrows(IOException.class,
+            () -> ESPointsMapSnapshot.load(dir));
+        assertTrue(error.getMessage().contains("单边最多"));
+    }
+
+    @Test
     void supportsMapWithoutBackground(@TempDir Path dir) throws Exception {
         writeValidFiles(dir, "");
         ESPointsMapSnapshot snapshot = ESPointsMapSnapshot.load(dir);
@@ -106,5 +127,28 @@ class ESPointsMapSnapshotTest {
               "showLabels":true
             }
             """.formatted(background), StandardCharsets.UTF_8);
+    }
+
+    private static byte[] minimalPngHeader(int width, int height) {
+        byte[] bytes = new byte[24];
+        byte[] signature = new byte[]{
+            (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
+        };
+        System.arraycopy(signature, 0, bytes, 0, signature.length);
+        bytes[11] = 13;
+        bytes[12] = 'I';
+        bytes[13] = 'H';
+        bytes[14] = 'D';
+        bytes[15] = 'R';
+        writeInt(bytes, 16, width);
+        writeInt(bytes, 20, height);
+        return bytes;
+    }
+
+    private static void writeInt(byte[] bytes, int offset, int value) {
+        bytes[offset] = (byte) (value >>> 24);
+        bytes[offset + 1] = (byte) (value >>> 16);
+        bytes[offset + 2] = (byte) (value >>> 8);
+        bytes[offset + 3] = (byte) value;
     }
 }

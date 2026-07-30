@@ -35,7 +35,7 @@
 
 `level.dat` 与至少一个非空 `region/*.mca` 是有效地图模板的必要条件。维度生成器直接从该地图自己的 `level.dat` 读取，因此超平坦、噪声世界等模板不会共享一份写死的生成器。服务端在 `ServerAboutToStartEvent`、原版创建各个 `ServerLevel` 之前，把所有有效模板的 `region/entities/poi/data/EsConfig` 复制到当前存档，作为每张地图的首局副本。地图使用完毕后会卸载并删除该副本；后续再次选中同一地图时，才重新从只读模板复制并挂载新的 `ServerLevel`。因此每局地形破坏只存在于当前存档副本中，`EsWorld` 原件始终不变。
 
-首次启动会从 JAR 导出 `test_flat` 超平坦地图与地图侧 JSON 示例，**不会**向 `EsFactions/` 写入任何预设或示例编制（该目录仅创建为空文件夹，编制需自行放置）。导出器只创建缺失文件，不覆盖服主已有配置。`/reload` 与 `/espetro reload` 明确不会重读上述文件；修改后必须完整重启。
+首次启动会从 JAR 导出 `test_flat` 超平坦地图、地图侧 JSON 和十份示例编制。只要 `EsFactions/` 已有任意 JSON，导出器就不会向该目录新增、覆盖或删除任何文件；只有空目录或全新安装才会生成示例编制。`/reload` 与 `/espetro reload` 明确不会重读上述文件；修改后必须完整重启。
 
 JSON 必须是 UTF-8，不支持注释和尾随逗号。指挥官技能仍由 KubeJS 脚本按 KubeJS 自身规则加载。
 
@@ -147,15 +147,17 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
 | `minecraft_version` | `1.20.1` | 目标游戏版本 |
 | `forge_version` | `47.4.20` | Forge 开发版本 |
 | `mod_id` | `espetro` | 模组 ID 与数据包命名空间 |
-| `mod_version` | `1.0.9-alpha` | 构建版本 |
+| `mod_version` | `1.1.0-alpha` | 构建版本 |
 | `mod_group_id` | `com.shuai` | Maven group |
 | `mutil_version` | `6.3.0` | MUtil 强制依赖版本 |
+| `oelib_version` | `0.2.4` | AuraTip 运行时强制依赖版本 |
+| `auratip_version` | `1.1.1-beta` | 战术轮盘强制依赖版本 |
 | `rhino_version` | `2001.2.2-build.17` | Rhino 强制依赖版本，用于 KubeJS JavaScript |
 | `architectury_version` | `9.1.12` | Architectury API 强制依赖版本，满足 KubeJS Forge 1.20.1 要求 |
-| `espoints_version` | `1.0.6-final` | ESPoints 可选运行时依赖版本 |
+| `espoints_version` | `1.1.0-final` | ESPoints 可选运行时依赖版本 |
 | `kubejs_version` | `2001.6.5-build.26` | KubeJS 强制运行依赖版本 |
 
-`META-INF/mods.toml` 声明 MUtil 6.3.0、Rhino `2001.2.2-build.17`、Architectury API `>=9.1.12` 和 KubeJS `>=2001.6.5-build.26` 为强制依赖，并将模组 ID 为 `espoints` 的 ESPoints `>=1.0.6-final` 声明为可选依赖。未安装 ESPoints 时部署界面使用占位地图；如需战术地图、据点或 `155火炮支援` 选点，客户端和服务器必须同时安装工作区同步版 ESPoints。该同步版不再依赖 AuraTip/OELib，也不再读取全局 `teamfight.json` 或数据包地图。开发环境仅在传入 `-PespetroIncludeLocalEspoints=true` 时注入兄弟项目 JAR。
+`META-INF/mods.toml` 声明 MUtil、OELib、AuraTip、Rhino、Architectury API 和 KubeJS 为强制依赖，并将模组 ID 为 `espoints` 的 ESPoints `>=1.1.0-final` 声明为可选依赖。普通 GUI 使用 MUtil，战术轮盘使用 AuraTip；默认指挥官技能需要 KubeJS。未安装 ESPoints 时部署界面使用占位地图；如需战术地图、据点或 `155火炮支援` 选点，客户端和服务器必须同时安装工作区同步版 ESPoints 与 Ping Wheel。开发环境仅在传入 `-PespetroIncludeLocalEspoints=true` 时注入兄弟项目 JAR。
 
 资源 JSON：
 
@@ -182,6 +184,7 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
     "faction_reveal_seconds": 3,
     "round_end_seconds": 10,
     "respawn_invincibility_ticks": 60,
+    "main_base_invulnerability_radius": 150.0,
     "class_switch_cooldown_seconds": 60,
     "teammate_name_tag_distance": 10.0,
     "waiting_y": 200
@@ -222,9 +225,10 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
 | `faction_reveal_seconds` | 3 | 8 | 双方编制揭示时间 |
 | `round_end_seconds` | 10 | 10 | 回合结算界面时间 |
 | `respawn_invincibility_ticks` | 60 | 60 | 复活保护 tick，20 tick = 1 秒 |
+| `main_base_invulnerability_radius` | 150.0 | 150.0 | 本方原部署点的水平无敌半径，方块；玩家和所属本阵营的载具均受保护，设为 `0` 可关闭 |
 | `class_switch_cooldown_seconds` | 60 | 60 | 每名玩家成功选择职业后的独立换职冷却，秒；首次选职不受已有冷却限制，设为 `0` 可关闭 |
 | `teammate_name_tag_distance` | 10.0 | 10.0 | 队友名牌距离，方块 |
-| `waiting_y` | 200 | 200 | 统一等待部署点的高空 Y 坐标；玩家聚集于主世界 `(0.5, waiting_y, 0.5)`，选择部署点前保持旁观、失明并锁位 |
+| `waiting_y` | 200 | 200 | 尚未选择阵营及阶段切换时的高空等待 Y；已选择阵营后的首次部署、死亡重新部署和主动重新部署均以冒险模式临时锁在本方原部署点 |
 
 ### `troops`
 
@@ -317,7 +321,8 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 
 放置阶段/权限/排斥半径/队友人数等见 [LOGISTICS_CONFIG.md](LOGISTICS_CONFIG.md) 的 `logistics.radio`。
 
-弹药补给冷却固定为 5 分钟，不在此 JSON 中配置。
+弹药补给冷却固定为 5 分钟，不在此 JSON 中配置。补给只有在玩家确有弹药缺口且
+Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库存不足不会扣费、发物品或进入冷却。
 
 ## `team_pack.json`
 
@@ -459,6 +464,7 @@ kubejs/server_scripts/00_espetro_artillery_155.js
       "role": "突击",
       "icon": "rifleman",
       "maxPlayers": 8,
+      "teammates_need": 2,
       "healthBonus": 0,
       "speedBonus": 0.0,
       "troopValue": 1,
@@ -535,11 +541,12 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `IconImage` | String | 可选；**文件系统完整路径**的职业图标（优先于 `icon`），例 `/home/shu/图片/Icon/rifleman.png` |
 | `maxPlayers` | Integer | 必须大于 0。默认（`team_count: false`）为编制/队伍总上限；`team_count: true` 时为**每个班组小队**上限 |
 | `team_count` | Boolean | 默认 `false`；也接受 `teamCount`。`true` 时人数在班组小队内统计，未入小队不可选该职业 |
-| `max_per_squad` | Integer | 默认 0（不限）。仅 `team_count: false` 时生效：每个班组小队内该职业上限，必须 `≤ maxPlayers`；未入小队只受总限 |
+| `max_per_squad` | Integer | 默认 0（不限）。仅 `team_count: false` 时生效：每个班组小队内该职业上限，必须 `≤ maxPlayers` |
+| `teammates_need` | Integer | 默认 0（额外人数门槛关闭）；选择该职业时所在小队至少需要的人数，**包含选择者自己**。也接受 `teammatesNeed` |
 | `strict_count` | Boolean | 变体计数模式，默认 `true`；也接受别名 `strictCount`。详见下方说明 |
 | `troopValue` | Integer | 0 或缺失时回退 1；阵亡扣兵力 |
-| `healthBonus` | Integer | 默认 0 |
-| `speedBonus` | Float | 默认 0 |
+| `healthBonus` | Integer | 默认 0；额外生命点，`4` 等于两颗心 |
+| `speedBonus` | Float | 默认 0；移动速度比例，`0.1` 等于提高 10% |
 | `variants` | Object | 变体 ID 到装备变体的映射；JSON 中的顺序就是二级菜单显示顺序 |
 
 ### `classes.<class_id>.variants.<variant_id>`
@@ -568,11 +575,13 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 #### `team_count` / `max_per_squad` 行为说明
 
 - **共性（入队门槛）**：**所有职业**均须先加入班组小队后才能选择；未入队时服务端返回 `REQUIRES_SQUAD`，界面禁用全部职业按钮。
+- **`teammates_need`**：在通用入队门槛之上增加小队人数要求。例如 `2` 表示至少两人小队、`6` 表示至少六人小队；不满足时职业按钮标红并显示可读原因，服务端仍会再次校验。该限制对部署界面和 Radio 轮盘选职都生效。
 - **未入队 UI**：`team_count: true` 的按钮标红且**不显示** `[人数/上限]`；其它职业仍显示 `[当前选择人数/编制总上限]`，按钮禁用。
 - **已入队 UI**：`team_count: true` 显示 `[小队 当前/小队上限]` 且可点（未满时）；其它职业显示 `[队伍当前/编制总上限]`（若有 `max_per_squad` 可附加 `·小队 a/b`）。
 - **`team_count: true`**：`maxPlayers` 为每个班组小队内**父职业**上限；任意变体都计入该上限。只扫本小队，**忽略编制总限与队伍记分板**。离队取消该职业。`max_per_squad` 忽略。
 - **`team_count: false`（默认）**：父职业 `maxPlayers` 为整支攻/守队伍总限。可选 `max_per_squad`。`max_per_squad ≤ maxPlayers` 即可。
 - **变体**：无论 `strict_count` 如何，**选变体 = 选父职业的一个席位**；`strict_count: true` 时再叠加变体自身上限。
+- **换职入口**：服务端只接受部署选点等待状态、本方原部署点 `6` 格范围和附近己方 Radio 职业轮盘发出的选职请求。普通 HAB、前哨与玩家上一次部署坐标不属于 J 键换职区；Radio 请求会在点击职业时再次校验位置和归属。
 
 
 任何变体无效、（`strict_count: true` 时）人数不相等，都会在启动时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
@@ -609,6 +618,9 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 | `entity_tags` | `[]` | 生成后附加到实体的 tag 数组 |
 
 编制文件不再保存部署坐标。部署位置完全由获胜地图的 `VehSpawn.json` 决定。
+每局布防开始时，`entity` 数组中的每个配置槽位会先生成一辆首发载具；
+`per_max_count` 大于 1 的剩余容量仍由指挥官后续部署使用，不会让首发波次在同一
+点位叠放多辆。
 
 ## 随 JAR 导出的示例编制
 

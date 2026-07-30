@@ -1,6 +1,7 @@
 package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
 import se.mickelus.mutil.gui.GuiElement;
@@ -87,6 +88,11 @@ public class CommanderVoteScreen extends MutilScreen {
 
     /** 固定显示60个候选人名字 */
     private static final int VISIBLE_NAME_COUNT = 60;
+
+    @Override
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    }
 
     @Override
     protected void buildMutilRoot(GuiElement root) {

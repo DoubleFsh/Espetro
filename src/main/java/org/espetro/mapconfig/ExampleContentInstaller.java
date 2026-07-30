@@ -34,9 +34,17 @@ public final class ExampleContentInstaller {
             if (manifest.files == null || manifest.files.isEmpty()) {
                 return new Result(0, 0, List.of("示例内容清单为空"));
             }
+            // 只要运营目录已有任意编制，就把整个 EsFactions 视为服主所有。
+            // 不能因升级新增示例文件而改变现有服务器可选编制集合。
+            boolean preserveOperatorFactions =
+                containsFactionJson(normalizedGameDir.resolve("EsFactions"));
             for (String relative : manifest.files) {
                 if (!isSafeRelativePath(relative)) {
                     errors.add("示例清单包含非法路径: " + relative);
+                    continue;
+                }
+                if (preserveOperatorFactions && relative.startsWith("EsFactions/")) {
+                    skipped++;
                     continue;
                 }
                 Path target = normalizedGameDir.resolve(relative).normalize();
@@ -76,6 +84,17 @@ public final class ExampleContentInstaller {
             Espetro.LOGGER.error("[示例导出] {}", error);
         }
         return new Result(installed, skipped, List.copyOf(errors));
+    }
+
+    private static boolean containsFactionJson(Path factionsDir) throws IOException {
+        if (!Files.isDirectory(factionsDir)) {
+            return false;
+        }
+        try (var files = Files.list(factionsDir)) {
+            return files.anyMatch(path -> Files.isRegularFile(path)
+                && path.getFileName().toString().toLowerCase(java.util.Locale.ROOT)
+                    .endsWith(".json"));
+        }
     }
 
     private static Manifest readManifest() throws IOException {

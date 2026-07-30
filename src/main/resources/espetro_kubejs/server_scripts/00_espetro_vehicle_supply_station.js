@@ -1,94 +1,100 @@
 // Espetro 默认指挥官技能实现脚本：Dragonrise 载具补给站。
+// 用原版 /give + NBT 发放可放置物品，由指挥官自行摆放。
 
-var EspetroSupplyEntityId = Utils.id('dragonrise_reforge', 'ammo_supply_station')
+var EspetroSupplyItemId = 'dragonrise_reforge:ammo_supply_station'
+var EspetroSupplyDisplayName = '载具补给站'
 
 EspetroCommanderSkills.on('vehicle_supply_station', event => {
-  const team = String(event.team() || '')
-  const level = event.level()
-  const commander = event.commander()
-  const direction = commander.getDirection()
-  const stepX = Number(direction.getStepX())
-  const stepZ = Number(direction.getStepZ())
-  const stationX = event.blockX() + stepX * 3
-  const stationY = event.blockY()
-  const stationZ = event.blockZ() + stepZ * 3
-  const barrelX = stationX - stepZ * 2
-  const barrelZ = stationZ + stepX * 2
+  var team = String(event.team() || '')
+  var commander = event.commander()
 
   if (team.length === 0) {
     event.tell('§c你还没有加入阵营。')
     return false
   }
-  if (!espetroSupplyHasRoom(level, stationX, stationY, stationZ)) {
-    event.tell('§c前方空间不足，无法部署补给站。')
+  if (commander == null) {
+    event.tell('§c无法识别指挥官。')
     return false
   }
 
-  const barrel = level.getBlock(barrelX, stationY, barrelZ)
-  if (!espetroSupplyIsAir(barrel)) {
-    event.tell('§c补给箱位置被阻挡。')
+  var playerName = espetroCommanderUserName(commander, event)
+  if (!playerName) {
+    event.tell('§c无法解析指挥官名称。')
     return false
   }
 
-  var entity = null
+  // display.Name 为 JSON 文本组件；物品为 Dragonrise 补给站部署器
+  var nbt = '{display:{Name:\'{"text":"' + EspetroSupplyDisplayName + '"}\'}}'
+  var cmd = 'give ' + playerName + ' ' + EspetroSupplyItemId + nbt + ' 1'
+
   try {
-    entity = level.createEntity(EspetroSupplyEntityId)
-    if (entity == null) {
-      event.tell('§c无法创建 Dragonrise 载具补给站。')
+    var server = espetroEventServer(event)
+    if (server == null) {
+      event.tell('§c服务器不可用。')
       return false
     }
 
-    entity.setPosition(stationX + 0.5, stationY, stationZ + 0.5)
-    entity.setCustomName(Component.literal('载具补给站'))
-    entity.setCustomNameVisible(true)
-    entity.addTag('espetro_vehicle_supply_station')
-    entity.addTag('espetro_vehicle_supply_station_team_' + team)
-    entity.addTag('espetro_team_' + team)
-    entity.addTag('espetro_commander_skill')
-
-    barrel.set(Utils.id('minecraft', 'barrel'))
-    entity.spawn()
-  } catch (error) {
-    barrel.set(Utils.id('minecraft', 'air'))
-    if (entity != null) {
-      try {
-        entity.discard()
-      } catch (ignored) {
-      }
+    var code = -1
+    if (typeof server.runCommandSilent === 'function') {
+      code = server.runCommandSilent(cmd)
+    } else if (typeof server.runCommand === 'function') {
+      code = server.runCommand(cmd)
+    } else {
+      // Utils.server 回退
+      code = Utils.server.runCommandSilent(cmd)
     }
-    console.error('[Espetro] vehicle_supply_station deployment failed: ' + error)
-    event.tell('§c载具补给站部署失败。')
+
+    // runCommandSilent：成功通常 >= 1（给予数量）；失败为 0
+    if (code === 0 || code === false) {
+      console.error('[Espetro] give failed, cmd=' + cmd + ' code=' + code)
+      event.tell('§c发放失败（物品不存在或指令未生效）。')
+      return false
+    }
+
+    event.tell('§a已获得「' + EspetroSupplyDisplayName + '」。右键方块放置补给站。')
+    console.info('[Espetro] vehicle_supply_station give ok: ' + cmd + ' code=' + code)
+    return true
+  } catch (error) {
+    console.error('[Espetro] vehicle_supply_station grant failed: ' + error + ' cmd=' + cmd)
+    event.tell('§c发放载具补给站物品失败。')
     return false
   }
-
-  event.tell('§a载具补给站已部署！')
-  console.info('[Espetro] Dragonrise vehicle supply station deployed at '
-    + stationX + ', ' + stationY + ', ' + stationZ)
-  return true
 })
 
-function espetroSupplyHasRoom(level, centerX, y, centerZ) {
-  if (espetroSupplyIsAir(level.getBlock(centerX, y - 1, centerZ))) return false
-
-  for (var offsetY = 0; offsetY <= 1; offsetY++) {
-    for (var offsetX = -1; offsetX <= 1; offsetX++) {
-      for (var offsetZ = -1; offsetZ <= 1; offsetZ++) {
-        if (!espetroSupplyIsAir(level.getBlock(
-          centerX + offsetX,
-          y + offsetY,
-          centerZ + offsetZ
-        ))) {
-          return false
-        }
-      }
-    }
-  }
-  return true
+function espetroEventServer(event) {
+  try {
+    if (typeof event.server === 'function') return event.server()
+  } catch (e) {}
+  try {
+    if (typeof event.getServer === 'function') return event.getServer()
+  } catch (e) {}
+  try {
+    if (event.server) return event.server
+  } catch (e) {}
+  try {
+    return Utils.server
+  } catch (e) {}
+  return null
 }
 
-function espetroSupplyIsAir(block) {
-  const id = String(block.getId())
-  return id === 'minecraft:air'
-    || id === 'minecraft:cave_air'
-    || id === 'minecraft:void_air'
+function espetroCommanderUserName(commander, event) {
+  try {
+    if (commander.username) return String(commander.username)
+  } catch (e) {}
+  try {
+    if (typeof commander.getGameProfile === 'function') {
+      return String(commander.getGameProfile().getName())
+    }
+  } catch (e) {}
+  try {
+    if (typeof commander.getName === 'function') {
+      var n = commander.getName()
+      if (n && typeof n.getString === 'function') return n.getString()
+      return String(n)
+    }
+  } catch (e) {}
+  try {
+    if (typeof event.commanderName === 'function') return String(event.commanderName())
+  } catch (e) {}
+  return ''
 }

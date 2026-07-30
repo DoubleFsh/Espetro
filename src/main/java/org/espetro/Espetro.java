@@ -53,6 +53,7 @@ import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
 
 import org.espetro.team.ClassSelectManager;
+import org.espetro.tutorial.TutorialManager;
 import org.espetro.vehicle.VehicleCommand;
 import org.espetro.vehicle.VehicleManager;
 import org.espetro.mapconfig.ExternalConfigBootstrap;
@@ -232,7 +233,29 @@ public class Espetro {
                 MapVoteManager.init();
                 PlayerMatchStatsManager.init();
                 CommanderGovernanceManager.init();
+                // 启动时预加载易在热路径首次解析的类，避免运行中替换 jar 后懒加载 CNFE 拖垮服务端
+                TutorialManager.getInstance();
+                preloadCriticalClasses();
             });
+        }
+
+        /**
+         * 强制解析关键类。SecureJar 在游戏运行中被覆盖后，尚未加载的类会 ClassNotFound；
+         * 启动时拉进内存可显著降低热替换 jar 引发的退服/右键崩溃。
+         */
+        private static void preloadCriticalClasses() {
+            try {
+                org.espetro.logistics.SupplyType.values();
+                org.espetro.logistics.SupplyManager.getInstance();
+                Class.forName("org.espetro.logistics.DeploySupplyStationPlacer");
+                Class.forName("org.espetro.logistics.LogisticsConfig");
+                Class.forName("org.espetro.logistics.SupplySourceBlock");
+                Class.forName("org.espetro.logistics.SupplySourceBlockEntity");
+                Class.forName("org.espetro.tutorial.TutorialStep");
+                LOGGER.info("Espetro 关键类预加载完成");
+            } catch (Throwable t) {
+                LOGGER.error("Espetro 关键类预加载失败（请确认 jar 完整且勿在游戏运行时覆盖）", t);
+            }
         }
 
     }
@@ -261,7 +284,7 @@ public class Espetro {
                 // 先强制主城再清背包/阶段逻辑，避免登录瞬间仍停在战场维度
                 GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
                 StaminaManager.resetPlayer(serverPlayer);
-                clearAndSavePlayerInventory(serverPlayer);
+                clearPlayerInventory(serverPlayer);
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
                 GameStateManager.getInstance().onPlayerJoin(serverPlayer);
@@ -277,8 +300,13 @@ public class Espetro {
                 // 退服前强制写回主城坐标与重生点（主城维度不重置）
                 GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
                 StaminaManager.removePlayer(serverPlayer.getUUID());
-                org.espetro.tutorial.TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
-                clearAndSavePlayerInventory(serverPlayer);
+                try {
+                    TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
+                } catch (Throwable t) {
+                    // 教程会话清理失败不得拖垮整个退服流程（含 jar 热替换后懒加载失败）
+                    Espetro.LOGGER.error("清理玩家教程会话失败: {}", serverPlayer.getUUID(), t);
+                }
+                clearPlayerInventory(serverPlayer);
             } else {
                 ClassEquipment.clearEquipment(event.getEntity());
             }
@@ -298,6 +326,7 @@ public class Espetro {
             }
             String squadTeam = SquadManager.getInstance().removePlayer(event.getEntity().getUUID());
             countManager.removePlayer(event.getEntity());
+            org.espetro.ping.VehicleSeatPingCache.clear(event.getEntity().getUUID());
             NetworkManager.broadcastClassCounts(classCountTeam, classCountFaction);
             if (squadTeam != null) {
                 TeamPackManager.getInstance().reconcileTeam(squadTeam);
@@ -488,12 +517,16 @@ public class Espetro {
             }
         }
 
-        private static void clearAndSavePlayerInventory(ServerPlayer player) {
+        /**
+         * Clear the affected player's transient class equipment only.
+         *
+         * PlayerList#remove saves this player immediately after Forge fires
+         * PlayerLoggedOutEvent. Calling saveAll() here used to synchronously
+         * write every online player's data for each join/leave, which becomes
+         * a severe disk-I/O spike on a busy server.
+         */
+        private static void clearPlayerInventory(ServerPlayer player) {
             ClassEquipment.clearEquipment(player);
-            MinecraftServer server = player.getServer();
-            if (server != null) {
-                server.getPlayerList().saveAll();
-            }
         }
 
         private static void clearAndSaveOnlinePlayerInventories(MinecraftServer server) {

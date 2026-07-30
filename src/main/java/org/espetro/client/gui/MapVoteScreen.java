@@ -41,6 +41,11 @@ public final class MapVoteScreen extends MutilScreen {
     }
 
     @Override
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    }
+
+    @Override
     protected void buildMutilRoot(GuiElement root) {
         mapButtons.clear();
         phaseHeader = EspetroMutilWidgets.addMutablePhaseHeader(root, width,

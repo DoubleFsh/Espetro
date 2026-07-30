@@ -35,12 +35,13 @@ Espetro 是 Minecraft Forge 1.20.1 的战术小队与侵攻流程模组，提供
 | Forge | 47.4.20 |
 | MUtil | 6.3.0 |
 | OELib | 0.2.4 |
+| AuraTip | 1.1.1-beta 或更高 |
 | Rhino (`rhino`) | 2001.2.2-build.17 |
 | Architectury API (`architectury`) | 9.1.12 或更高 |
-| ESPoints (`espoints`) | 1.0.6-final（本工作区同步版）或更高 |
+| ESPoints (`espoints`) | 1.1.0-final（本工作区同步版）或更高 |
 | KubeJS (`kubejs`) | Forge 1.20.1 使用 `2001.6.5-build.26`，强制依赖 |
 
-Espetro、MUtil、OELib、Rhino、Architectury API 和 KubeJS 是基础运行依赖。MUtil 负责全部 Espetro 界面、战术轮盘与 HUD 元素；AuraTip 不再是 Espetro 的依赖。所有指挥官技能由 KubeJS 脚本注册和实现：`startup_scripts` 注册技能，`server_scripts` 执行技能效果。ESPoints 以 `espoints` 为模组 ID，并依赖 Espetro；Espetro 将 ESPoints 声明为软依赖。未安装时 Espetro 仍可启动，但部署界面的战术地图会使用占位显示，`155火炮支援` 无法打开选点地图。生产环境如需战术地图、据点或火炮选点，客户端和服务器都必须安装当前工作区同步后的 ESPoints；该版本已经移除 AuraTip、OELib 依赖，并从 Espetro 的当前地图快照读取配置。为防止 ESPoints 影响 Espetro 的独立开发启动，本地兄弟项目默认不注入，可用 `-PespetroIncludeLocalEspoints=true` 显式启用。Esvoice 是可选的战术语音扩展，但 Esvoice 会依赖 Espetro。
+Espetro、MUtil、OELib、AuraTip、Rhino、Architectury API 和 KubeJS 是基础运行依赖。普通 GUI 使用 MUtil；战术轮盘使用 AuraTip。所有指挥官技能由 KubeJS 脚本注册和实现：`startup_scripts` 注册技能，`server_scripts` 执行技能效果。ESPoints 以 `espoints` 为模组 ID，并依赖 Espetro；Espetro 将 ESPoints 声明为软依赖。未安装时 Espetro 仍可启动，但部署界面的战术地图会使用占位显示，`155火炮支援` 无法打开选点地图。如需战术地图、据点、标点或火炮选点，客户端和服务器都必须同时安装 ESPoints 1.1.0-final、Ping Wheel 1.12.1 及其声明的 AuraTip/OELib 前置。为防止 ESPoints 影响 Espetro 的独立开发启动，本地兄弟项目默认不注入，可用 `-PespetroIncludeLocalEspoints=true` 显式启用。Esvoice 是可选的战术语音扩展。
 
 KubeJS 是强制依赖。加载时会自动暴露 `Espetro`、`EspetroAPI`、`EspetroCommanderSkills`、底层管理器、ESPoints 桥接类和 MUtil 类给 KubeJS。默认三项指挥官技能均通过 KubeJS 执行，并按技能拆分为独立脚本；`无人机侦测` 使用 `level.getPlayers()` 和 `target.getPotionEffects().add(...)` 高亮范围内敌方玩家，`载具补给站` 使用 `level.getBlock(...).set(...)` 与 `level.createEntity(...).spawn()` 部署，`155火炮支援` 的默认火力效果由 `kubejs/server_scripts/00_espetro_artillery_155.js` 以 KubeJS `ServerEvents.tick` 队列、`level.createEntity(...)`、`entity.setPositionAndRotation(...)`、`entity.setMotionX/Y/Z(...)` 和 `entity.spawn()` 实现。
 
@@ -86,7 +87,7 @@ EsWorld/<地图文件夹>/
     └── map.png              # 可选，由 TacticalMap.json 引用
 ```
 
-首次启动会从 JAR 安全导出地图与配置示例（含 Y64 超平坦 `test_flat`），**不会**向 `EsFactions/` 写入任何预设或示例编制——编制 JSON 需自行放入该目录。已有同名文件永不覆盖。`TacticalMap.json` 与 `CapturePoints.json` 是每张地图的必需文件；缺失或非法时该地图会被拒绝。修改外部配置后必须重启客户端或服务端；`/reload` 与 `/espetro reload` 不会重读这些启动冻结配置。
+首次启动会从 JAR 安全导出地图、配置和十份示例编制（含 Y64 超平坦 `test_flat`）。若 `EsFactions/` 已有任意 JSON，则整个目录视为服主所有，升级时不会补写、替换或删除任何编制；只有空目录或全新安装才会生成示例编制。`TacticalMap.json` 与 `CapturePoints.json` 是每张地图的必需文件；缺失或非法时该地图会被拒绝。修改外部配置后必须重启客户端或服务端；`/reload` 与 `/espetro reload` 不会重读这些启动冻结配置。
 
 详见[配置文档](docs/CONFIGURATION.md)和[使用手册](docs/USER_GUIDE.md)。
 

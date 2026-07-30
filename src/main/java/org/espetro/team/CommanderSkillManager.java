@@ -13,6 +13,7 @@ import org.espetro.Espetro;
 import org.espetro.kubejs.commander.EspetroCommanderSkills;
 import org.espetro.kubejs.commander.KubeCommanderSkillDefinition;
 import org.espetro.kubejs.commander.KubeCommanderSkillEvent;
+import org.espetro.kubejs.commander.SkillUserRole;
 import org.espetro.network.NetworkManager;
 
 import java.util.ArrayList;
@@ -192,14 +193,22 @@ public class CommanderSkillManager {
     public boolean activateSkill(ServerPlayer commander, String skillId) {
         if (commander == null || skillId == null || skillId.isBlank()) return false;
 
-        if (!VoteManager.getInstance().isCommander(commander.getUUID())) {
-            Espetro.sendToPlayer(commander, "\u00a7c你不是指挥官，无法使用技能！");
+        KubeCommanderSkillDefinition definition = EspetroCommanderSkills.getDefinition(skillId);
+        if (definition == null) {
+            Espetro.sendToPlayer(commander, "\u00a7c未配置技能: " + skillId
+                + "，请在 KubeJS startup_scripts 中注册 Espetro 技能。");
+            return false;
+        }
+
+        if (!canPlayerUseSkill(commander, definition)) {
+            Espetro.sendToPlayer(commander, "\u00a7c你没有权限使用该技能（需要: "
+                + definition.allowedRolesWire() + "）");
             return false;
         }
 
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
         if (phase != GamePhase.BATTLE && phase != GamePhase.DEPLOYING) {
-            Espetro.sendToPlayer(commander, "\u00a7c当前阶段无法使用指挥官技能！");
+            Espetro.sendToPlayer(commander, "\u00a7c当前阶段无法使用技能！");
             return false;
         }
 
@@ -209,26 +218,40 @@ public class CommanderSkillManager {
             return false;
         }
 
-        KubeCommanderSkillDefinition definition = EspetroCommanderSkills.getDefinition(skillId);
-        if (definition != null) {
-            boolean success;
-            if (definition.isTargetMapTrigger()) {
-                success = beginArtilleryTargetSelection(commander, definition.id());
-            } else {
-                KubeCommanderSkillEvent event = EspetroCommanderSkills.event(
-                    definition, commander, normalizeTeam(Espetro.getPlayerTeam(commander)));
-                success = EspetroCommanderSkills.execute(definition, event);
-                if (success) {
-                    finishCommanderSkill(commander, skillId, definition.displayName(),
-                        definition.cooldownSeconds() * 20L);
-                }
+        boolean success;
+        if (definition.isTargetMapTrigger()) {
+            success = beginArtilleryTargetSelection(commander, definition.id());
+        } else {
+            KubeCommanderSkillEvent event = EspetroCommanderSkills.event(
+                definition, commander, normalizeTeam(Espetro.getPlayerTeam(commander)));
+            success = EspetroCommanderSkills.execute(definition, event);
+            if (success) {
+                finishCommanderSkill(commander, skillId, definition.displayName(),
+                    definition.cooldownSeconds() * 20L);
             }
-            return success;
         }
+        return success;
+    }
 
-        Espetro.sendToPlayer(commander, "\u00a7c未配置指挥官技能: " + skillId
-            + "，请在 KubeJS startup_scripts 中注册 Espetro 指挥官技能。");
+    /**
+     * 玩家是否满足技能声明的 usableBy 角色（指挥官 / 小队长，满足其一即可）。
+     */
+    public boolean canPlayerUseSkill(ServerPlayer player, KubeCommanderSkillDefinition definition) {
+        if (player == null || definition == null) {
+            return false;
+        }
+        UUID uuid = player.getUUID();
+        if (definition.allowsCommander() && VoteManager.getInstance().isCommander(uuid)) {
+            return true;
+        }
+        if (definition.allowsSquadLeader() && SquadManager.getInstance().isSquadLeader(uuid)) {
+            return true;
+        }
         return false;
+    }
+
+    public boolean canPlayerUseSkill(ServerPlayer player, String skillId) {
+        return canPlayerUseSkill(player, EspetroCommanderSkills.getDefinition(skillId));
     }
 
     public boolean beginArtilleryTargetSelection(ServerPlayer commander) {
@@ -265,9 +288,9 @@ public class CommanderSkillManager {
         UUID commanderId = commander.getUUID();
         String skillId = pendingTargetSkillIds.getOrDefault(commanderId, EspetroCommanderSkills.DEFAULT_ARTILLERY_SKILL_ID);
         KubeCommanderSkillDefinition definition = EspetroCommanderSkills.getDefinition(skillId);
-        String skillName = definition != null ? definition.displayName() : "指挥官选点技能";
-        if (!VoteManager.getInstance().isCommander(commander.getUUID())) {
-            Espetro.sendToPlayer(commander, "\u00a7c你不是指挥官，无法提交" + skillName + "坐标！");
+        String skillName = definition != null ? definition.displayName() : "选点技能";
+        if (definition == null || !canPlayerUseSkill(commander, definition)) {
+            Espetro.sendToPlayer(commander, "\u00a7c你没有权限提交" + skillName + "坐标！");
             pendingTargetSkillIds.remove(commanderId);
             return false;
         }
@@ -362,8 +385,11 @@ public class CommanderSkillManager {
 
         String team = Espetro.getPlayerTeam(commander);
         if (team != null) {
-            Espetro.broadcastToTeam(team, "\u00a76\u26a1 指挥官 " + commander.getName().getString()
-                + " 发动了 " + displayName + "！");
+            String roleLabel = VoteManager.getInstance().isCommander(commander.getUUID())
+                ? "指挥官"
+                : (SquadManager.getInstance().isSquadLeader(commander.getUUID()) ? "队长" : "玩家");
+            Espetro.broadcastToTeam(team, "\u00a76\u26a1 " + roleLabel + " "
+                + commander.getName().getString() + " 发动了 " + displayName + "！");
         }
     }
 
@@ -406,12 +432,13 @@ public class CommanderSkillManager {
         KubeCommanderSkillDefinition definition = EspetroCommanderSkills.getDefinition(normalizedSkillId);
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
         boolean commanderAllowed = commander != null && VoteManager.getInstance().isCommander(commander.getUUID());
+        boolean roleAllowed = canPlayerUseSkill(commander, definition);
         boolean phaseAllowed = phase == GamePhase.BATTLE || phase == GamePhase.DEPLOYING;
         int cooldownSeconds = commander == null ? 0
             : getRemainingCooldownSeconds(commander.getUUID(), normalizedSkillId);
         boolean onCooldown = cooldownSeconds > 0;
         boolean registered = definition != null;
-        boolean canUse = registered && commanderAllowed && phaseAllowed && !onCooldown;
+        boolean canUse = registered && roleAllowed && phaseAllowed && !onCooldown;
 
         return new SkillStatus(
             normalizedSkillId,
@@ -430,16 +457,35 @@ public class CommanderSkillManager {
     public List<SkillView> getSkillViews() {
         Map<String, SkillView> views = new HashMap<>();
         for (KubeCommanderSkillDefinition definition : EspetroCommanderSkills.getDefinitions()) {
-            String stats = definition.stats().isBlank()
-                ? "\u00a78KubeJS | 冷却: " + definition.cooldownSeconds() + "秒"
-                : definition.stats();
-            views.put(definition.id(), new SkillView(definition.id(), definition.displayName(),
-                definition.description(), stats, definition.icon()));
+            views.put(definition.id(), toSkillView(definition));
         }
 
         return views.values().stream()
             .sorted((a, b) -> a.id().compareTo(b.id()))
             .toList();
+    }
+
+    /** 仅返回该玩家 usableBy 允许的技能（供 S2C 同步 / 轮盘展示）。 */
+    public List<SkillView> getSkillViewsFor(ServerPlayer player) {
+        if (player == null) {
+            return List.of();
+        }
+        List<SkillView> views = new ArrayList<>();
+        for (KubeCommanderSkillDefinition definition : EspetroCommanderSkills.getDefinitions()) {
+            if (canPlayerUseSkill(player, definition)) {
+                views.add(toSkillView(definition));
+            }
+        }
+        views.sort((a, b) -> a.id().compareTo(b.id()));
+        return views;
+    }
+
+    private static SkillView toSkillView(KubeCommanderSkillDefinition definition) {
+        String stats = definition.stats().isBlank()
+            ? "\u00a78KubeJS | 冷却: " + definition.cooldownSeconds() + "秒"
+            : definition.stats();
+        return new SkillView(definition.id(), definition.displayName(),
+            definition.description(), stats, definition.icon());
     }
 
     public ArtillerySupportRequest getLatestArtillerySupportRequest() {

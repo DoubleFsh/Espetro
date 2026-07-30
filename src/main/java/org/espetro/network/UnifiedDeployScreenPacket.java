@@ -315,14 +315,16 @@ public class UnifiedDeployScreenPacket {
         public final float speedBonus;
         public final boolean teamCount;
         public final int maxPerSquad;
-        public final int squadCurrentCount;
+        /** 选择职业所需的小队最低人数（含自己）。 */
+        public final int teammatesNeed;
+        public int squadCurrentCount;
         public final List<VariantInfo> variants;
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
                          int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
                          List<VariantInfo> variants) {
             this(classId, name, description, role, icon, null, maxPlayers, strictCount, currentCount,
-                troopValue, healthBonus, speedBonus, false, 0, 0, variants);
+                troopValue, healthBonus, speedBonus, false, 0, 0, 0, variants);
         }
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
@@ -330,12 +332,13 @@ public class UnifiedDeployScreenPacket {
                          boolean teamCount, int maxPerSquad, int squadCurrentCount,
                          List<VariantInfo> variants) {
             this(classId, name, description, role, icon, null, maxPlayers, strictCount, currentCount,
-                troopValue, healthBonus, speedBonus, teamCount, maxPerSquad, squadCurrentCount, variants);
+                troopValue, healthBonus, speedBonus, teamCount, maxPerSquad, squadCurrentCount, 0, variants);
         }
 
         public ClassInfo(String classId, String name, String description, String role, String icon, String iconImage,
                          int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
                          boolean teamCount, int maxPerSquad, int squadCurrentCount,
+                         int teammatesNeed,
                          List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
@@ -352,6 +355,7 @@ public class UnifiedDeployScreenPacket {
             this.teamCount = teamCount;
             this.maxPerSquad = Math.max(0, maxPerSquad);
             this.squadCurrentCount = Math.max(0, squadCurrentCount);
+            this.teammatesNeed = Math.max(0, teammatesNeed);
             this.variants = variants != null ? variants : new ArrayList<>();
         }
 
@@ -371,6 +375,7 @@ public class UnifiedDeployScreenPacket {
             this.teamCount = buf.readBoolean();
             this.maxPerSquad = Math.max(0, buf.readVarInt());
             this.squadCurrentCount = Math.max(0, buf.readVarInt());
+            this.teammatesNeed = Math.max(0, buf.readVarInt());
             int variantCount = buf.readVarInt();
             this.variants = new ArrayList<>(variantCount);
             for (int i = 0; i < variantCount; i++) {
@@ -394,6 +399,7 @@ public class UnifiedDeployScreenPacket {
             buf.writeBoolean(teamCount);
             buf.writeVarInt(maxPerSquad);
             buf.writeVarInt(squadCurrentCount);
+            buf.writeVarInt(teammatesNeed);
             buf.writeVarInt(variants.size());
             for (VariantInfo variant : variants) variant.write(buf);
         }
@@ -706,22 +712,33 @@ public class UnifiedDeployScreenPacket {
         public final String className;
         public final boolean leader;
         public final boolean commander;
+        /** 0=A, 1=B, 2=C */
+        public final byte fireteam;
+        public final boolean fireteamLeader;
 
         public SquadMemberInfo(String playerName, String className, boolean leader) {
-            this(new UUID(0L, 0L), playerName, className, leader, false);
+            this(new UUID(0L, 0L), playerName, className, leader, false, (byte) 0, leader);
         }
 
         public SquadMemberInfo(String playerName, String className, boolean leader, boolean commander) {
-            this(new UUID(0L, 0L), playerName, className, leader, commander);
+            this(new UUID(0L, 0L), playerName, className, leader, commander, (byte) 0, leader);
         }
 
         public SquadMemberInfo(UUID uuid, String playerName, String className,
                                boolean leader, boolean commander) {
+            this(uuid, playerName, className, leader, commander, (byte) 0, leader);
+        }
+
+        public SquadMemberInfo(UUID uuid, String playerName, String className,
+                               boolean leader, boolean commander,
+                               byte fireteam, boolean fireteamLeader) {
             this.uuid = uuid == null ? new UUID(0L, 0L) : uuid;
             this.playerName = playerName == null ? "" : playerName;
             this.className = className == null ? "" : className;
             this.leader = leader;
             this.commander = commander;
+            this.fireteam = fireteam;
+            this.fireteamLeader = fireteamLeader;
         }
 
         public SquadMemberInfo(FriendlyByteBuf buf) {
@@ -730,6 +747,8 @@ public class UnifiedDeployScreenPacket {
             this.className = buf.readUtf();
             this.leader = buf.readBoolean();
             this.commander = buf.readBoolean();
+            this.fireteam = buf.readByte();
+            this.fireteamLeader = buf.readBoolean();
         }
 
         public void write(FriendlyByteBuf buf) {
@@ -738,6 +757,8 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(className);
             buf.writeBoolean(leader);
             buf.writeBoolean(commander);
+            buf.writeByte(fireteam);
+            buf.writeBoolean(fireteamLeader);
         }
 
         @Override
@@ -747,13 +768,15 @@ public class UnifiedDeployScreenPacket {
             return uuid.equals(that.uuid)
                 && leader == that.leader
                 && commander == that.commander
+                && fireteam == that.fireteam
+                && fireteamLeader == that.fireteamLeader
                 && Objects.equals(playerName, that.playerName)
                 && Objects.equals(className, that.className);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(uuid, playerName, className, leader, commander);
+            return Objects.hash(uuid, playerName, className, leader, commander, fireteam, fireteamLeader);
         }
     }
 

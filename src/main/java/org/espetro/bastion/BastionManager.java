@@ -7,6 +7,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -16,7 +17,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraftforge.common.MinecraftForge;
 import org.espetro.Espetro;
+import org.espetro.api.event.BastionLifecycleEvent;
 import org.espetro.logistics.LogisticsConfig;
 
 import javax.annotation.Nullable;
@@ -24,6 +28,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * 兵站管理器
@@ -33,6 +40,11 @@ public class BastionManager {
 
     /** 每个队伍最多同时生效的兵站数量 */
     public static final int MAX_BASTIONS = 4;
+    /**
+     * 仅复活传送时临时拉目标区块（与原版传送/门票据一致，会自动过期）。
+     * 禁止用自定义 ticket 长期强加载兵站区块。
+     */
+    private static final int TELEPORT_PORTAL_TICKET_RADIUS = 1;
     /** 兼容旧调用，实际含义为每个队伍的上限。 */
     @Deprecated
     public static final int MAX_BASTIONS_PER_TEAM = MAX_BASTIONS;
@@ -49,6 +61,9 @@ public class BastionManager {
 
     // 正在等待复活选择的玩家
     private final Map<UUID, UUID> waitingPlayers = new HashMap<>(); // playerUUID -> bastionChoiceRequestId
+    /** Deduplicated asynchronous FULL-chunk loads used only while deploying. */
+    private final Map<HabChunkKey, CompletableFuture<Boolean>> pendingHabChunkLoads = new HashMap<>();
+    private final Set<UUID> pendingHabTeleports = new HashSet<>();
 
     // 由死亡进入的等待复活状态。部署期残留等待会在开战时自动结算，死亡等待不会。
     private final Set<UUID> deathWaitingPlayers = new HashSet<>();
@@ -195,8 +210,9 @@ public class BastionManager {
         bastion.setArmorStandPosition(pos.above());
         if (structureKind == StructureKind.HAB) {
             bastion.setHabBuilt(true);
-            long activationMs = LogisticsConfig.get().habActivationSeconds * 1000L;
-            bastion.setHabAvailableAt(System.currentTimeMillis() + Math.max(0L, activationMs));
+            // 0 = 建成即可部署；>0 时才写入未来可用时间。压制/覆盖仍由 isHabOperational 判定。
+            long activationMs = Math.max(0L, LogisticsConfig.get().habActivationSeconds * 1000L);
+            bastion.setHabAvailableAt(activationMs == 0L ? 0L : System.currentTimeMillis() + activationMs);
         }
 
         if (!registerBastionRecord(bastion)) {
@@ -230,6 +246,7 @@ public class BastionManager {
 
         Espetro.LOGGER.info("创建{}: {} (队伍: {}, 编号: {}, 核心位置: {})",
             structureKind, name, team, bastion.getBastionNumber(), bastion.getArmorStandPosition());
+        MinecraftForge.EVENT_BUS.post(new BastionLifecycleEvent.Built(bastion));
 
         return bastion;
     }
@@ -319,16 +336,51 @@ public class BastionManager {
     }
 
     /**
-     * 获取玩家所属队伍可部署的 HAB 列表（不含纯 Radio）。
+     * 获取玩家所属队伍的 HAB 列表（不含纯 Radio），供部署 UI 展示。
+     * <p>
+     * 含启用倒计时中 / 无覆盖 / 被压制的兵站，由 {@link #getFobStatus} 标注原因；
+     * 真正可否传送由 {@link #isHabOperational} / 选择入口再校验。
+     * （默认建成即可用；若配置了 activation 秒数，倒计时期间仍会列出并标状态。）
      */
     public List<BastionData> getTeamBastions(String team) {
         List<BastionData> result = new ArrayList<>(MAX_BASTIONS);
+        if (team == null) {
+            return result;
+        }
         for (BastionData bastion : bastions.values()) {
-            if (bastion.getTeam().equals(team) && isBastionUsable(bastion)) {
+            if (bastion == null || !bastion.isActive() || !team.equals(bastion.getTeam())) {
+                continue;
+            }
+            // 纯 Radio 不可作为复活点；旧合并 FOB 或 HAB 才进列表
+            if (bastion.isRadio() && !bastion.isLegacyCombined()) {
+                continue;
+            }
+            if (!bastion.isHabBuilt() && !bastion.isLegacyCombined()) {
+                continue;
+            }
+            if (!bastionRecordPositions.containsKey(bastion.getBastionId())) {
+                registerBastionRecord(bastion);
+            }
+            // UI 列表只读记录坐标，不 checkArmorStand（避免选职/刷面板时 N×getEntity）
+            if (getRecordedArmorStandPosition(bastion) == null) {
+                continue;
+            }
+            result.add(bastion);
+        }
+        result.sort(Comparator.comparing(BastionData::getName));
+        return result;
+    }
+
+    /**
+     * 队伍中当前真正可部署（可传送复活）的 HAB。
+     */
+    public List<BastionData> getTeamOperationalBastions(String team) {
+        List<BastionData> result = new ArrayList<>();
+        for (BastionData bastion : getTeamBastions(team)) {
+            if (isHabOperational(bastion)) {
                 result.add(bastion);
             }
         }
-        result.sort(Comparator.comparing(BastionData::getName));
         return result;
     }
 
@@ -463,6 +515,9 @@ public class BastionManager {
         if (bastion.isRadio() && !bastion.isLegacyCombined()) {
             return bastion.isAmmoCrateBuilt() ? "Radio 弹药箱可用" : "Radio 等待弹药箱";
         }
+        if (!bastion.isActive()) {
+            return "HAB 已失效";
+        }
         if (!bastion.isHabBuilt()) {
             return "HAB 待建造";
         }
@@ -476,7 +531,16 @@ public class BastionManager {
         if (bastion.isHab() && !isCoveredByFriendlyRadio(bastion)) {
             return "HAB 无 Radio 覆盖";
         }
+        // 与 isHabOperational 对齐：记录坐标缺失时不可部署
+        if (getRecordedArmorStandPosition(bastion) == null) {
+            return "HAB 坐标缺失";
+        }
         return "HAB 可部署";
+    }
+
+    /** UI / 客户端：状态文案是否表示当前可点选部署。 */
+    public static boolean isDeployReadyStatus(String status) {
+        return status != null && status.equals("HAB 可部署");
     }
 
     /** HAB 或旧版合并 FOB 是否仍被己方 Radio 建造半径覆盖。 */
@@ -574,11 +638,17 @@ public class BastionManager {
     }
 
     private void destroyBastion(BastionData bastion, @Nullable Entity attacker, boolean removeLoadedCoreEntity) {
-        destroyBastion(bastion, attacker, removeLoadedCoreEntity, null);
+        destroyBastion(bastion, attacker, removeLoadedCoreEntity, null, false);
     }
 
     private void destroyBastion(BastionData bastion, @Nullable Entity attacker,
                                 boolean removeLoadedCoreEntity, @Nullable Boolean manpowerOverride) {
+        destroyBastion(bastion, attacker, removeLoadedCoreEntity, manpowerOverride, false);
+    }
+
+    private void destroyBastion(BastionData bastion, @Nullable Entity attacker,
+                                boolean removeLoadedCoreEntity, @Nullable Boolean manpowerOverride,
+                                boolean silent) {
         if (bastion == null || !bastion.isActive()) {
             return;
         }
@@ -587,52 +657,258 @@ public class BastionManager {
         String bastionTeam = bastion.getTeam();
         boolean radio = bastion.isRadio();
         // 旧合并 FOB 仍按 Radio 扣兵力；纯 HAB 不扣；己方拆 Radio 可 override 为不扣。
-        boolean deductManpower = manpowerOverride != null ? manpowerOverride : radio;
+        boolean deductManpower = !silent && (manpowerOverride != null ? manpowerOverride : radio);
+        int penalty = deductManpower ? getDestroyTroopPenalty() : 0;
 
         if (removeLoadedCoreEntity) {
             removeCoreEntityIfLoaded(bastion, true);
+            if (radio) {
+                removeRadioBlockIfLoaded(bastion);
+            }
         }
         if (radio) {
             releaseRadioBlockRecord(bastion);
         }
 
         setBastionActive(bastion, false);
-        if (radio) {
+        // Radio 增减会影响 HAB 覆盖；silent 战局清理由 reset 整体清空，无需重算。
+        if (radio && !silent) {
             recomputeHabCoverage();
         }
 
-        String attackerName = attacker == null ? "unknown" : attacker.getName().getString();
-        if (deductManpower) {
-            int penalty = getDestroyTroopPenalty();
-            org.espetro.team.TroopCountManager troopManager = org.espetro.team.TroopCountManager.getInstance();
-            if ("ATTACK".equals(bastionTeam)) {
-                troopManager.modifyAttackTroops(-penalty);
+        if (!silent) {
+            String attackerName = attacker == null ? "unknown" : attacker.getName().getString();
+            if (deductManpower) {
+                org.espetro.team.TroopCountManager troopManager = org.espetro.team.TroopCountManager.getInstance();
+                if ("ATTACK".equals(bastionTeam)) {
+                    troopManager.modifyAttackTroops(-penalty);
+                } else {
+                    troopManager.modifyDefendTroops(-penalty);
+                }
+                Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
+                Espetro.broadcastToTeam(bastionTeam,
+                    "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
+                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
+                Espetro.broadcastToTeam(enemyTeam,
+                    "§a[Radio] 敌方 Radio §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
             } else {
-                troopManager.modifyDefendTroops(-penalty);
+                Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
+                Espetro.broadcastToTeam(bastionTeam,
+                    "§c[兵站] §e" + bastionName + " §c已被摧毁！无法再从此点复活（不扣兵力）。");
+                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
+                Espetro.broadcastToTeam(enemyTeam,
+                    "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！");
             }
-            Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
-            Espetro.broadcastToTeam(bastionTeam,
-                "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
-            String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-            Espetro.broadcastToTeam(enemyTeam,
-                "§a[Radio] 敌方 Radio §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
-        } else {
-            Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
-            Espetro.broadcastToTeam(bastionTeam,
-                "§c[兵站] §e" + bastionName + " §c已被摧毁！无法再从此点复活（不扣兵力）。");
-            String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-            Espetro.broadcastToTeam(enemyTeam,
-                "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！");
+
+            ServerPlayer commander = findCommanderForTeam(bastionTeam);
+            if (commander != null) {
+                commander.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    deductManpower
+                        ? "§c你的 Radio §e" + bastionName + " §c已被摧毁！"
+                        : "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
+                ));
+            }
         }
 
-        ServerPlayer commander = findCommanderForTeam(bastionTeam);
-        if (commander != null) {
-            commander.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                deductManpower
-                    ? "§c你的 Radio §e" + bastionName + " §c已被摧毁！"
-                    : "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
-            ));
+        MinecraftForge.EVENT_BUS.post(
+            new BastionLifecycleEvent.Destroyed(bastion, attacker, deductManpower, penalty));
+    }
+
+    /**
+     * 战局结束 / 回城 / 卸载战场维度：摧毁全部 Radio 与 HAB。
+     * 不扣兵力、不刷队内战报；仍发 {@link BastionLifecycleEvent.Destroyed}。
+     * <p>
+     * <b>不</b>为清理而强加载/临时拉区块：仅处理当前已加载区块内的核心实体与 Radio 方块；
+     * 卸载区实体随维度删除或地图重建一并消失。禁止匹配结束时批量 {@code getChunk}。
+     *
+     * @return 摧毁的活跃结构数量
+     */
+    public int destroyAllBastionsForMatchEnd() {
+        // 取消进行中的 HAB 读条，避免回合结束后 complete 再生成孤儿兵站
+        HabChannelManager.getInstance().reset();
+
+        List<BastionData> snapshot = new ArrayList<>(bastions.values());
+        int destroyed = 0;
+        for (BastionData bastion : snapshot) {
+            if (bastion == null || !bastion.isActive()) {
+                continue;
+            }
+            // removeLoadedCoreEntity=true 也只清「已加载」区块，不会 force-load
+            destroyBastion(bastion, null, true, false, true);
+            destroyed++;
         }
+        // 清残余运行时表（等待复活、冷却等）
+        reset(false);
+        if (destroyed > 0) {
+            Espetro.LOGGER.info("战局结束/回城：已摧毁全部兵站 {} 个（不扣兵力，未强加载区块）", destroyed);
+        }
+        return destroyed;
+    }
+
+    /** 仅在区块已加载时移除 Radio 方块；绝不主动加载区块。 */
+    private void removeRadioBlockIfLoaded(BastionData bastion) {
+        if (bastion == null || BastionItems.RADIO_BLOCK == null) {
+            return;
+        }
+        ServerLevel level = bastion.getLevel();
+        BlockPos pos = bastion.getPosition();
+        if (level == null || pos == null || !isChunkLoaded(level, pos)) {
+            return;
+        }
+        if (level.getBlockState(pos).is(BastionItems.RADIO_BLOCK)) {
+            level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+        }
+    }
+
+    /**
+     * 将玩家传送到 HAB 核心：优先原版「传送到实体」位姿。
+     * <p>
+     * 实体所在区块已加载：直接贴实体。未加载：用记录坐标传送，并挂<strong>一次性过期</strong>的
+     * 原版 {@link TicketType#PORTAL}（与门/传送一致，非长期强加载、无自定义 ticket）。
+     *
+     * @return false 仅当缺少维度或记录坐标
+     */
+    public boolean teleportPlayerToHab(ServerPlayer player, BastionData bastion) {
+        if (player == null || bastion == null) {
+            return false;
+        }
+        ServerLevel level = bastion.getLevel();
+        if (level == null) {
+            return false;
+        }
+
+        UUID standId = bastion.getArmorStandId();
+        if (standId != null) {
+            Entity entity = level.getEntity(standId);
+            if (entity instanceof ArmorStand stand && stand.isAlive()) {
+                player.teleportTo(
+                    level,
+                    stand.getX(),
+                    stand.getY(),
+                    stand.getZ(),
+                    stand.getYRot(),
+                    stand.getXRot()
+                );
+                updateBastionArmorStandPosition(bastion, stand.blockPosition());
+                return true;
+            }
+        }
+
+        BlockPos targetPos = getRecordedArmorStandPosition(bastion);
+        if (targetPos == null) {
+            return false;
+        }
+
+        // Never synchronously load an unloaded HAB chunk from the server thread.
+        if (!isChunkLoaded(level, targetPos)) {
+            return false;
+        }
+
+        if (standId != null) {
+            Entity entity = level.getEntity(standId);
+            if (entity instanceof ArmorStand stand && stand.isAlive()) {
+                player.teleportTo(
+                    level,
+                    stand.getX(),
+                    stand.getY(),
+                    stand.getZ(),
+                    stand.getYRot(),
+                    stand.getXRot()
+                );
+                updateBastionArmorStandPosition(bastion, stand.blockPosition());
+                return true;
+            }
+        }
+
+        player.teleportTo(
+            level,
+            targetPos.getX() + 0.5,
+            targetPos.getY(),
+            targetPos.getZ() + 0.5,
+            player.getYRot(),
+            player.getXRot()
+        );
+        return true;
+    }
+
+    /**
+     * Prepare an unloaded HAB without blocking the server thread. Concurrent
+     * requests targeting the same dimension/chunk share one chunk future.
+     * Completion always runs on the Minecraft server executor.
+     *
+     * @return false when this player already has a deployment load pending
+     */
+    public boolean teleportPlayerToHabAsync(
+        ServerPlayer player,
+        BastionData bastion,
+        Consumer<Boolean> completion
+    ) {
+        if (player == null || bastion == null || completion == null) {
+            return false;
+        }
+        if (!pendingHabTeleports.add(player.getUUID())) {
+            return false;
+        }
+
+        ServerLevel level = bastion.getLevel();
+        BlockPos targetPos = getRecordedArmorStandPosition(bastion);
+        if (level == null || targetPos == null) {
+            pendingHabTeleports.remove(player.getUUID());
+            completion.accept(false);
+            return true;
+        }
+        if (isChunkLoaded(level, targetPos)) {
+            level.getServer().execute(() -> {
+                pendingHabTeleports.remove(player.getUUID());
+                boolean valid = isWaitingForBastion(player.getUUID())
+                    && bastion.isActive()
+                    && isHabOperational(bastion, false);
+                completion.accept(valid && teleportPlayerToHab(player, bastion));
+            });
+            return true;
+        }
+
+        ChunkPos chunk = new ChunkPos(targetPos);
+        HabChunkKey key = new HabChunkKey(level, chunk);
+        CompletableFuture<Boolean> future = pendingHabChunkLoads.computeIfAbsent(key, ignored -> {
+            level.getChunkSource().addRegionTicket(
+                TicketType.PORTAL,
+                chunk,
+                TELEPORT_PORTAL_TICKET_RADIUS,
+                targetPos
+            );
+            CompletableFuture<Boolean> created = level.getChunkSource()
+                .getChunkFuture(chunk.x, chunk.z, ChunkStatus.FULL, true)
+                .thenApply(result -> result != null && result.left().isPresent())
+                .completeOnTimeout(false, 10, TimeUnit.SECONDS);
+            created.whenComplete((success, error) ->
+                level.getServer().execute(() -> {
+                    pendingHabChunkLoads.remove(key, created);
+                    level.getChunkSource().removeRegionTicket(
+                        TicketType.PORTAL,
+                        chunk,
+                        TELEPORT_PORTAL_TICKET_RADIUS,
+                        targetPos
+                    );
+                }));
+            return created;
+        });
+
+        future.whenComplete((loaded, error) -> level.getServer().execute(() -> {
+            pendingHabTeleports.remove(player.getUUID());
+            boolean valid = error == null
+                && Boolean.TRUE.equals(loaded)
+                && player.connection != null
+                && isWaitingForBastion(player.getUUID())
+                && bastion.isActive()
+                && isHabOperational(bastion, false);
+            completion.accept(valid && teleportPlayerToHab(player, bastion));
+        }));
+        return true;
+    }
+
+    public boolean isHabTeleportPending(UUID playerId) {
+        return pendingHabTeleports.contains(playerId);
     }
 
     /**
@@ -678,6 +954,7 @@ public class BastionManager {
     public void clearWaiting(UUID playerId) {
         waitingPlayers.remove(playerId);
         deathWaitingPlayers.remove(playerId);
+        pendingHabTeleports.remove(playerId);
         unlockPlayerPosition(playerId);
     }
 
@@ -704,7 +981,12 @@ public class BastionManager {
     }
 
     /**
-     * 移除无效兵站
+     * 轻量一致性清理：仅移除已标记失效的脏记录。
+     * <p>
+     * 真摧毁只走事件（{@link BastionEventHandler} 死亡/离开非 unload、方块破坏等）→
+     * {@link #destroyBastion}。禁止「区块已加载却找不到实体」时当摧毁
+     * （卸载竞态 + 无强加载时更易误杀）。
+     * 若核心已加载，顺带刷新记录坐标（不强制加载区块）。
      */
     public void removeInvalidBastions() {
         Iterator<BastionData> iterator = bastions.values().iterator();
@@ -713,10 +995,18 @@ public class BastionManager {
             if (!bastion.isActive()) {
                 iterator.remove();
                 unregisterCoreEntity(bastion);
-            } else if (bastion.checkArmorStand()) {
-                updateBastionArmorStandPosition(bastion, bastion.getArmorStandPosition());
-            } else if (bastion.isChunkLoaded()) {
-                onCoreArmorStandDestroyed(bastion, null);
+                continue;
+            }
+            // 可选：已加载时同步位置，不判摧毁
+            if (bastion.getArmorStandId() == null || bastion.getLevel() == null) {
+                continue;
+            }
+            if (!bastion.isChunkLoaded()) {
+                continue;
+            }
+            Entity entity = bastion.getLevel().getEntity(bastion.getArmorStandId());
+            if (entity instanceof ArmorStand stand && stand.isAlive()) {
+                updateBastionArmorStandPosition(bastion, stand.blockPosition());
             }
         }
     }
@@ -755,14 +1045,24 @@ public class BastionManager {
         bastionIdsByArmorStand.clear();
         radioBlockPositions.clear();
         waitingPlayers.clear();
+        pendingHabChunkLoads.clear();
+        pendingHabTeleports.clear();
         deathWaitingPlayers.clear();
         playerDeployPoints.clear();
         playerLockPositions.clear();
         bastionCooldowns.clear();
         resupplyCooldowns.clear();
+        habProxyCache.clear();
         clearBastionRecords();
     }
 
+    private record HabChunkKey(ServerLevel level, ChunkPos chunk) {
+    }
+
+    /**
+     * 仅当核心所在区块<strong>已经</strong>加载时 discard HAB 盔甲架。
+     * 绝不 force-load / 临时 PORTAL 拉块（{@code kill} 参数仅保留兼容旧调用，不再触发加载）。
+     */
     private void removeCoreEntityIfLoaded(BastionData bastion, boolean kill) {
         if (bastion == null || bastion.getArmorStandId() == null) {
             return;
@@ -770,7 +1070,10 @@ public class BastionManager {
 
         BlockPos entityPos = bastion.getArmorStandPosition();
         if (entityPos == null) {
-            entityPos = bastion.getPosition().above();
+            entityPos = bastion.getPosition() != null ? bastion.getPosition().above() : null;
+        }
+        if (entityPos == null) {
+            return;
         }
 
         ServerLevel level = bastion.getLevel();
@@ -875,7 +1178,15 @@ public class BastionManager {
         return getRecordedArmorStandPosition(bastion) != null && isHabOperational(bastion);
     }
 
+    /**
+     * 是否可部署。{@code applySuppression=true} 时才写入压制截止时间（真正选点时）；
+     * 列表/status 查询传 false，避免误触副作用与缓存污染。
+     */
     public boolean isHabOperational(BastionData bastion) {
+        return isHabOperational(bastion, false);
+    }
+
+    public boolean isHabOperational(BastionData bastion, boolean applySuppression) {
         if (bastion == null || !bastion.isActive()) {
             return false;
         }
@@ -900,43 +1211,73 @@ public class BastionManager {
             float maximum = Math.max(1.0f, armorStandHealth);
             float healthPercent = bastion.getCoreHealth() * 100.0f / maximum;
             if (healthPercent <= LogisticsConfig.get().habDisableRadioHealth) {
-                bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+                if (applySuppression) {
+                    bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+                }
                 return false;
             }
         }
 
         if (isHabProxied(bastion)) {
-            bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+            if (applySuppression) {
+                bastion.setHabDisabledUntil(now + LogisticsConfig.get().habReactivationSeconds * 1000L);
+            }
             return false;
         }
         return bastion.getHabDisabledUntil() <= now;
     }
 
+    /** HAB 压制结果短缓存（gameTime），避免同 tick 多次部署校验扫玩家表。 */
+    private final Map<UUID, long[]> habProxyCache = new HashMap<>(); // bastionId -> [gameTime, proxied 0/1]
+    private static final int HAB_PROXY_CACHE_TICKS = 30;
+
+    /**
+     * 敌方贴近压制：单次遍历在线玩家，按半径环累计人数（O(玩家数)，不扫区块/实体表）。
+     * 仅在选择部署等热路径按需调用，不做每 tick 轮询；30 tick 内同 HAB 复用结果。
+     */
     private boolean isHabProxied(BastionData bastion) {
         ServerLevel level = bastion.getLevel();
         if (level == null) {
             return false;
         }
+        long gameTime = level.getGameTime();
+        UUID id = bastion.getBastionId();
+        long[] cached = habProxyCache.get(id);
+        if (cached != null && gameTime - cached[0] <= HAB_PROXY_CACHE_TICKS) {
+            return cached[1] != 0L;
+        }
+
         BlockPos center = bastion.getPosition();
         int[] radii = {20, 30, 40, 50, 60, 70, 80, 90};
-        for (int index = 0; index < radii.length; index++) {
-            int radius = radii[index];
-            int requiredEnemies = index + 2;
-            int enemies = 0;
-            for (ServerPlayer player : level.players()) {
-                if (!player.isAlive() || player.isSpectator()
-                    || Objects.equals(bastion.getTeam(), Espetro.getPlayerTeam(player))) {
-                    continue;
-                }
-                if (player.blockPosition().distSqr(center) <= radius * radius) {
-                    enemies++;
-                    if (enemies >= requiredEnemies) {
-                        return true;
+        long maxR2 = (long) radii[radii.length - 1] * radii[radii.length - 1];
+        int[] counts = new int[radii.length];
+        String habTeam = bastion.getTeam();
+        boolean proxied = false;
+        for (ServerPlayer player : level.players()) {
+            if (!player.isAlive() || player.isSpectator()
+                || Objects.equals(habTeam, Espetro.getPlayerTeam(player))) {
+                continue;
+            }
+            double distSq = player.blockPosition().distSqr(center);
+            if (distSq > maxR2) {
+                continue;
+            }
+            for (int index = 0; index < radii.length; index++) {
+                long r = radii[index];
+                if (distSq <= r * r) {
+                    counts[index]++;
+                    if (counts[index] >= index + 2) {
+                        proxied = true;
+                        break;
                     }
                 }
             }
+            if (proxied) {
+                break;
+            }
         }
-        return false;
+        habProxyCache.put(id, new long[]{gameTime, proxied ? 1L : 0L});
+        return proxied;
     }
 
     private boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
@@ -1187,6 +1528,22 @@ public class BastionManager {
         return playerDeployPoints.get(playerId);
     }
 
+    /** Immutable, level-reference-free deploy points for tactical-map consumers. */
+    public List<PlayerDeployPointSnapshot> getPlayerDeployPointSnapshots() {
+        return playerDeployPoints.entrySet().stream()
+            .filter(entry -> entry.getValue() != null
+                && entry.getValue().pos != null
+                && entry.getValue().level != null)
+            .map(entry -> new PlayerDeployPointSnapshot(
+                entry.getKey(),
+                entry.getValue().level.dimension().location().toString(),
+                entry.getValue().pos.getX(),
+                entry.getValue().pos.getY(),
+                entry.getValue().pos.getZ()))
+            .sorted(Comparator.comparing(snapshot -> snapshot.playerId().toString()))
+            .toList();
+    }
+
     /**
      * 在原部署点复活玩家
      */
@@ -1235,5 +1592,9 @@ public class BastionManager {
             this.pos = pos;
             this.level = level;
         }
+    }
+
+    public record PlayerDeployPointSnapshot(UUID playerId, String dimension,
+                                            int x, int y, int z) {
     }
 }

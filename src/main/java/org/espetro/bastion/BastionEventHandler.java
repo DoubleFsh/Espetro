@@ -36,6 +36,7 @@ import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TeamPackManager;
 import org.espetro.logistics.LogisticsConfig;
+import org.espetro.logistics.AmmoResupplyPolicy;
 import org.espetro.logistics.SupplyManager;
 import org.espetro.mapconfig.BattlefieldContext;
 
@@ -667,7 +668,14 @@ public class BastionEventHandler {
         }
     }
 
-    /** Radio 方块交互：潜行右键=存补给，右键=领职业弹药。 */
+    /**
+     * Radio 方块交互（服务端）：
+     * <ul>
+     *   <li>普通右键：由客户端 {@code RadioRadialController} 发 OPEN 包打开 AuraTip 轮盘，
+     *       此处只拦截原版/旧逻辑，避免直接补弹把轮盘盖掉。</li>
+     *   <li>潜行右键：快捷存入补给（轮盘里也有同名操作）。</li>
+     * </ul>
+     */
     @SubscribeEvent
     public static void onRadioBlockRightClick(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)
@@ -690,6 +698,7 @@ public class BastionEventHandler {
             return; // 敌方静默
         }
 
+        // 仅潜行右键保留快捷存入；普通右键走电台轮盘（C→S OPEN / RESUPPLY）
         if (player.isShiftKeyDown()) {
             SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
             if (result.success()) {
@@ -705,10 +714,7 @@ public class BastionEventHandler {
                         + " 建材 §7| §b" + bastion.getAmmunitionSupplies()
                         + " 弹药 §7| " + BastionManager.getInstance().getFobStatus(bastion)));
             }
-            return;
         }
-
-        performAmmoResupply(player, bastion);
     }
 
     @SubscribeEvent
@@ -717,9 +723,13 @@ public class BastionEventHandler {
             || !(event.getLevel() instanceof ServerLevel level)) {
             return;
         }
-        if (SupplyManager.getInstance().handleSourceInteraction(player, level, event.getPos())) {
-            event.setCanceled(true);
-            event.setCancellationResult(InteractionResult.SUCCESS);
+        try {
+            if (SupplyManager.getInstance().handleSourceInteraction(player, level, event.getPos())) {
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.SUCCESS);
+            }
+        } catch (Throwable t) {
+            Espetro.LOGGER.error("补给站交互失败 at {}", event.getPos(), t);
         }
     }
 
@@ -764,7 +774,7 @@ public class BastionEventHandler {
     /**
      * 从 Radio 领取职业弹药补给（原潜影盒逻辑，供潜影盒与 Radio 实体两个入口复用）。
      */
-    static void performAmmoResupply(ServerPlayer player, BastionData bastion) {
+    public static void performAmmoResupply(ServerPlayer player, BastionData bastion) {
         if (!bastion.isAmmoCrateBuilt()) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                 "§c该 Radio 尚未建成弹药箱，需要继续存入建材。"));
@@ -794,27 +804,16 @@ public class BastionEventHandler {
         int ammoCost = resupply.ammoCost != null
             ? Math.max(0, resupply.ammoCost)
             : LogisticsConfig.get().defaultResupplyAmmoCost;
-        if (bastion.getAmmunitionSupplies() <= 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§cRadio 弹药库存为 0，无法补给。"));
-            return;
-        }
-
-        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
-        if (errorMsg != null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
-            return;
-        }
-
-        // 智能补给：检查背包已有数量，补充到上限
-        int givenItems = 0;
-        StringBuilder detail = new StringBuilder();
+        // 先只计算缺口，不改背包、不扣库存。满弹与 Radio 库存不足都必须零副作用。
+        java.util.List<PlannedResupply> planned = new java.util.ArrayList<>();
+        int validConfiguredItems = 0;
         for (FactionDataLoader.ResupplyItem ri : resupply.items) {
             if (ri.id == null || ri.id.isBlank()) continue;
             ItemStack template = createResupplyStack(ri);
             if (template.isEmpty()) {
                 continue;
             }
+            validConfiguredItems++;
             Item item = template.getItem();
             if (item == net.minecraft.world.item.Items.AIR) {
                 Espetro.LOGGER.warn("补给物品不存在: {}", ri.id);
@@ -831,38 +830,62 @@ public class BastionEventHandler {
             }
 
             // 计算可补充数量（不超过上限）
-            int canGive = Math.min(giveCount, maxCap - current);
+            int canGive = AmmoResupplyPolicy.grantCount(current, maxCap, giveCount);
             if (canGive > 0) {
-                ItemStack giveStack = template.copy();
-                giveStack.setCount(canGive);
-                if (!player.getInventory().add(giveStack)) {
-                    player.drop(giveStack, false);
-                }
-                givenItems++;
-                if (!detail.isEmpty()) detail.append(", ");
-                detail.append(giveStack.getHoverName().getString()).append(" ×").append(canGive);
+                planned.add(new PlannedResupply(template, canGive));
             }
         }
 
-        if (givenItems == 0) {
+        if (validConfiguredItems == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c该职业弹药补给配置中没有有效物品。"));
+            return;
+        }
+        if (planned.isEmpty()) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
             return;
         }
 
-        // 记录补给
-        int chargedAmmo = 0;
-        int availableAmmo = Math.min(ammoCost, bastion.getAmmunitionSupplies());
-        if (availableAmmo > 0
-            && BastionManager.getInstance().tryConsumeFobAmmunition(bastion, availableAmmo)) {
-            chargedAmmo = availableAmmo;
+        int availableAmmo = bastion.getAmmunitionSupplies();
+        if (!AmmoResupplyPolicy.canAfford(availableAmmo, ammoCost)) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§cRadio 弹药不足：需要 §b" + ammoCost + "§c，当前仅有 §b"
+                    + availableAmmo + "§c。"));
+            return;
         }
+        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
+        if (errorMsg != null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
+            return;
+        }
+        // 先足额扣费再发放；任何不足都不能先发物品再把库存扣到零。
+        if (!BastionManager.getInstance().tryConsumeFobAmmunition(bastion, ammoCost)) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§cRadio 弹药库存发生变化，本次补给已取消。"));
+            return;
+        }
+
+        StringBuilder detail = new StringBuilder();
+        for (PlannedResupply plan : planned) {
+            ItemStack giveStack = plan.template().copy();
+            giveStack.setCount(plan.count());
+            if (!player.getInventory().add(giveStack) && !giveStack.isEmpty()) {
+                player.drop(giveStack, false);
+            }
+            if (!detail.isEmpty()) detail.append(", ");
+            detail.append(plan.template().getHoverName().getString())
+                .append(" ×").append(plan.count());
+        }
+
         BastionManager.getInstance().recordResupply(player.getUUID());
-        String chargeDetail = chargedAmmo == ammoCost
-            ? "消耗 §b" + chargedAmmo + " Radio 弹药"
-            : "Radio 弹药不足 §7(需要 §b" + ammoCost + "§7)，已扣除剩余 §b"
-                + chargedAmmo + " §7并归零";
+        String chargeDetail = ammoCost > 0
+            ? "消耗 §b" + ammoCost + " Radio 弹药"
+            : "本职业补给无需消耗 Radio 弹药";
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
             "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 冷却5分钟"));
+    }
+
+    private record PlannedResupply(ItemStack template, int count) {
     }
 
     private static ItemStack createResupplyStack(FactionDataLoader.ResupplyItem ri) {
@@ -907,7 +930,18 @@ public class BastionEventHandler {
     }
 
     /**
-     * 兵站核心盔甲架离开世界（卸载/清除）：立即失效兵站。
+     * 核心盔甲架离开世界。
+     * <p>
+     * <b>绝不</b>在此处因区块卸载摧毁兵站。卸载时 RemovalReason 在部分环境下
+     * 不是 {@link Entity.RemovalReason#UNLOADED_TO_CHUNK}（甚至为 null），
+     * 旧逻辑会把卸载误判为摧毁（聊天「已被摧毁！不扣兵力」+ attacker=unknown）。
+     * <p>
+     * 真摧毁仅走：
+     * <ul>
+     *   <li>{@link #onPlayerDeath} → LivingDeathEvent（被打掉）</li>
+     *   <li>方块/命令/己方拆除等显式 {@code destroyBastion*}</li>
+     * </ul>
+     * LeaveLevel 对 KILLED 也只做幂等兜底（死亡事件通常已处理）。
      */
     @SubscribeEvent
     public static void onBastionCoreLeaveLevel(EntityLeaveLevelEvent event) {
@@ -916,6 +950,12 @@ public class BastionEventHandler {
         }
         Entity entity = event.getEntity();
         if (!(entity instanceof ArmorStand armorStand) || !isBastionCore(armorStand)) {
+            return;
+        }
+        Entity.RemovalReason reason = entity.getRemovalReason();
+        // 白名单：只有明确击杀才可能摧毁。卸载 / 换维 / null / DISCARD 卸载路径一律忽略。
+        // DISCARDED 也不在此摧毁：显式 dismantle 会先 destroyBastion 再 discard（已 isActive=false）。
+        if (reason != Entity.RemovalReason.KILLED) {
             return;
         }
         BastionData bastion = BastionManager.getInstance().findBastionByArmorStand(armorStand.getUUID());
@@ -934,10 +974,7 @@ public class BastionEventHandler {
         // 重新登录也不会清除等待状态，避免绕过部署点选择
     }
 
-    /**
-     * 每 tick 轻量维持：位置锁回拉 + 禁移 + 旁观。
-     * 完整 MatchHold / 强制失明重推只在进入等待、跨维/传送后，或每 3 秒节流一次。
-     */
+    /** 每秒分片兜底；正常移动由服务端移动包拦截器直接拒绝。 */
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
@@ -947,6 +984,9 @@ public class BastionEventHandler {
         java.util.UUID playerId = player.getUUID();
         net.minecraft.world.phys.Vec3 lock = bastionManager.getPlayerLockPosition(playerId);
         boolean waiting = bastionManager.isWaitingForBastion(playerId);
+        // 所有已选阵营的部署等待（含首次部署）都使用冒险模式。
+        // 非 Bastion waiting 的位置锁属于未选阵营/阶段 hold，仍维持旁观模式。
+        boolean adventureDeployWaiting = waiting;
         if (lock == null && !waiting) {
             return;
         }
@@ -956,15 +996,23 @@ public class BastionEventHandler {
             if (player.tickCount % 20 == 0) {
                 applyWaitingDeployState(player);
             } else {
-                maintainHoldWithoutTeleport(player, false);
+                maintainHoldWithoutTeleport(player, false, adventureDeployWaiting);
             }
             return;
         }
 
+        int shard = Math.floorMod(playerId.hashCode(), 20);
+        if (Math.floorMod(player.tickCount, 20) != shard) {
+            return;
+        }
+        boolean needModeFix = adventureDeployWaiting
+            ? player.gameMode.getGameModeForPlayer() != net.minecraft.world.level.GameType.ADVENTURE
+            : !player.isSpectator();
+
         boolean teleported = enforceLockedPosition(player, lock);
-        // 传送后立即强制失明；否则 3 秒节流重推，其余 tick 仅补缺失效果
-        boolean forceBlind = teleported || (player.tickCount % 60) == 0;
-        maintainHoldWithoutTeleport(player, forceBlind);
+        boolean forceBlind = teleported || needModeFix
+            || Math.floorMod(player.tickCount, 60) == shard;
+        maintainHoldWithoutTeleport(player, forceBlind, adventureDeployWaiting);
     }
 
     /**
@@ -973,7 +1021,8 @@ public class BastionEventHandler {
     private static boolean enforceLockedPosition(ServerPlayer player, net.minecraft.world.phys.Vec3 lock) {
         player.setDeltaMovement(0, 0, 0);
         player.fallDistance = 0f;
-        if (player.distanceToSqr(lock) > 0.04) {
+        // 略放宽阈值，减少无意义 teleport（0.5 格²）
+        if (player.distanceToSqr(lock) > 0.25) {
             player.teleportTo(player.serverLevel(), lock.x, lock.y, lock.z,
                 player.getYRot(), player.getXRot());
             player.setDeltaMovement(0, 0, 0);
@@ -982,8 +1031,13 @@ public class BastionEventHandler {
         return false;
     }
 
-    private static void maintainHoldWithoutTeleport(ServerPlayer player, boolean forceBlindResync) {
-        GameStateManager.enforceSpectatorBlindness(player, forceBlindResync);
+    private static void maintainHoldWithoutTeleport(
+            ServerPlayer player, boolean forceBlindResync, boolean adventureDeployWaiting) {
+        if (adventureDeployWaiting) {
+            GameStateManager.enforceAdventureBlindness(player, forceBlindResync);
+        } else {
+            GameStateManager.enforceSpectatorBlindness(player, forceBlindResync);
+        }
     }
 
     private static void applyWaitingDeployState(ServerPlayer player) {

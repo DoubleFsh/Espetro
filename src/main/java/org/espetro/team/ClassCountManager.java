@@ -15,6 +15,7 @@ import org.espetro.stats.PlayerMatchStatsManager;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 职业人数管理器
@@ -41,6 +42,8 @@ public class ClassCountManager {
     // 与当前职业记录分离，避免离队、死亡或短线重连绕过换职冷却。
     private final ClassSwitchCooldownTracker classSwitchCooldowns =
         new ClassSwitchCooldownTracker();
+    /** 最近一次 TEAMMATES_NEED 拒绝时的需求人数（供 messageFor 读取后清除）。 */
+    private static final Map<UUID, Integer> pendingTeammatesNeedMessage = new ConcurrentHashMap<>();
 
     public ClassCountManager() {
         INSTANCE = this;
@@ -250,6 +253,15 @@ public class ClassCountManager {
             return SelectionResult.REQUIRES_SQUAD;
         }
 
+        // teammates_need：小队至少 N 人（含自己）才可选该职
+        if (kit.teammatesNeed > 0) {
+            int squadSize = SquadManager.getInstance().getSquadMemberUuids(team, squadId).size();
+            if (squadSize < kit.teammatesNeed) {
+                pendingTeammatesNeedMessage.put(uuid, kit.teammatesNeed);
+                return SelectionResult.TEAMMATES_NEED;
+            }
+        }
+
         // 同职业换变体时，玩家仍占父职业 1 个名额，不重复检查职业满员；
         // 换到其它职业时，目标职业人数按当前（不含自己）计算。
         boolean changingClass = !classId.equals(oldClassId);
@@ -318,6 +330,7 @@ public class ClassCountManager {
         }
         playerClasses.put(uuid, classId);
         playerVariants.put(uuid, variantId);
+        ClassEquipment.applyClassBonuses(player, kit);
 
         if (playerFactions.get(uuid) == null) {
             String factionId = extractFactionId(classId);
@@ -350,7 +363,46 @@ public class ClassCountManager {
         VARIANT_FULL,
         REQUIRES_SQUAD,
         SQUAD_CLASS_FULL,
-        CLASS_SWITCH_COOLDOWN
+        CLASS_SWITCH_COOLDOWN,
+        OUT_OF_RANGE,
+        /** 小队人数不足 teammates_need */
+        TEAMMATES_NEED
+    }
+
+    /** 用户可读拒绝文案（聊天 / AuraTip）。 */
+    public static String messageFor(SelectionResult result, UUID playerId) {
+        if (result == null) {
+            return "§c当前无法选择该职业。";
+        }
+        return switch (result) {
+            case SUCCESS -> "";
+            case CLASS_FULL -> "§c该职业全队人数已满！请选择其他职业。";
+            case VARIANT_FULL -> "§c该装备变体人数已满！请选择其他变体。";
+            case SQUAD_CLASS_FULL -> "§c本小队该职业人数已满！请选择其他职业或小队。";
+            case REQUIRES_SQUAD -> "§c请先加入班组小队后再选择职业！";
+            case TEAMMATES_NEED -> {
+                Integer need = playerId != null ? pendingTeammatesNeedMessage.remove(playerId) : null;
+                yield need != null
+                    ? teammatesNeedMessage(need)
+                    : "§c该职业需要小队人数达到要求后才能选择！";
+            }
+            case CLASS_SWITCH_COOLDOWN -> {
+                int sec = INSTANCE != null
+                    ? INSTANCE.getClassSwitchCooldownRemaining(playerId) : 0;
+                yield "§c职业切换冷却中，还需等待 " + Math.max(1, sec) + " 秒。";
+            }
+            case INVALID_VARIANT -> "§c无效的职业装备变体。";
+            case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
+            case NO_TEAM -> "§c你尚未加入攻防方，无法选择职业。";
+            case OUT_OF_RANGE -> "§c只能在选择部署点时、原部署点附近或己方 Radio 轮盘中选择职业！";
+        };
+    }
+
+    /**
+     * 可读文案：带上具体 teammates_need 数字（客户端灰显提示可用）。
+     */
+    public static String teammatesNeedMessage(int need) {
+        return "§c该职业需要小队至少 " + Math.max(1, need) + " 人！";
     }
 
     public int countClassInSquad(String team, int squadId, String classId) {
@@ -554,6 +606,48 @@ public class ClassCountManager {
                     variants.put(variant.id, team == null
                         ? getVariantCount(kit.id, variant.id)
                         : getVariantCount(team, kit.id, variant.id));
+                }
+            }
+            result.put(kit.id, variants);
+        }
+        return result;
+    }
+
+    /** Per-viewer squad counts used by the lightweight deploy-state packet. */
+    public Map<String, Integer> getSquadCountsForViewer(
+        UUID viewerId,
+        String team,
+        String factionId
+    ) {
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        Map<String, Integer> result = new HashMap<>();
+        for (FactionDataLoader.ClassKitData kit : loader.getClassesForFaction(factionId)) {
+            result.put(kit.id, getSquadClassCountForViewer(viewerId, team, kit.id));
+        }
+        return result;
+    }
+
+    /**
+     * Variant limits for team_count kits are squad-scoped; other kits remain
+     * team-scoped. This mirrors selectClassVariant without rebuilding the full
+     * equipment-preview packet.
+     */
+    public Map<String, Map<String, Integer>> getVariantCountsForViewer(
+        UUID viewerId,
+        String team,
+        String factionId
+    ) {
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        int squadId = SquadManager.getInstance().getPlayerSquadId(viewerId);
+        Map<String, Map<String, Integer>> result = new HashMap<>();
+        for (FactionDataLoader.ClassKitData kit : loader.getClassesForFaction(factionId)) {
+            Map<String, Integer> variants = new HashMap<>();
+            if (kit.variants != null) {
+                for (FactionDataLoader.ClassVariantData variant : kit.variants.values()) {
+                    int count = kit.teamCount
+                        ? countVariantInSquad(team, squadId, kit.id, variant.id)
+                        : getVariantCount(team, kit.id, variant.id);
+                    variants.put(variant.id, count);
                 }
             }
             result.put(kit.id, variants);

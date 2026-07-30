@@ -69,8 +69,9 @@ public final class LogisticsConfig {
         public int ammoCrateConstructionCost = 100;
         @SerializedName("default_resupply_ammo_cost")
         public int defaultResupplyAmmoCost = 50;
+        /** HAB 建成后启用倒计时（秒）。0 = 建成即可部署（仍受覆盖/压制约束）。 */
         @SerializedName("hab_activation_seconds")
-        public int habActivationSeconds = 30;
+        public int habActivationSeconds = 0;
         @SerializedName("hab_reactivation_seconds")
         public int habReactivationSeconds = 30;
         @SerializedName("hab_disable_radio_health")

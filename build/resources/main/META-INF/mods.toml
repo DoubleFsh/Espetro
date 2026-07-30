@@ -91,6 +91,7 @@ versionRange = "[1.1.1-beta,)"
 ordering = "AFTER"
 side = "BOTH"
 
+
 [[dependencies."espetro"]]
 modId = "rhino"
 mandatory = true
@@ -100,7 +101,7 @@ side = "BOTH"
 
 [[dependencies."espetro"]]
 modId = "architectury"
-mandatory = false
+mandatory = true
 versionRange = "[9.1.12,)"
 ordering = "AFTER"
 side = "BOTH"
@@ -114,7 +115,15 @@ side = "BOTH"
 
 [[dependencies."espetro"]]
 modId = "kubejs"
-mandatory = false
+mandatory = true
 versionRange = "[2001.6.5-build.26,)"
+ordering = "AFTER"
+side = "BOTH"
+
+# 残骸加速消失 mixin 目标；未安装时由 EspetroMixinPlugin 跳过 .sbw. mixin。
+[[dependencies."espetro"]]
+modId = "superbwarfare"
+mandatory = false
+versionRange = "[0,)"
 ordering = "AFTER"
 side = "BOTH"

@@ -2,7 +2,6 @@ package org.espetro.network;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import org.espetro.Espetro;
@@ -18,7 +17,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * 兵站选择 — 使用兵站记录坐标，不依赖区块加载/盔甲架实体检查
+ * 兵站选择 — 复活时优先传送到 HAB 核心实体（原版实体传送语义）。
  */
 public class BastionSelectionPacket {
 
@@ -73,7 +72,7 @@ public class BastionSelectionPacket {
     }
 
     /**
-     * 玩家选择兵站复活：只看存储坐标，不查区块、不查实体。
+     * 玩家选择兵站复活：优先传送到核心盔甲架实体；未加载时用记录坐标 + 临时 PORTAL。
      */
     public static boolean handleBastionSelect(ServerPlayer player, UUID bastionId) {
         String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
@@ -81,6 +80,15 @@ public class BastionSelectionPacket {
 
         String team = Espetro.getPlayerTeam(player);
         if (team == null) return false;
+
+        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
+        if (classId == null || classId.isEmpty()) {
+            player.sendSystemMessage(Component.literal("§c请先选择职业后再选择部署点！"));
+            NetworkManager.NET.send(
+                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                new ClassCountSyncPacket("§c请先选择职业后再选择部署点！", true));
+            return false;
+        }
 
         BastionData bastion = BastionManager.getInstance().getBastion(bastionId);
         if (bastion == null || !bastion.isActive() || !team.equals(bastion.getTeam())) {
@@ -95,34 +103,50 @@ public class BastionSelectionPacket {
             return false;
         }
 
-        if (!BastionManager.getInstance().isHabOperational(bastion)) {
-            player.sendSystemMessage(Component.literal("§c该 HAB 尚未激活或正被敌军压制，无法部署！"));
-            return false;
-        }
-
-        // 检查是否在等待复活
+        // 先校验等待态，避免非等待玩家反复触发 isHabOperational 的压制副作用
         if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
             player.sendSystemMessage(Component.literal("§c你已经完成了复活选择！"));
             return false;
         }
 
-        // 读取记录的盔甲架坐标，不强制加载远处区块。
-        BlockPos targetPos = BastionManager.getInstance().getRecordedArmorStandPosition(bastion);
-        if (targetPos == null) {
-            player.sendSystemMessage(Component.literal("§c该兵站缺少记录坐标或已失效，无法部署！"));
+        // applySuppression=true：真正选点时写入压制截止时间
+        if (!BastionManager.getInstance().isHabOperational(bastion, true)) {
+            String status = BastionManager.getInstance().getFobStatus(bastion);
+            player.sendSystemMessage(Component.literal(
+                "§c无法在该兵站部署：§e" + status
+                    + "§c（需己方 Radio 覆盖且未被敌方压制）"));
             return false;
         }
 
         // 改选 HAB：取消未完成的 Rally 波次队列，避免冷却结束后误拉回队包。
         TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
-        BastionManager.getInstance().clearWaiting(player.getUUID());
 
-        player.teleportTo(bastion.getLevel(),
-            targetPos.getX() + 0.5,
-            targetPos.getY(),
-            targetPos.getZ() + 0.5,
-            0f, 0f);
+        BastionManager manager = BastionManager.getInstance();
+        boolean queued = manager.teleportPlayerToHabAsync(player, bastion, success -> {
+            if (!success) {
+                player.sendSystemMessage(Component.literal(
+                    "§c兵站区块加载失败、超时或已失效，请重新选择部署点。"));
+                NetworkManager.sendUnifiedDeployScreen(player, -1);
+                return;
+            }
+            completeHabDeployment(player, bastion, manager);
+        });
+        if (!queued) {
+            if (manager.isHabTeleportPending(player.getUUID())) {
+                player.sendSystemMessage(Component.literal("§e正在准备该兵站，请稍候。"));
+                return true;
+            }
+            player.sendSystemMessage(Component.literal("§c该兵站缺少记录坐标或已失效，无法部署！"));
+        }
+        return queued;
+    }
 
+    private static void completeHabDeployment(
+        ServerPlayer player,
+        BastionData bastion,
+        BastionManager manager
+    ) {
+        manager.clearWaiting(player.getUUID());
         player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
         player.removeAllEffects();
 
@@ -134,9 +158,7 @@ public class BastionSelectionPacket {
             false, false, false
         ));
         GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
-
+        GameStateManager.getInstance().onMidGameDeployComplete(player);
         player.sendSystemMessage(Component.literal("§a已在 §e" + bastion.getName() + " §a复活！"));
-
-        return true;
     }
 }

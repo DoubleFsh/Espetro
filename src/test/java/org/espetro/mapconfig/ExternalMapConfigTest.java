@@ -141,6 +141,10 @@ class ExternalMapConfigTest {
         FactionDataLoader loader = new FactionDataLoader();
         loader.loadExternalFrozen(Map.of("compatible", compatible));
         assertTrue(loader.isCompatibleWithMap("compatible", map));
+        FactionDataLoader.ClassKitData[] classes =
+            loader.getClassesForFaction("compatible");
+        assertEquals(1, classes.length);
+        assertEquals(4, classes[0].teammatesNeed);
 
         Path overflow = temp.resolve("overflow.json");
         Files.writeString(overflow, factionJson(
@@ -226,6 +230,7 @@ class ExternalMapConfigTest {
                   "name": "Rifle",
                   "icon": "rifleman",
                   "maxPlayers": 1,
+                  "teammates_need": 4,
                   "commands": ["minecraft:bread 1"]
                 }
               }

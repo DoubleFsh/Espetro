@@ -93,16 +93,17 @@ public class CommanderSkillScreen extends MutilScreen {
             EspetroMutilWidgets.PANEL, EspetroMutilWidgets.BORDER));
 
         root.addChild(EspetroMutilWidgets.text(panelX + 10, panelY + 8,
-            "\u00a76\u00a7l指挥官技能", EspetroMutilWidgets.GOLD));
+            "\u00a76\u00a7l战术技能", EspetroMutilWidgets.GOLD));
 
         root.addChild(EspetroMutilWidgets.button(panelX + panelW - 50, panelY + 7, 40, 14,
             "关闭", () -> Minecraft.getInstance().setScreen(null)));
 
         root.addChild(EspetroMutilWidgets.rect(panelX + 10, panelY + 26, panelW - 20, 1, 0x25FFFFFF));
 
-        if (!isCommander) {
+        // isCommander 在同步包中表示「有技能入口」；列表已由服务端按 usableBy 过滤
+        if (skills.isEmpty()) {
             root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 50, panelW,
-                "\u00a7c你不是指挥官，无法使用技能", EspetroMutilWidgets.NEGATIVE));
+                "\u00a77当前角色无可用技能", EspetroMutilWidgets.MUTED));
             lastCooldownSignature = getCooldownSignature();
             return;
         }

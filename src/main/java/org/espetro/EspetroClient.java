@@ -35,6 +35,14 @@ public class EspetroClient {
             .addListener(EspetroClient::onLivingJump);
 
         org.espetro.client.gui.AuraTipRadialController.initialize();
+        org.espetro.client.gui.RadioRadialController.initialize();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.EquipZoneRenderer::onRenderLevel);
+        // AuraTip 默认画在 HUD；部署等主 GUI 打开时再叠一层到 Screen 之上
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.gui.AuraTipAboveScreen::onScreenRenderPost);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(EspetroClient::onRightClickBlock);
     }
 
     // ==================== 事件处理方法 ====================
@@ -62,6 +70,7 @@ public class EspetroClient {
         net.minecraft.client.KeyMapping radialKey =
             Espetro.KEY_RADIAL instanceof net.minecraft.client.KeyMapping key ? key : null;
         org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
+        org.espetro.client.gui.RadioRadialController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
         // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
         if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
@@ -109,6 +118,21 @@ public class EspetroClient {
                 }
             }
         }
+    }
+
+    /** 右键己方 Radio：打开电台 AuraTip 轮盘。 */
+    private static void onRightClickBlock(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
+        if (!event.getLevel().isClientSide()) {
+            return;
+        }
+        net.minecraft.world.level.block.state.BlockState state = event.getLevel().getBlockState(event.getPos());
+        if (!(state.getBlock() instanceof org.espetro.bastion.RadioBlock)) {
+            return;
+        }
+        // 客户端先请求服务端校验并推送职业列表；成功后再开轮盘
+        org.espetro.client.gui.RadioRadialController.requestOpen(event.getPos());
+        event.setCanceled(true);
+        event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
     }
 
     private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {

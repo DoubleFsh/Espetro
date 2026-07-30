@@ -54,7 +54,10 @@ public final class BattlefieldContext {
                 previous.esPoints.tacticalMapJson,
                 previous.esPoints.capturePointsJson,
                 previous.esPoints.backgroundImage,
-                previous.esPoints.backgroundBytes()
+                previous.esPoints.backgroundBytes(),
+                previous.esPoints.backgroundSha256,
+                previous.esPoints.backgroundWidth,
+                previous.esPoints.backgroundHeight
             );
             MinecraftForge.EVENT_BUS.post(new BattlefieldLifecycleEvent.Cleared(snapshot));
             Espetro.LOGGER.info("已清除活动战场配置");

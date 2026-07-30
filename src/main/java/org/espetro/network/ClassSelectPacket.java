@@ -1,22 +1,18 @@
 package org.espetro.network;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.espetro.Espetro;
-import org.espetro.bastion.BastionData;
-import org.espetro.bastion.BastionItems;
-import org.espetro.bastion.BastionManager;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.ClassEquipment;
+import org.espetro.team.ClassEquipmentZones;
 import org.espetro.team.ClassSelectManager;
+import org.espetro.bastion.BastionManager;
+import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
-import org.espetro.team.OutpostManager;
-import org.espetro.team.SpawnPointConfig;
-import org.espetro.team.VoteManager;
 
 import java.util.function.Supplier;
 
@@ -26,31 +22,62 @@ import java.util.function.Supplier;
  */
 public class ClassSelectPacket {
 
+    public enum Source {
+        /** J 键统一部署界面：只允许等待选点或位于本方原部署点。 */
+        DEPLOY_SCREEN,
+        /** 右键己方 Radio 打开的 AuraTip 职业轮盘。 */
+        RADIO
+    }
+
     private final String teamOrFaction; // ATTACK/DEFEND 或 factionId
     private final String classId;
     private final String variantId;
+    private final Source source;
+    private final BlockPos sourcePos;
 
     public ClassSelectPacket(String teamOrFaction, String classId) {
-        this(teamOrFaction, classId, "");
+        this(teamOrFaction, classId, "", Source.DEPLOY_SCREEN, BlockPos.ZERO);
     }
 
     public ClassSelectPacket(String teamOrFaction, String classId, String variantId) {
+        this(teamOrFaction, classId, variantId, Source.DEPLOY_SCREEN, BlockPos.ZERO);
+    }
+
+    public ClassSelectPacket(String teamOrFaction, String classId, String variantId,
+                             Source source, BlockPos sourcePos) {
         this.teamOrFaction = teamOrFaction;
         this.classId = classId;
         this.variantId = variantId != null ? variantId : "";
+        this.source = source != null ? source : Source.DEPLOY_SCREEN;
+        this.sourcePos = sourcePos != null ? sourcePos.immutable() : BlockPos.ZERO;
+    }
+
+    public static ClassSelectPacket fromRadio(String teamOrFaction, String classId,
+                                               String variantId, BlockPos radioPos) {
+        return new ClassSelectPacket(
+            teamOrFaction, classId, variantId, Source.RADIO, radioPos);
     }
 
     public static ClassSelectPacket read(FriendlyByteBuf buf) {
         String teamOrFaction = buf.readUtf();
         String classId = buf.readUtf();
         String variantId = buf.readUtf();
-        return new ClassSelectPacket(teamOrFaction, classId, variantId);
+        Source source;
+        try {
+            source = Source.valueOf(buf.readUtf());
+        } catch (IllegalArgumentException ignored) {
+            source = Source.DEPLOY_SCREEN;
+        }
+        BlockPos sourcePos = buf.readBlockPos();
+        return new ClassSelectPacket(teamOrFaction, classId, variantId, source, sourcePos);
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeUtf(teamOrFaction);
         buf.writeUtf(classId);
         buf.writeUtf(variantId);
+        buf.writeUtf(source.name());
+        buf.writeBlockPos(sourcePos);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -70,78 +97,39 @@ public class ClassSelectPacket {
 
             // 否则作为职业选择处理（在战斗/部署阶段）
             ClassCountManager countManager = ClassCountManager.getInstance();
+            GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+            if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) {
+                denyOutOfRange(player);
+                return;
+            }
 
             String currentClass = countManager.getPlayerClass(player.getUUID());
             String currentVariant = countManager.getPlayerVariant(player.getUUID());
 
-            // 检查是否在部署点或兵站周边6格范围内
-            BlockPos playerPos = player.blockPosition();
-            boolean inRange = false;
-
-            // 1) 检查玩家已保存的原部署点（传送/死亡时保存的）
-            BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(player.getUUID());
-            if (deployPoint != null && playerPos.closerThan(deployPoint.pos, 6)) {
-                inRange = true;
-            }
-
-            // 2) 始终检查 SpawnPointConfig 中该队伍当前配置的部署点
-            //    （覆盖 /espetro spawnpoint here 重新设置后旧记录不同步的情况）
-            if (!inRange) {
-                String team = countManager.getEffectivePlayerTeam(player.getUUID());
-                if (team != null) {
-                    SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
-                    if (spawn != null) {
-                        BlockPos teamSpawnPos = new BlockPos((int) spawn.x, (int) spawn.y, (int) spawn.z);
-                        if (playerPos.closerThan(teamSpawnPos, 6)) {
-                            inRange = true;
-                        }
-                    }
-                }
-            }
-
-            // 3) 检查兵站周边
-            if (!inRange) {
-                String team = countManager.getEffectivePlayerTeam(player.getUUID());
-                for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
-                    BlockPos bastionPos = BastionManager.getInstance().getRecordedArmorStandPosition(bastion);
-                    if (team != null
-                        && team.equals(bastion.getTeam())
-                        && bastion.isActive()
-                        && bastionPos != null
-                        && playerPos.closerThan(bastionPos, 6)) {
-                        inRange = true;
-                        break;
-                    }
-                }
-            }
-
-            // 4) 布防期内，防守方在前哨基地周边也可选择职业
-            if (!inRange && OutpostManager.getInstance().isPlayerNearAvailableOutpost(player, 6)) {
-                inRange = true;
-            }
-
-            if (!inRange) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你不在部署点、兵站或可用前哨基地周边6格范围内！无法选择职业。"));
+            /*
+             * 入口必须由服务端重新验证，客户端传入的 source 只决定校验路径：
+             * - 部署界面：仍在选择部署点，或已落地但位于本方原部署点；
+             * - Radio：点击位置仍是附近己方有效 Radio。
+             * 不再把普通 HAB、个人上次部署点或前哨当作 J 键换职区。
+             */
+            boolean allowed = source == Source.RADIO
+                ? RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos)
+                : BastionManager.getInstance().isWaitingForBastion(player.getUUID())
+                    || ClassEquipmentZones.isPlayerNearOriginalSpawn(player);
+            if (!allowed) {
+                denyOutOfRange(player);
                 return;
             }
 
             ClassCountManager.SelectionResult selection =
                 countManager.selectClassVariant(player, classId, variantId);
             if (selection != ClassCountManager.SelectionResult.SUCCESS) {
-                String message = switch (selection) {
-                    case CLASS_FULL -> "§c该职业人数已满！请选择其他职业。";
-                    case VARIANT_FULL -> "§c该装备变体人数已满！请选择其他变体。";
-                    case SQUAD_CLASS_FULL -> "§c本小队该职业人数已满！请选择其他职业或小队。";
-                    case REQUIRES_SQUAD -> "§c请先加入班组小队后再选择职业！";
-                    case CLASS_SWITCH_COOLDOWN -> "§c职业切换冷却中，还需等待 "
-                        + countManager.getClassSwitchCooldownRemaining(player.getUUID())
-                        + " 秒。";
-                    case INVALID_VARIANT -> "§c无效的职业装备变体。";
-                    case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
-                    default -> "§c当前无法选择该职业装备变体。";
-                };
-                ClassCountSyncPacket errorPacket = new ClassCountSyncPacket(message, true);
-                NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), errorPacket);
+                String message = ClassCountManager.messageFor(selection, player.getUUID());
+                if (message.isEmpty()) {
+                    message = "§c当前无法选择该职业装备变体。";
+                }
+                NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
+                    new ClassCountSyncPacket(message, true));
                 return;
             }
 
@@ -149,7 +137,16 @@ public class ClassSelectPacket {
                 && countManager.getPlayerVariant(player.getUUID()).equals(currentVariant);
             String actualFactionId = countManager.getPlayerFaction(player.getUUID());
             String selectedVariantId = countManager.getPlayerVariant(player.getUUID());
-            if (!sameSelection) {
+            /*
+             * 死亡/中途加入的等待部署状态只预留职业名额，不在高空旁观位发装。
+             * 真正落地统一由 GameStateManager.onMidGameDeployComplete 发放一次。
+             */
+            boolean awaitingDeployment =
+                BastionManager.getInstance().isWaitingForBastion(player.getUUID())
+                    || player.isSpectator();
+            // 已落地换职必发装；同职再点仅在背包被清空时补发，避免误点刷弹药。
+            if (!awaitingDeployment
+                && (!sameSelection || ClassEquipment.needsLoadout(player))) {
                 ClassEquipment.equipPlayer(player, actualFactionId, classId, selectedVariantId);
             }
 
@@ -158,14 +155,20 @@ public class ClassSelectPacket {
 
             String team = countManager.getEffectivePlayerTeam(player.getUUID());
             String factionId = countManager.getPlayerFaction(player.getUUID());
-            // 不再 syncSquadsToTeam：成员 className 变化曾触发整页 rebuild 闪烁。
-            // 给同队玩家发完整部署包以更新小队作用域人数；客户端 updateSquads
-            // 在结构未变时不会 rebuild。
+            // Small count + squad packets replace the old full deploy-screen
+            // fan-out (which repeated every ItemStack preview for every player).
             NetworkManager.broadcastClassCounts(team,
                 factionId != null ? factionId : teamOrFaction);
-            NetworkManager.refreshUnifiedDeployScreensForTeam(team);
+            NetworkManager.syncSquadsToTeam(team);
         });
         ctx.get().setPacketHandled(true);
     }
 
+    private static void denyOutOfRange(ServerPlayer player) {
+        String message = ClassCountManager.messageFor(
+            ClassCountManager.SelectionResult.OUT_OF_RANGE, player.getUUID());
+        NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
+            new ClassCountSyncPacket(message, true));
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(message));
+    }
 }

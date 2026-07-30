@@ -1,6 +1,7 @@
 package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.espetro.team.FactionDataLoader;
 import org.espetro.team.FactionDataProvider;
@@ -34,6 +35,11 @@ public class FactionSelectionScreen extends MutilScreen {
         factions = Arrays.stream(loader.getFactionArray())
             .filter(f -> f != null && f.name != null && !f.name.contains("空降兵团"))
             .toArray(FactionDataLoader.FactionData[]::new);
+    }
+
+    @Override
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
     @Override

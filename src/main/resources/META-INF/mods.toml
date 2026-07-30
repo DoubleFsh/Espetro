@@ -91,6 +91,7 @@ versionRange = "[${auratip_version},)"
 ordering = "AFTER"
 side = "BOTH"
 
+
 [[dependencies."${mod_id}"]]
 modId = "rhino"
 mandatory = true
@@ -100,7 +101,7 @@ side = "BOTH"
 
 [[dependencies."${mod_id}"]]
 modId = "architectury"
-mandatory = false
+mandatory = true
 versionRange = "[${architectury_version},)"
 ordering = "AFTER"
 side = "BOTH"
@@ -114,7 +115,15 @@ side = "BOTH"
 
 [[dependencies."${mod_id}"]]
 modId = "kubejs"
-mandatory = false
+mandatory = true
 versionRange = "[${kubejs_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+# 残骸加速消失 mixin 目标；未安装时由 EspetroMixinPlugin 跳过 .sbw. mixin。
+[[dependencies."${mod_id}"]]
+modId = "superbwarfare"
+mandatory = false
+versionRange = "[0,)"
 ordering = "AFTER"
 side = "BOTH"

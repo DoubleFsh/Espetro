@@ -29,6 +29,7 @@ public class GameConfig {
     private static int attackFactionSelectSeconds = 30;
     private static int factionPoolSize = 6;
     private static int respawnInvincibilityTicks = 60;
+    private static double mainBaseInvulnerabilityRadius = 150.0;
     private static int classSwitchCooldownSeconds = 60;
     private static double teammateNameTagDistance = 10.0;
     private static double waitingY = 200.0;
@@ -139,6 +140,13 @@ public class GameConfig {
         return respawnInvincibilityTicks;
     }
 
+    /**
+     * 本方原部署点的水平无敌半径。0 表示关闭原部署点无敌区。
+     */
+    public static double getMainBaseInvulnerabilityRadius() {
+        return mainBaseInvulnerabilityRadius;
+    }
+
     public static int getClassSwitchCooldownSeconds() {
         return classSwitchCooldownSeconds;
     }
@@ -234,6 +242,7 @@ public class GameConfig {
         factionRevealSeconds = s.factionRevealSeconds;
         roundEndSeconds = s.roundEndSeconds;
         respawnInvincibilityTicks = s.respawnInvincibilityTicks;
+        mainBaseInvulnerabilityRadius = s.mainBaseInvulnerabilityRadius;
         classSwitchCooldownSeconds = s.classSwitchCooldownSeconds;
         teammateNameTagDistance = s.teammateNameTagDistance;
         waitingY = s.waitingY;
@@ -251,9 +260,10 @@ public class GameConfig {
         commanderVacancySeconds = s.commanderVacancySeconds;
         // required_players is deprecated; tutorial steps are AuraTip-driven (manual).
         loaded = true;
-        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 换职冷却{}s 弹劾{}s/冷却{}s",
+        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 原部署点无敌半径{} 换职冷却{}s 弹劾{}s/冷却{}s",
             teamSelectSeconds, deployTimeoutSeconds, factionRevealSeconds, roundEndSeconds,
-            classSwitchCooldownSeconds, impeachmentVoteSeconds, impeachmentCooldownSeconds);
+            mainBaseInvulnerabilityRadius, classSwitchCooldownSeconds,
+            impeachmentVoteSeconds, impeachmentCooldownSeconds);
     }
 
     public static boolean isTutorialEnabled() {
