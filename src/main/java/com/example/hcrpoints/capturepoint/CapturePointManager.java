@@ -937,14 +937,14 @@ public class CapturePointManager {
         // 如果所有据点都被进攻方占领，处理批次推进或结束
         if (allCapturedByAttacker) {
             // 每完成一个批次，给进攻方增加200兵力
-            int cmdResult = server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "/espetro troops add ATTACK 200");
-            ModLogger.info("批次 " + currentBatch + " 完成，执行命令：espetro troops add ATTACK 200，返回值：" + cmdResult);
+            int cmdResult = server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "/espetro troops add ATTACK 50");
+            ModLogger.info("批次 " + currentBatch + " 完成，执行命令：espetro troops add ATTACK 50，返回值：" + cmdResult);
             
             // 向所有进攻方玩家发送批次完成消息
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 Team playerTeam = player.getTeam();
                 if (playerTeam != null && playerTeam.getName().equals(attackerTeam)) {
-                    player.sendSystemMessage(Component.literal("§6[据点] §e第 " + currentBatch + " 批次据点已全部占领！进攻方获得 200 兵力增援！"));
+                    player.sendSystemMessage(Component.literal("§6[据点] §e第 " + currentBatch + " 批次据点已全部占领！进攻方获得 50 兵力增援！"));
                 }
             }
             
@@ -1252,6 +1252,29 @@ public class CapturePointManager {
                         if (captorName != null && !captorName.isEmpty()) {
                             ModLogger.info("占领者 " + captorName + " 占领据点 " + point.getName());
                             
+                            // 进攻方占领时，向双方发送副标题和音效
+                            String attackerTeam = getAttackerTeam();
+                            if (attackerTeam != null && captorName.equals(attackerTeam)) {
+                                String defenderTeam = getDefenderTeam();
+                                net.minecraft.network.chat.Component attackerMsg =
+                                    net.minecraft.network.chat.Component.literal("§a阵地已夺取，继续进攻！");
+                                net.minecraft.network.chat.Component defenderMsg =
+                                    net.minecraft.network.chat.Component.literal("§c阵地丢失，后撤继续防守！");
+                                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                                    Team pt = p.getTeam();
+                                    if (pt == null) continue;
+                                    if (pt.getName().equals(attackerTeam)) {
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(attackerMsg));
+                                        p.playNotifySound(net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,
+                                            net.minecraft.sounds.SoundSource.MASTER, 1.0F, 1.0F);
+                                    } else if (defenderTeam != null && pt.getName().equals(defenderTeam)) {
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(defenderMsg));
+                                        p.playNotifySound(net.minecraft.sounds.SoundEvents.BEACON_DEACTIVATE,
+                                            net.minecraft.sounds.SoundSource.MASTER, 1.0F, 1.0F);
+                                    }
+                                }
+                            }
+
                             // 检查是否是刷分操作：如果据点脱离已占领状态3秒内又回到已占领状态，不给予奖励
                             long scoreSpamCheckTime = System.currentTimeMillis();
                             Long lastLostTime = lastLostCaptureTime.get(point.getName());
@@ -1842,8 +1865,7 @@ public class CapturePointManager {
             boolean success = (Boolean) removePointsMethod.invoke(null, player, points);
             
             if (success) {
-                // 手动发送系统消息给玩家，告知扣分原因
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("你因为" + reason + "被扣了" + points + "点！"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你因为" + reason + "被扣了" + points + "点！"));
                 ModLogger.info("为玩家 " + player.getName().getString() + " 扣除了 " + points + " 点数，原因：" + reason);
             } else {
                 ModLogger.warn("为玩家 " + player.getName().getString() + " 扣除点数失败，原因：" + reason);

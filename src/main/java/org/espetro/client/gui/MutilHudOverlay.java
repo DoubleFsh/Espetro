@@ -15,12 +15,19 @@ public final class MutilHudOverlay {
     private static GuiElement root;
     private static int width = -1;
     private static int height = -1;
+    private static int tickCounter;
+    /** 每 N 帧渲染一次；跳过中间帧，降低 HUD 渲染开销。设为 1 即每帧渲染。 */
+    private static final int HUD_RENDER_INTERVAL = 10;
 
     private MutilHudOverlay() {
     }
 
     public static void render(GuiGraphics graphics, Minecraft minecraft, float partialTick) {
         if (minecraft == null || minecraft.level == null || minecraft.options.hideGui) {
+            return;
+        }
+        tickCounter++;
+        if (tickCounter % HUD_RENDER_INTERVAL != 0) {
             return;
         }
         int nextWidth = graphics.guiWidth();

@@ -250,13 +250,13 @@ public class TroopCountManager {
             manager.modifyAttackTroops(-(troopValue + commandPenalty));
             String msg = "§c☠ 攻方 [" + player.getName().getString() + "] 阵亡！- " + troopValue + " 兵力";
             if (isCommander) msg += " §c(指挥官额外 -" + commandPenalty + ")";
-            Espetro.broadcastToAll(msg);
+            Espetro.broadcastToTeam(team, msg);
             Espetro.LOGGER.info("攻方 {} 阵亡(指挥官={})，扣除 {}{} 兵力，剩余: {}", player.getName().getString(), isCommander, troopValue, commandPenalty > 0 ? "+" + commandPenalty : "", manager.getAttackTroops());
         } else {
             manager.modifyDefendTroops(-(troopValue + commandPenalty));
             String msg = "§9☠ 守方 [" + player.getName().getString() + "] 阵亡！- " + troopValue + " 兵力";
             if (isCommander) msg += " §9(指挥官额外 -" + commandPenalty + ")";
-            Espetro.broadcastToAll(msg);
+            Espetro.broadcastToTeam(team, msg);
             Espetro.LOGGER.info("守方 {} 阵亡(指挥官={})，扣除 {}{} 兵力，剩余: {}", player.getName().getString(), isCommander, troopValue, commandPenalty > 0 ? "+" + commandPenalty : "", manager.getDefendTroops());
         }
 

@@ -384,8 +384,8 @@ public class BastionEventHandler {
             error = "§c本方生效 Radio 数量已达到上限（" + manager.getBastionLimitPerTeam() + "个）！";
         }
         if (error == null
-            && manager.findNearestRadio(level, pos, null, radio.exclusionRadius) != null) {
-            error = "§c附近已有 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
+            && manager.findNearestRadio(level, pos, team, radio.exclusionRadius) != null) {
+            error = "§c附近已有己方 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
         }
         if (error == null && radio.teammateCount > 0) {
             int nearby = countNearbyTeammates(player, team, pos, radio.teammateRadius);

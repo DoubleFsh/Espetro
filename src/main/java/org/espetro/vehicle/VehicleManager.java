@@ -589,11 +589,11 @@ public class VehicleManager {
         String displayName = getDisplayName(data.factionId(), data.vehicleType());
         if ("ATTACK".equals(data.team())) {
             troopManager.modifyAttackTroops(-penalty);
-            Espetro.broadcastToAll("§c☠ 攻方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
+            Espetro.broadcastToTeam(data.team(), "§c☠ 攻方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
             Espetro.LOGGER.info("攻方载具 {} 被摧毁，扣除 {} 兵力，剩余: {}", displayName, penalty, troopManager.getAttackTroops());
         } else if ("DEFEND".equals(data.team())) {
             troopManager.modifyDefendTroops(-penalty);
-            Espetro.broadcastToAll("§9☠ 守方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
+            Espetro.broadcastToTeam(data.team(), "§9☠ 守方载具 [" + displayName + "] 被摧毁！- " + penalty + " 兵力");
             Espetro.LOGGER.info("守方载具 {} 被摧毁，扣除 {} 兵力，剩余: {}", displayName, penalty, troopManager.getDefendTroops());
         }
         troopManager.checkVictoryCondition();

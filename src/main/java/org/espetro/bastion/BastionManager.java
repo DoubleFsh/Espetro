@@ -688,16 +688,10 @@ public class BastionManager {
                 Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
                 Espetro.broadcastToTeam(bastionTeam,
                     "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
-                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-                Espetro.broadcastToTeam(enemyTeam,
-                    "§a[Radio] 敌方 Radio §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
             } else {
                 Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
                 Espetro.broadcastToTeam(bastionTeam,
                     "§c[兵站] §e" + bastionName + " §c已被摧毁！无法再从此点复活（不扣兵力）。");
-                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-                Espetro.broadcastToTeam(enemyTeam,
-                    "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！");
             }
 
             ServerPlayer commander = findCommanderForTeam(bastionTeam);

@@ -375,11 +375,11 @@ public class EspetroCommand {
                                 if ("ATTACK".equals(team)) {
                                     int current = TroopCountManager.getInstance().getAttackTroops();
                                     TroopCountManager.getInstance().setAttackTroops(current + value);
-                                    Espetro.broadcastToAll("§6[管理] 攻方兵力增加了 " + value + " (当前: §c" + (current + value) + "§6)");
+                                    Espetro.broadcastToTeam("ATTACK", "§6[管理] 攻方兵力增加了 " + value + " (当前: §c" + (current + value) + "§6)");
                                 } else {
                                     int current = TroopCountManager.getInstance().getDefendTroops();
                                     TroopCountManager.getInstance().setDefendTroops(current + value);
-                                    Espetro.broadcastToAll("§6[管理] 守方兵力增加了 " + value + " (当前: §9" + (current + value) + "§6)");
+                                    Espetro.broadcastToTeam("DEFEND", "§6[管理] 守方兵力增加了 " + value + " (当前: §9" + (current + value) + "§6)");
                                 }
                                 return 1;
                             })

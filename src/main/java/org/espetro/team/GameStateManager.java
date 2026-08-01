@@ -1614,7 +1614,7 @@ public class GameStateManager {
                 player.sendSystemMessage(Component.literal(
                     "§a✅ 增援到达部署阶段！请在左侧面板选择职业和部署点"));
 
-                Espetro.broadcastToAll("§e⚡ 增援到达！" + player.getName().getString()
+                Espetro.broadcastToTeam(team, "§e⚡ 增援到达！" + player.getName().getString()
                     + " 加入了" + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方")
                     + " §7(部署中)");
             }
@@ -1657,7 +1657,7 @@ public class GameStateManager {
 
                 NetworkManager.sendUnifiedDeployScreen(player, -1);
 
-                Espetro.broadcastToAll("§e⚡ 增援到达！" + player.getName().getString()
+                Espetro.broadcastToTeam(team, "§e⚡ 增援到达！" + player.getName().getString()
                     + " 加入了" + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方"));
             }
 
