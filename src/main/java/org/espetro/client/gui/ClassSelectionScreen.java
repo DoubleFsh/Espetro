@@ -346,6 +346,18 @@ public class ClassSelectionScreen extends MutilScreen {
                 10, 22, 0xAAAAAA);
         }
 
+        // 战局倒计时（右上角）
+        int btRemaining = ClientGameState.getBattleTimeRemaining();
+        if (btRemaining > 0) {
+            int min = btRemaining / 60;
+            int sec = btRemaining % 60;
+            String timerColor = btRemaining <= 60 ? "§c" : (btRemaining <= 300 ? "§e" : "§a");
+            String timerText = timerColor + "§l倒计时 " + String.format("%02d:%02d", min, sec);
+            int timerW = this.font.width(timerText);
+            graphics.drawString(this.font, Component.literal(timerText),
+                this.width - timerW - 10, 8, 0xFFFFFF);
+        }
+
         graphics.drawString(this.font, Component.literal("§e选择职业 §7(悬停查看装备)"),
             10, 36, 0xFFFFFF);
 

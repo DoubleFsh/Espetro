@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.protection.MainBaseProtectionTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-07-29T18:44:24" hostname="cachyos-x8664" time="0.001">
+<testsuite name="org.espetro.protection.MainBaseProtectionTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-08T01:42:00" hostname="DESKTOP-1GK3H0A" time="0.002">
   <properties/>
   <testcase name="horizontalRadiusIncludesBoundaryAndIgnoresHeight()" classname="org.espetro.protection.MainBaseProtectionTest" time="0.001"/>
   <testcase name="zeroRadiusDisablesProtection()" classname="org.espetro.protection.MainBaseProtectionTest" time="0.0"/>

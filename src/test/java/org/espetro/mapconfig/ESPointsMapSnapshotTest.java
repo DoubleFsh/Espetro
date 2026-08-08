@@ -72,7 +72,7 @@ class ESPointsMapSnapshotTest {
     @Test
     void rejectsPngPixelBombBeforeDecode(@TempDir Path dir) throws Exception {
         writeValidFiles(dir, "map.png");
-        Files.write(dir.resolve("map.png"), minimalPngHeader(100_000, 100_000));
+        Files.write(dir.resolve("map.png"), minimalPngHeader(20_000, 20_000));
 
         IOException error = assertThrows(IOException.class,
             () -> ESPointsMapSnapshot.load(dir));

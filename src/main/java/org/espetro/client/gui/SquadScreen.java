@@ -108,7 +108,7 @@ public class SquadScreen extends MutilScreen {
     public void updateFromDeployPacket(UnifiedDeployScreenPacket packet) {
         updateSquads(packet.getSquads(), packet.getMySquadId());
         if (parent instanceof UnifiedDeployScreen deployScreen) {
-            deployScreen.updateClassCounts(packet.getClassCounts(), packet.getVariantCounts());
+            deployScreen.updateClasses(packet.getClasses(), packet.getClassCounts(), packet.getVariantCounts());
             deployScreen.updateTimeRemaining(packet.getDeployTimeRemaining());
             deployScreen.updateDeploymentState(
                 packet.isWaitingForDeploySelection(),
@@ -223,9 +223,10 @@ public class SquadScreen extends MutilScreen {
         boolean joined = squad.id == mySquadId;
         boolean full = squad.memberCount >= squad.maxMembers && !joined;
         String count = "§7[" + squad.memberCount + "/" + squad.maxMembers + "]";
+        String lockIcon = squad.isLocked ? " §c🔒" : "";
         String marker = firstCodePoint(squad.categoryId, squad.categoryDisplayName);
         return (joined ? "§a" : full ? "§c" : "§f")
-            + squad.name + " " + count + (marker.isEmpty() ? "" : " §6[" + marker + "]");
+            + squad.name + " " + count + lockIcon + (marker.isEmpty() ? "" : " §6[" + marker + "]");
     }
 
     /** 原地刷新行按钮的标签/状态与展开三角。 */
@@ -235,9 +236,10 @@ public class SquadScreen extends MutilScreen {
             if (join != null) {
                 boolean joined = squad.id == mySquadId;
                 boolean full = squad.memberCount >= squad.maxMembers && !joined;
+                boolean blockedByLock = squad.isLocked && !joined;
                 join.setLabel(squadRowLabel(squad))
                     .setSelected(joined)
-                    .setEnabled(!full)
+                    .setEnabled(!full && !blockedByLock)
                     .setTextColor(full ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
             }
             EspetroMutilWidgets.ActionButton detail = rowDetailButtons.get(squad.id);
@@ -278,9 +280,22 @@ public class SquadScreen extends MutilScreen {
             EspetroMutilWidgets.MUTED, TEXT_SCALE));
 
         if (isLocalPlayerLeader(squad)) {
+            String lockLabel = squad.isLocked ? "解锁" : "锁定";
+            int lockColor = squad.isLocked ? EspetroMutilWidgets.POSITIVE : EspetroMutilWidgets.WARNING;
+            detailContainer.addChild(compactButton(x + width - 70, y + 11, 32, BUTTON_H,
+                lockLabel, () -> {
+                    if (squad.isLocked) {
+                        NetworkManager.unlockSquad();
+                    } else {
+                        NetworkManager.lockSquad();
+                    }
+                }).setTextColor(lockColor));
             detailContainer.addChild(compactButton(x + width - 36, y + 11, 32, BUTTON_H,
                 "删除", () -> NetworkManager.deleteSquad(squad.id))
                 .setTextColor(EspetroMutilWidgets.NEGATIVE));
+        } else if (squad.isLocked) {
+            detailContainer.addChild(compactText(x + width - 70, y + 13, 66,
+                "§c🔒 已锁定", EspetroMutilWidgets.MUTED, TEXT_SCALE));
         }
 
         ScrollableList detailList = new ScrollableList(x + 4, y + 25, width - 8, height - 29)

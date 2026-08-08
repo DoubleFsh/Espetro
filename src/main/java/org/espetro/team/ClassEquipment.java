@@ -33,6 +33,9 @@ import java.util.UUID;
 public class ClassEquipment {
 
     private static final Set<UUID> EQUIPMENT_MUTATION_PLAYERS = new HashSet<>();
+    /** Tracks the last equipped class key (factionId:classId:variantId) per player,
+     *  so that a class change forces re-equip even if the inventory still has items. */
+    private static final Map<UUID, String> LAST_EQUIPPED_KEY = new java.util.HashMap<>();
     /** Stable IDs make class changes replace modifiers instead of stacking them. */
     static final UUID CLASS_HEALTH_BONUS_ID =
         UUID.fromString("dd348d6d-91e3-4f54-aa7a-cd6847dad14a");
@@ -68,9 +71,12 @@ public class ClassEquipment {
     /**
      * 若玩家已有职业记录且当前像未发装，则按当前职业补发。
      * 落地部署后调用，避免「面板上已选职但背包空」。
+     * <p>
+     * 额外检查：若玩家当前职业与上次发装时不同，强制重新发装，
+     * 解决「死后换职业但旧装备仍留在背包导致新装备不生效」的问题。
      */
     public static void ensureEquippedIfNeeded(ServerPlayer player) {
-        if (player == null || !needsLoadout(player)) {
+        if (player == null) {
             return;
         }
         ClassCountManager counts = ClassCountManager.getInstance();
@@ -78,6 +84,14 @@ public class ClassEquipment {
         String variantId = counts.getPlayerVariant(player.getUUID());
         String factionId = counts.getPlayerFaction(player.getUUID());
         if (classId == null || variantId == null || factionId == null) {
+            return;
+        }
+
+        String currentKey = factionId + ":" + classId + ":" + variantId;
+        String lastKey = LAST_EQUIPPED_KEY.get(player.getUUID());
+        boolean classChanged = lastKey != null && !currentKey.equals(lastKey);
+
+        if (!classChanged && !needsLoadout(player)) {
             return;
         }
         equipPlayer(player, factionId, classId, variantId);
@@ -221,6 +235,8 @@ public class ClassEquipment {
         if (shouldAutoEquipWearables(variant)) {
             equipWearableItems(player);
         }
+        // 记录本次发装标识，用于后续判断职业是否变更
+        LAST_EQUIPPED_KEY.put(player.getUUID(), kit.factionId + ":" + kit.id + ":" + variant.id);
     }
 
     private static void beginEquipmentMutation(Player player) {
@@ -463,6 +479,7 @@ public class ClassEquipment {
         if (player == null) {
             return;
         }
+        LAST_EQUIPPED_KEY.remove(player.getUUID());
         float previousHealth = player.getHealth();
         removeModifier(player.getAttribute(Attributes.MAX_HEALTH), CLASS_HEALTH_BONUS_ID);
         removeModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), CLASS_SPEED_BONUS_ID);

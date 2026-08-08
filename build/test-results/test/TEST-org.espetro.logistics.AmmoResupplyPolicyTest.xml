@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.logistics.AmmoResupplyPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-07-29T18:44:21" hostname="cachyos-x8664" time="0.002">
+<testsuite name="org.espetro.logistics.AmmoResupplyPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-08T01:41:57" hostname="DESKTOP-1GK3H0A" time="0.002">
   <properties/>
   <testcase name="fullInventoryHasNoResupplyGap()" classname="org.espetro.logistics.AmmoResupplyPolicyTest" time="0.001"/>
   <testcase name="onlyMissingAmountCanBeGranted()" classname="org.espetro.logistics.AmmoResupplyPolicyTest" time="0.0"/>

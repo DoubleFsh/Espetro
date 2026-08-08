@@ -55,6 +55,7 @@ import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.tutorial.TutorialManager;
 import org.espetro.vehicle.VehicleCommand;
+import org.espetro.vehicle.VehCommand;
 import org.espetro.vehicle.VehicleManager;
 import org.espetro.mapconfig.ExternalConfigBootstrap;
 import org.espetro.stats.PlayerMatchStatsManager;
@@ -233,6 +234,8 @@ public class Espetro {
                 MapVoteManager.init();
                 PlayerMatchStatsManager.init();
                 CommanderGovernanceManager.init();
+                // 初始化组队匹配管理器
+                org.espetro.team.PartyManager.getInstance();
                 // 启动时预加载易在热路径首次解析的类，避免运行中替换 jar 后懒加载 CNFE 拖垮服务端
                 TutorialManager.getInstance();
                 preloadCriticalClasses();
@@ -270,6 +273,7 @@ public class Espetro {
             EspetroCommand.register(event.getDispatcher());
             org.espetro.bastion.BastionCommand.register(event.getDispatcher());
             VehicleCommand.register(event.getDispatcher());
+            VehCommand.register(event.getDispatcher());
             event.getDispatcher().register(org.espetro.command.OutpostCommand.register());
         }
 
@@ -288,6 +292,10 @@ public class Espetro {
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
                 GameStateManager.getInstance().onPlayerJoin(serverPlayer);
+                // 指挥官断线重连恢复（仅 BATTLE / DEPLOYING 阶段尝试）
+                if (phase == GamePhase.BATTLE || phase == GamePhase.DEPLOYING) {
+                    CommanderGovernanceManager.getInstance().tryRestoreCommanderOnRejoin(serverPlayer);
+                }
                 Espetro.LOGGER.info("玩家 {} 在{}阶段加入", serverPlayer.getName().getString(),
                     phase.getDisplayName());
             }

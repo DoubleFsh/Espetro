@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.governance.CommanderGovernanceManagerTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-07-29T18:44:21" hostname="cachyos-x8664" time="0.009">
+<testsuite name="org.espetro.governance.CommanderGovernanceManagerTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-08T01:41:56" hostname="DESKTOP-1GK3H0A" time="0.008">
   <properties/>
-  <testcase name="vacancyEmptyVolunteersReturnsNull()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.002"/>
-  <testcase name="vacancyHighestVoteWins()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.001"/>
-  <testcase name="impeachmentNoVotesKeepsIncumbent()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.001"/>
-  <testcase name="impeachmentTieKeepsIncumbent()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.001"/>
-  <testcase name="vacancyTieBreaksByLeaderSinceThenUuid()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.0"/>
-  <testcase name="impeachmentChallengerNeedsStrictMajority()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.001"/>
+  <testcase name="vacancyEmptyVolunteersReturnsNull()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.003"/>
+  <testcase name="vacancyHighestVoteWins()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.002"/>
+  <testcase name="impeachmentNoVotesKeepsIncumbent()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.0"/>
+  <testcase name="impeachmentTieKeepsIncumbent()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.0"/>
+  <testcase name="vacancyTieBreaksByLeaderSinceThenUuid()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.001"/>
+  <testcase name="impeachmentChallengerNeedsStrictMajority()" classname="org.espetro.governance.CommanderGovernanceManagerTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

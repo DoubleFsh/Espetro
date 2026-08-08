@@ -688,16 +688,10 @@ public class BastionManager {
                 Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
                 Espetro.broadcastToTeam(bastionTeam,
                     "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
-                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-                Espetro.broadcastToTeam(enemyTeam,
-                    "§a[Radio] 敌方 Radio §e" + bastionName + " §a已被摧毁！敌方 -" + penalty + " 兵力");
             } else {
                 Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
                 Espetro.broadcastToTeam(bastionTeam,
                     "§c[兵站] §e" + bastionName + " §c已被摧毁！无法再从此点复活（不扣兵力）。");
-                String enemyTeam = "ATTACK".equals(bastionTeam) ? "DEFEND" : "ATTACK";
-                Espetro.broadcastToTeam(enemyTeam,
-                    "§a[兵站] 敌方兵站 §e" + bastionName + " §a已被摧毁！");
             }
 
             ServerPlayer commander = findCommanderForTeam(bastionTeam);
@@ -1555,10 +1549,11 @@ public class BastionManager {
 
         // 改选原部署点：取消未完成的 Rally 波次队列。
         org.espetro.team.TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
-        clearWaiting(player.getUUID());
 
         // 传送玩家到原部署点。该坐标由队伍复活点 JSON 配置保存，不再因目标区块未加载而取消。
         player.teleportTo(deployPoint.level, deployPoint.pos.getX() + 0.5, deployPoint.pos.getY() + 0.1, deployPoint.pos.getZ() + 0.5, 0f, 0f);
+        // 先传送后清除等待，防止空窗期间移动包绕过检查
+        clearWaiting(player.getUUID());
 
         // 设置生存模式
         player.setGameMode(GameType.SURVIVAL);

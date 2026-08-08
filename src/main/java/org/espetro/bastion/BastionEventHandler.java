@@ -384,8 +384,8 @@ public class BastionEventHandler {
             error = "§c本方生效 Radio 数量已达到上限（" + manager.getBastionLimitPerTeam() + "个）！";
         }
         if (error == null
-            && manager.findNearestRadio(level, pos, null, radio.exclusionRadius) != null) {
-            error = "§c附近已有 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
+            && manager.findNearestRadio(level, pos, team, radio.exclusionRadius) != null) {
+            error = "§c附近已有己方 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
         }
         if (error == null && radio.teammateCount > 0) {
             int nearby = countNearbyTeammates(player, team, pos, radio.teammateRadius);
@@ -883,6 +883,86 @@ public class BastionEventHandler {
             : "本职业补给无需消耗 Radio 弹药";
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
             "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 冷却5分钟"));
+    }
+
+    /**
+     * 从载具领取弹药补给（载具轮盘"补给步兵"操作）。
+     */
+    public static void performVehicleResupply(ServerPlayer player,
+                                               org.espetro.vehicle.VehicleManager.VehicleSupplyState supply,
+                                               int ammoCost) {
+        // 获取玩家职业配置
+        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
+        String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
+        if (classId == null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
+            return;
+        }
+
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        MinecraftServer server = player.getServer();
+        if (server != null) loader.ensureLoaded(server.getResourceManager());
+        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
+        FactionDataLoader.ClassVariantData variant = kit != null ? kit.getVariant(variantId) : null;
+        FactionDataLoader.ResupplyData resupply = variant != null ? variant.resupply : null;
+        if (resupply == null || resupply.items == null || resupply.items.length == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业装备变体没有配置弹药补给！"));
+            return;
+        }
+
+        int cost = resupply.ammoCost != null ? Math.max(0, resupply.ammoCost) : ammoCost;
+
+        java.util.List<PlannedResupply> planned = new java.util.ArrayList<>();
+        for (FactionDataLoader.ResupplyItem ri : resupply.items) {
+            if (ri.id == null || ri.id.isBlank()) continue;
+            ItemStack template = createResupplyStack(ri);
+            if (template.isEmpty()) continue;
+            Item item = template.getItem();
+            if (item == net.minecraft.world.item.Items.AIR) continue;
+            int maxCap = ri.max > 0 ? ri.max : 64;
+            int giveCount = ri.count > 0 ? ri.count : 16;
+            int current = 0;
+            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                ItemStack stack = player.getInventory().getItem(i);
+                if (matchesResupplyItem(stack, template)) current += stack.getCount();
+            }
+            int canGive = AmmoResupplyPolicy.grantCount(current, maxCap, giveCount);
+            if (canGive > 0) planned.add(new PlannedResupply(template, canGive));
+        }
+
+        if (planned.isEmpty()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
+            return;
+        }
+
+        if (!supply.canAffordAmmo(cost)) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c载具弹药不足：需要 §b" + cost + "§c，当前仅有 §b" + supply.getAmmo() + "§c。"));
+            return;
+        }
+
+        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
+        if (errorMsg != null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
+            return;
+        }
+
+        supply.removeAmmo(cost);
+
+        StringBuilder detail = new StringBuilder();
+        for (PlannedResupply plan : planned) {
+            ItemStack giveStack = plan.template().copy();
+            giveStack.setCount(plan.count());
+            if (!player.getInventory().add(giveStack) && !giveStack.isEmpty()) {
+                player.drop(giveStack, false);
+            }
+            if (!detail.isEmpty()) detail.append(", ");
+            detail.append(plan.template().getHoverName().getString()).append(" ×").append(plan.count());
+        }
+
+        BastionManager.getInstance().recordResupply(player.getUUID());
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§a▸ 已补充: §f" + detail + "  §7| 消耗 §b" + cost + " 载具弹药 §7| 冷却5分钟"));
     }
 
     private record PlannedResupply(ItemStack template, int count) {

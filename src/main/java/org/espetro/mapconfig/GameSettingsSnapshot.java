@@ -37,6 +37,7 @@ public final class GameSettingsSnapshot {
     public final int impeachmentVoteSeconds;
     public final int impeachmentCooldownSeconds;
     public final int commanderVacancySeconds;
+    public final int battleTimeoutSeconds;
 
     public final boolean deprecatedRequiredPlayersPresent;
     public final boolean deprecatedTutorialPresent;
@@ -69,6 +70,7 @@ public final class GameSettingsSnapshot {
         int impeachmentVoteSeconds,
         int impeachmentCooldownSeconds,
         int commanderVacancySeconds,
+        int battleTimeoutSeconds,
         boolean deprecatedRequiredPlayersPresent,
         boolean deprecatedTutorialPresent
     ) {
@@ -99,16 +101,17 @@ public final class GameSettingsSnapshot {
         this.impeachmentVoteSeconds = impeachmentVoteSeconds;
         this.impeachmentCooldownSeconds = impeachmentCooldownSeconds;
         this.commanderVacancySeconds = commanderVacancySeconds;
+        this.battleTimeoutSeconds = battleTimeoutSeconds;
         this.deprecatedRequiredPlayersPresent = deprecatedRequiredPlayersPresent;
         this.deprecatedTutorialPresent = deprecatedTutorialPresent;
     }
 
     public static GameSettingsSnapshot defaults() {
         return new GameSettingsSnapshot(
-            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 150.0, 60, 10.0, 200.0,
+            60, 240, 30, 20, 20, 30, 30, 6, 5, 10, 60, 150.0, 0, 10.0, 200.0,
             280, 1200, 2,
             100, 5, 15, 2, 2, 12,
-            60, 600, 180,
+            60, 600, 180, 3600,
             false, false
         );
     }
@@ -148,6 +151,7 @@ public final class GameSettingsSnapshot {
         int impeachVote = d.impeachmentVoteSeconds;
         int impeachCd = d.impeachmentCooldownSeconds;
         int vacancy = d.commanderVacancySeconds;
+        int battleTimeout = d.battleTimeoutSeconds;
 
         if (root.has("game") && root.get("game").isJsonObject()) {
             JsonObject game = root.getAsJsonObject("game");
@@ -171,6 +175,7 @@ public final class GameSettingsSnapshot {
                 game, "class_switch_cooldown_seconds", classSwitchCooldown);
             nameTag = getDouble(game, "teammate_name_tag_distance", nameTag);
             waitingY = getDouble(game, "waiting_y", waitingY);
+            battleTimeout = getInt(game, "battle_timeout_seconds", battleTimeout);
         }
         if (root.has("troops") && root.get("troops").isJsonObject()) {
             JsonObject troops = root.getAsJsonObject("troops");
@@ -227,6 +232,7 @@ public final class GameSettingsSnapshot {
             Math.max(1, impeachVote),
             Math.max(0, impeachCd),
             Math.max(1, vacancy),
+            Math.max(1, battleTimeout),
             deprecatedRequired,
             deprecatedTutorial
         );

@@ -25,7 +25,19 @@ public class MapVoteStatePacket {
     public final String winnerMapFolder;
     public final String winnerDisplayName;
 
-    public record Candidate(String mapFolder, String displayName, String dimensionId) {
+    public static final class Candidate {
+        public final String mapFolder;
+        public final String displayName;
+        public final String dimensionId;
+        /** 服务端读取的 map_preview.png 字节数据；null 表示无预览图。 */
+        public final byte[] previewBytes;
+
+        public Candidate(String mapFolder, String displayName, String dimensionId, byte[] previewBytes) {
+            this.mapFolder = mapFolder;
+            this.displayName = displayName;
+            this.dimensionId = dimensionId;
+            this.previewBytes = previewBytes;
+        }
     }
 
     public MapVoteStatePacket(boolean active, int remainingSeconds, long endGameTime,
@@ -44,7 +56,8 @@ public class MapVoteStatePacket {
     public static MapVoteStatePacket from(MapVoteManager mgr, ServerPlayer viewer) {
         List<Candidate> list = new ArrayList<>();
         for (var c : mgr.getCandidates()) {
-            list.add(new Candidate(c.mapFolder, c.displayName, c.dimensionId.toString()));
+            list.add(new Candidate(c.mapFolder, c.displayName, c.dimensionId.toString(),
+                c.previewImageBytes));
         }
         String my = viewer != null ? mgr.getPlayerVote(viewer.getUUID()) : null;
         String winFolder = mgr.getWinner() != null ? mgr.getWinner().mapFolder : null;
@@ -64,7 +77,14 @@ public class MapVoteStatePacket {
         int n = buf.readVarInt();
         List<Candidate> candidates = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
-            candidates.add(new Candidate(buf.readUtf(), buf.readUtf(), buf.readUtf()));
+            String folder = buf.readUtf();
+            String name = buf.readUtf();
+            String dimId = buf.readUtf();
+            byte[] previewBytes = null;
+            if (buf.readBoolean()) {
+                previewBytes = buf.readByteArray();
+            }
+            candidates.add(new Candidate(folder, name, dimId, previewBytes));
         }
         int m = buf.readVarInt();
         Map<String, Integer> tally = new LinkedHashMap<>();
@@ -86,6 +106,11 @@ public class MapVoteStatePacket {
             buf.writeUtf(c.mapFolder);
             buf.writeUtf(c.displayName);
             buf.writeUtf(c.dimensionId);
+            boolean hasBytes = c.previewBytes != null && c.previewBytes.length > 0;
+            buf.writeBoolean(hasBytes);
+            if (hasBytes) {
+                buf.writeByteArray(c.previewBytes);
+            }
         }
         buf.writeVarInt(tally.size());
         for (Map.Entry<String, Integer> e : tally.entrySet()) {

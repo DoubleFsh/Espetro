@@ -100,15 +100,31 @@ public class ClassSelectManager {
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
         List<FactionDataLoader.FactionData> allFactions = new ArrayList<>();
 
+        var ctx = org.espetro.mapconfig.BattlefieldContext.getOrNull();
+        Espetro.LOGGER.info("[编制池诊断] 开始生成编制池, BattlefieldContext={}, poolSize={}, 总编制数={}",
+            ctx != null ? ctx.displayName : "null",
+            GameConfig.getFactionPoolSize(),
+            loader.getFactionArray().length);
+
         for (FactionDataLoader.FactionData faction : loader.getFactionArray()) {
             if (faction != null && faction.id != null && !faction.id.isEmpty()) {
-                // 排除空文件的编制
-                if (loader.getClassesForFaction(faction.id).length == 0) continue;
-                if (!loader.isCompatibleWithMap(faction.id,
-                    org.espetro.mapconfig.BattlefieldContext.getOrNull())) continue;
+                int classCount = loader.getClassesForFaction(faction.id).length;
+                boolean compatible = loader.isCompatibleWithMap(faction.id, ctx);
+                if (classCount == 0) {
+                    Espetro.LOGGER.warn("[编制池诊断] {} → 排除: 职业数为0", faction.id);
+                    continue;
+                }
+                if (!compatible) {
+                    Espetro.LOGGER.warn("[编制池诊断] {} → 排除: isCompatibleWithMap 返回 false", faction.id);
+                    continue;
+                }
+                Espetro.LOGGER.info("[编制池诊断] {} → 通过 (职业数={})", faction.id, classCount);
                 allFactions.add(faction);
             }
         }
+
+        Espetro.LOGGER.info("[编制池诊断] 兼容编制数: {} (共{}个编制)", allFactions.size(),
+            loader.getFactionArray().length);
 
         int poolSize = GameConfig.getFactionPoolSize();
         // 随机打乱并取前 N 个

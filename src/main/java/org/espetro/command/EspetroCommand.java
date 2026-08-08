@@ -375,11 +375,11 @@ public class EspetroCommand {
                                 if ("ATTACK".equals(team)) {
                                     int current = TroopCountManager.getInstance().getAttackTroops();
                                     TroopCountManager.getInstance().setAttackTroops(current + value);
-                                    Espetro.broadcastToAll("§6[管理] 攻方兵力增加了 " + value + " (当前: §c" + (current + value) + "§6)");
+                                    Espetro.broadcastToTeam("ATTACK", "§6[管理] 攻方兵力增加了 " + value + " (当前: §c" + (current + value) + "§6)");
                                 } else {
                                     int current = TroopCountManager.getInstance().getDefendTroops();
                                     TroopCountManager.getInstance().setDefendTroops(current + value);
-                                    Espetro.broadcastToAll("§6[管理] 守方兵力增加了 " + value + " (当前: §9" + (current + value) + "§6)");
+                                    Espetro.broadcastToTeam("DEFEND", "§6[管理] 守方兵力增加了 " + value + " (当前: §9" + (current + value) + "§6)");
                                 }
                                 return 1;
                             })
@@ -392,6 +392,20 @@ public class EspetroCommand {
                         ctx.getSource().sendSystemMessage(Component.literal("§a兵力已重置为初始值: 攻方280 | 守方1200"));
                         return 1;
                     })
+                )
+            )
+            // 组队匹配管理
+            .then(Commands.literal("party")
+                .then(Commands.literal("maxsize")
+                    .then(Commands.argument("size", IntegerArgumentType.integer(1, 100))
+                        .executes(ctx -> {
+                            int size = IntegerArgumentType.getInteger(ctx, "size");
+                            org.espetro.team.PartyManager.setMaxPartySize(size);
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§a组队上限已设置为 " + size + " 人。"));
+                            return 1;
+                        })
+                    )
                 )
             )
         );

@@ -1,5 +1,6 @@
 package org.espetro.mixin;
 
+import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -14,7 +15,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Rejects movement before vanilla applies it while a player is in a deployment
- * or phase hold. A bounded correction replaces per-tick teleport spam.
+ * or phase hold. Also prevents mid-game rejoin kicks from
+ * "multiplayer.disconnect.invalid_player_movement" by keeping
+ * {@code awaitingPositionFromClient} non-null across dimension changes.
  */
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerGamePacketListenerWaitingLockMixin {
@@ -23,8 +26,27 @@ public abstract class ServerGamePacketListenerWaitingLockMixin {
     @Shadow
     public abstract void teleport(double x, double y, double z, float yaw, float pitch);
 
+    /** 防止位置锁期间维度切换（teleportTo 改维）时，
+     *  handleAcceptTeleportPacket 因 awaitingPositionFromClient==null
+     *  而踢出玩家（"接受非法移动数据"）。 */
+    @Shadow
+    private Vec3 awaitingPositionFromClient;
+
     @Unique
     private long espetro$lastWaitingCorrectionTick = Long.MIN_VALUE;
+
+    /**
+     * 在接受传送包之前补设 awaitingPositionFromClient，防止因跨维
+     * 传送后没有及时收到移动包而被踢。
+     */
+    @Inject(method = "handleAcceptTeleportation",
+            at = @At("HEAD"))
+    private void espetro$ensureAwaitingBeforeAccept(
+            ServerboundAcceptTeleportationPacket packet, CallbackInfo ci) {
+        if (awaitingPositionFromClient == null && player != null) {
+            awaitingPositionFromClient = new Vec3(player.getX(), player.getY(), player.getZ());
+        }
+    }
 
     @Inject(method = "handleMovePlayer", at = @At("HEAD"), cancellable = true)
     private void espetro$rejectWaitingMovement(
@@ -33,6 +55,12 @@ public abstract class ServerGamePacketListenerWaitingLockMixin {
         Vec3 lock = manager.getPlayerLockPosition(player.getUUID());
         if (lock == null && !manager.isWaitingForBastion(player.getUUID())) {
             return;
+        }
+
+        // 维持 awaitingPositionFromClient 为非 null，避免跨维 teleport
+        // 时 handleAcceptTeleportPacket 判空踢人。
+        if (awaitingPositionFromClient == null) {
+            awaitingPositionFromClient = new Vec3(player.getX(), player.getY(), player.getZ());
         }
 
         player.setDeltaMovement(Vec3.ZERO);

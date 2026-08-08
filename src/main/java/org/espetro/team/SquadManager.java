@@ -66,7 +66,7 @@ public class SquadManager {
 
         String name = sanitizeName(requestedName);
         if (name.isEmpty()) {
-            name = player.getName().getString() + "的小队";
+            name = "小队" + nextSquadId;
         }
 
         String catId = categoryId == null || categoryId.isBlank()
@@ -132,6 +132,9 @@ public class SquadManager {
         }
         if (squad.members.size() >= MAX_MEMBERS) {
             return ActionResult.failure(team, "小队人数已满。");
+        }
+        if (squad.locked) {
+            return ActionResult.failure(team, "该小队已锁定，无法加入。");
         }
         Fireteam assigned = firstAvailableFireteam(squad);
         if (assigned == null) {
@@ -214,6 +217,10 @@ public class SquadManager {
 
         if (squad.members.size() >= MAX_MEMBERS) {
             return ActionResult.failure(team, "目标小队人数已满。");
+        }
+
+        if (squad.locked) {
+            return ActionResult.failure(team, "该小队已锁定，无法加入。");
         }
 
         int previousSquadId = getPlayerSquadId(player.getUUID());
@@ -346,6 +353,53 @@ public class SquadManager {
         }
         Fireteam ft = squad.memberFireteam.get(uuid);
         return ft != null && uuid.equals(squad.fireteamLeaders.get(ft));
+    }
+
+    /** 小队长锁定小队，锁定后其他人无法加入（队员仍可自行退出）。 */
+    public ActionResult lockSquad(ServerPlayer player) {
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) {
+            return ActionResult.failure(null, "你尚未加入阵营。");
+        }
+        UUID uuid = player.getUUID();
+        if (!isSquadLeader(uuid)) {
+            return ActionResult.failure(team, "只有小队长可以锁定小队。");
+        }
+        Squad squad = getSquadOf(uuid);
+        if (squad == null) {
+            return ActionResult.failure(team, "你不在小队中。");
+        }
+        if (squad.locked) {
+            return ActionResult.failure(team, "小队已经处于锁定状态。");
+        }
+        squad.locked = true;
+        return ActionResult.success(team, "小队已锁定，其他人无法加入。");
+    }
+
+    /** 小队长解锁小队，允许其他人加入。 */
+    public ActionResult unlockSquad(ServerPlayer player) {
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) {
+            return ActionResult.failure(null, "你尚未加入阵营。");
+        }
+        UUID uuid = player.getUUID();
+        if (!isSquadLeader(uuid)) {
+            return ActionResult.failure(team, "只有小队长可以解锁小队。");
+        }
+        Squad squad = getSquadOf(uuid);
+        if (squad == null) {
+            return ActionResult.failure(team, "你不在小队中。");
+        }
+        if (!squad.locked) {
+            return ActionResult.failure(team, "小队当前未锁定。");
+        }
+        squad.locked = false;
+        return ActionResult.success(team, "小队已解锁，其他人可以加入。");
+    }
+
+    public boolean isSquadLocked(String team, int squadId) {
+        Squad squad = getSquad(team, squadId);
+        return squad != null && squad.locked;
     }
 
     public Fireteam getPlayerFireteam(UUID uuid) {
@@ -498,7 +552,7 @@ public class SquadManager {
                     memberUuid.equals(squad.leader), ft, ftLead));
             }
             result.add(new SquadSnapshot(squad.id, squad.name, getPlayerName(server, squad.leader),
-                squad.leader, MAX_MEMBERS, false, squad.categoryId, squad.categoryDisplayName, members));
+                squad.leader, MAX_MEMBERS, squad.locked, squad.categoryId, squad.categoryDisplayName, members));
         }
         return result;
     }
@@ -506,6 +560,18 @@ public class SquadManager {
     private Squad getSquad(String team, int squadId) {
         LinkedHashMap<Integer, Squad> squads = squadsByTeam.get(team);
         return squads != null ? squads.get(squadId) : null;
+    }
+
+    /** 返回指定小队的队长 UUID，不存在时返回 null。 */
+    public UUID getSquadLeaderUuid(String team, int squadId) {
+        Squad squad = getSquad(team, squadId);
+        return squad != null ? squad.leader : null;
+    }
+
+    /** 返回指定小队的名称，不存在时返回 null。 */
+    public String getSquadName(String team, int squadId) {
+        Squad squad = getSquad(team, squadId);
+        return squad != null ? squad.name : null;
     }
 
     private Squad getSquadOf(UUID uuid) {
@@ -696,6 +762,7 @@ public class SquadManager {
         private String categoryId = org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID;
         private String categoryDisplayName = org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY;
         private long leaderSinceTick;
+        private boolean locked;
 
         private Squad(int id, String team, String name, UUID leader) {
             this.id = id;

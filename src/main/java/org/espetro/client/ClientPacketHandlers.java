@@ -110,6 +110,8 @@ public class ClientPacketHandlers {
                 mc.setScreen(new org.espetro.client.gui.FactionRevealScreen(
                     packet.getAttackFactionName(),
                     packet.getDefendFactionName(),
+                    packet.getAttackFactionImage(),
+                    packet.getDefendFactionImage(),
                     packet.getDurationSeconds()
                 ));
             }
@@ -161,6 +163,7 @@ public class ClientPacketHandlers {
             if (phase.isLobbyLike() || phase == GamePhase.ROUND_END || phase == GamePhase.CLEANUP) {
                 org.espetro.client.gui.ClientGovernanceState.clear();
                 org.espetro.client.ClientEquipZones.clear();
+                org.espetro.client.gui.ClientGameState.setBattleTimeRemaining(-1);
             }
 
             net.minecraft.client.Minecraft phaseMc = net.minecraft.client.Minecraft.getInstance();
@@ -179,6 +182,14 @@ public class ClientPacketHandlers {
                 if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen
                     && !screen.isWaitingForDeploySelection()) {
                     mc.setScreen(null);
+                }
+            }
+
+            // 阶段变化时刷新已打开的部署界面的标题（阶段名 + 倒计时）
+            {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+                    screen.updateBattleTimer();
                 }
             }
         } catch (IllegalArgumentException ignored) {
@@ -368,6 +379,14 @@ public class ClientPacketHandlers {
         org.espetro.client.ClientEquipZones.setZones(packet.getZones());
     }
 
+    public static void handleBattleTimer(BattleTimerPacket packet) {
+        org.espetro.client.gui.ClientGameState.setBattleTimeRemaining(packet.getRemainingSeconds());
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            screen.updateBattleTimer();
+        }
+    }
+
     public static void handleMapVoteState(MapVoteStatePacket packet) {
         org.espetro.client.gui.MapVoteScreen.update(packet);
     }
@@ -403,7 +422,11 @@ public class ClientPacketHandlers {
     public static void handleRoundEnd(RoundEndPacket packet) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player != null) {
-            mc.setScreen(new org.espetro.client.gui.RoundEndScreen(packet.winner, packet.displaySeconds));
+            mc.setScreen(new org.espetro.client.gui.RoundEndScreen(
+                packet.winner, packet.displaySeconds,
+                packet.winnerShowName, packet.loserShowName,
+                packet.attackTickets, packet.defendTickets,
+                packet.resultLevel, packet.attackerTimeout));
         }
     }
 
@@ -417,4 +440,15 @@ public class ClientPacketHandlers {
         org.espetro.client.gui.TutorialOverlay.show(stepId, index, total, allowSkip);
     }
 
+    // ==================== PartyListPacket ====================
+
+    public static void handlePartyList(PartyListPacket packet) {
+        org.espetro.client.gui.PartyScreen.update(packet);
+    }
+
+    // ==================== VehicleSupplySyncPacket ====================
+
+    public static void handleVehicleSupplySync(VehicleSupplySyncPacket packet) {
+        org.espetro.client.gui.VehicleWheelController.updateSupply(packet);
+    }
 }

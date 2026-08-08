@@ -212138,5 +212138,6 @@ net/minecraft/world/ticks/WorldGenTickAccess net/minecraft/world/ticks/WorldGenT
 		1 p_193463_ p_193463_
 net/minecraft/world/ticks/package-info net/minecraft/world/ticks/package-info
 org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin
+	awaitingPositionFromClient f_9766_
 	player f_9743_
 	teleport (DDDFF)V m_9774_

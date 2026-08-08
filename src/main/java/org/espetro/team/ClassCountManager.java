@@ -262,6 +262,29 @@ public class ClassCountManager {
             }
         }
 
+        // leader_only：仅小队长可选
+        if (kit.leaderOnly && !SquadManager.getInstance().isSquadLeader(uuid)) {
+            return SelectionResult.LEADER_ONLY;
+        }
+
+        int squadSize = SquadManager.getInstance().getSquadMemberUuids(team, squadId).size();
+
+        // unlock_min_squad：小队达到此人数后解锁（优先级高于 unlock_per_n）
+        if (kit.unlockMinSquad > 0 && squadSize < kit.unlockMinSquad) {
+            return SelectionResult.UNLOCK_MIN_SQUAD;
+        }
+
+        // unlock_per_n：每 N 个小队员解锁 1 个名额
+        if (kit.unlockPerN > 0) {
+            int available = squadSize / kit.unlockPerN;
+            if (available <= 0) {
+                return SelectionResult.UNLOCK_PER_N;
+            }
+            if (countClassInSquad(team, squadId, classId) >= available) {
+                return SelectionResult.UNLOCK_PER_N_FULL;
+            }
+        }
+
         // 同职业换变体时，玩家仍占父职业 1 个名额，不重复检查职业满员；
         // 换到其它职业时，目标职业人数按当前（不含自己）计算。
         boolean changingClass = !classId.equals(oldClassId);
@@ -366,7 +389,15 @@ public class ClassCountManager {
         CLASS_SWITCH_COOLDOWN,
         OUT_OF_RANGE,
         /** 小队人数不足 teammates_need */
-        TEAMMATES_NEED
+        TEAMMATES_NEED,
+        /** 仅小队长可选 */
+        LEADER_ONLY,
+        /** 小队人数未达 unlock_min_squad */
+        UNLOCK_MIN_SQUAD,
+        /** unlock_per_n 目前无可选名额（available <= 0） */
+        UNLOCK_PER_N,
+        /** unlock_per_n 名额已用完 */
+        UNLOCK_PER_N_FULL
     }
 
     /** 用户可读拒绝文案（聊天 / AuraTip）。 */
@@ -395,6 +426,9 @@ public class ClassCountManager {
             case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
             case NO_TEAM -> "§c你尚未加入攻防方，无法选择职业。";
             case OUT_OF_RANGE -> "§c只能在选择部署点时、原部署点附近或己方 Radio 轮盘中选择职业！";
+            case LEADER_ONLY -> "§c该职业仅小队长可选！";
+            case UNLOCK_MIN_SQUAD -> "§c小队人数不足，无法选择该职业！";
+            case UNLOCK_PER_N, UNLOCK_PER_N_FULL -> "§c该职业名额已用完或小队人数不足！";
         };
     }
 

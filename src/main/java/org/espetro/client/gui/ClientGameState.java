@@ -13,6 +13,8 @@ public class ClientGameState {
     private static String playerFactionId = null;
     // 玩家当前选择的攻守方：ATTACK 或 DEFEND
     private static String playerTeam = null;
+    // 战局倒计时剩余秒数，-1 表示无倒计时
+    private static int battleTimeRemaining = -1;
 
     public static void setCurrentPhase(GamePhase phase) {
         currentPhase = phase;
@@ -36,6 +38,14 @@ public class ClientGameState {
 
     public static String getPlayerTeam() {
         return playerTeam;
+    }
+
+    public static void setBattleTimeRemaining(int seconds) {
+        battleTimeRemaining = seconds;
+    }
+
+    public static int getBattleTimeRemaining() {
+        return battleTimeRemaining;
     }
 
     /**
@@ -65,5 +75,26 @@ public class ClientGameState {
      */
     public static boolean canOpenCommanderSkill() {
         return currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE;
+    }
+
+    /**
+     * J键统一入口：主城/等待阶段打开组队面板，对战中请求职业选择。
+     */
+    public static void tryOpenJKeyScreen() {
+        if (canOpenClassSelection()) {
+            String playerTeam = getPlayerTeam();
+            if (playerTeam == null) {
+                org.espetro.network.NetworkManager.requestGameState();
+            } else {
+                String factionId = getPlayerFactionId();
+                org.espetro.network.NetworkManager.requestClassSelection(factionId);
+            }
+        } else if (currentPhase.isLobbyLike()) {
+            org.espetro.network.NetworkManager.requestPartyList();
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.player != null && !(mc.screen instanceof PartyScreen)) {
+                mc.setScreen(new PartyScreen());
+            }
+        }
     }
 }

@@ -7,15 +7,13 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 兵力统计HUD叠加层
- * 在屏幕左上角显示双方兵力
+ * 在屏幕左上角仅显示己方兵力。
  */
 public class TroopCountOverlay {
 
     private static int attackTroops = 0;
     private static int defendTroops = 0;
     private static boolean visible = false;
-    private static Component attackText = buildAttackText();
-    private static Component defendText = buildDefendText();
 
     /**
      * 更新兵力数据
@@ -23,8 +21,6 @@ public class TroopCountOverlay {
     public static void updateTroopCounts(int attack, int defend) {
         attackTroops = attack;
         defendTroops = defend;
-        attackText = buildAttackText();
-        defendText = buildDefendText();
         visible = true;
     }
 
@@ -48,25 +44,16 @@ public class TroopCountOverlay {
     static void drawElement(GuiGraphics graphics, Minecraft mc) {
         if (!visible || mc.level == null) return;
 
+        String myTeam = ClientGameState.getPlayerTeam();
+        if (myTeam == null) return;
+
+        int troops = "ATTACK".equals(myTeam) ? attackTroops : defendTroops;
+        String label = "ATTACK".equals(myTeam) ? "§c■ 进攻方" : "§9■ 防守方";
+        String color = troops > 50 ? "§a" : (troops > 20 ? "§e" : "§c");
+
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
-
-        int x = 10;
-        int y = 10;
-
-        graphics.drawString(mc.font, attackText, x, y, 0xFFFFFF);
-        graphics.drawString(mc.font, defendText, x + 110, y, 0xFFFFFF);
-
+        graphics.drawString(mc.font, Component.literal(label + ": " + color + troops), 10, 10, 0xFFFFFF);
         poseStack.popPose();
-    }
-
-    private static Component buildAttackText() {
-        String color = attackTroops > 50 ? "§a" : (attackTroops > 20 ? "§e" : "§c");
-        return Component.literal("§c■ 进攻方: " + color + attackTroops);
-    }
-
-    private static Component buildDefendText() {
-        String color = defendTroops > 50 ? "§a" : (defendTroops > 20 ? "§e" : "§c");
-        return Component.literal("§9■ 防守方: " + color + defendTroops);
     }
 }

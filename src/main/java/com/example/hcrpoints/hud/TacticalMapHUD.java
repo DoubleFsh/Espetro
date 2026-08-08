@@ -51,6 +51,9 @@ public class TacticalMapHUD implements IGuiOverlay {
     private boolean isMapVisible = false; // 地图是否可见
     private int mapZoom = MAX_MAP_ZOOM;
     private List<CapturePoint> allPoints = new ArrayList<>();
+    /** 每 N 帧渲染一次战术地图 HUD；设为 1 即每帧渲染。 */
+    private static final int MAP_RENDER_INTERVAL = 3;
+    private int mapTickCounter;
     
     // 存储从服务端同步的玩家位置
     private final Map<UUID, com.example.hcrpoints.network.SyncPlayerPositionsMessage.PlayerPosition> syncedPlayerPositions = new HashMap<>();
@@ -126,6 +129,10 @@ public class TacticalMapHUD implements IGuiOverlay {
     @Override
     public void render(ForgeGui gui, GuiGraphics guiGraphics, float partialTick, int screenWidth, int screenHeight) {
         if (!isMapVisible) {
+            return;
+        }
+        mapTickCounter++;
+        if (mapTickCounter % MAP_RENDER_INTERVAL != 0) {
             return;
         }
         

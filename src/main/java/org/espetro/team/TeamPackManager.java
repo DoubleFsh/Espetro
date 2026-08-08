@@ -614,13 +614,14 @@ public class TeamPackManager {
      * 在改选 HAB / 原部署点 / 前哨并成功部署后必须调用，避免冷却结束后误拉回 Rally。
      */
     private void spawnAtRally(ServerPlayer player, TeamPackData teamPack) {
-        BastionManager.getInstance().clearWaiting(player.getUUID());
         BlockPos spawnPos = teamPack.getSpawnPos();
         player.teleportTo(teamPack.level,
             spawnPos.getX() + 0.5,
             spawnPos.getY() + 0.1,
             spawnPos.getZ() + 0.5,
             0f, 0f);
+        // 先传送后取消等待，避免传送与解锁间的空窗导致移动包绕过量检查踢人
+        player.server.execute(() -> BastionManager.getInstance().clearWaiting(player.getUUID()));
         player.setGameMode(GameType.SURVIVAL);
         player.removeAllEffects();
         int invincibilityTicks = org.espetro.config.GameConfig.getRespawnInvincibilityTicks();

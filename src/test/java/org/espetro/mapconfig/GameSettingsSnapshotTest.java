@@ -12,7 +12,7 @@ class GameSettingsSnapshotTest {
         GameSettingsSnapshot settings = GameSettingsSnapshot.parse(
             JsonParser.parseString("{}").getAsJsonObject());
 
-        assertEquals(60, settings.classSwitchCooldownSeconds);
+        assertEquals(0, settings.classSwitchCooldownSeconds);
         assertEquals(150.0, settings.mainBaseInvulnerabilityRadius);
         assertEquals(2, settings.regenDelaySeconds);
         assertEquals(12, settings.fullRecoverySeconds);
