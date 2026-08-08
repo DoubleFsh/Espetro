@@ -16,10 +16,12 @@ import java.util.Set;
 public final class ClientTacticalState {
 
     private static final int NO_SQUAD = -1;
+    private static final byte FIRETEAM_NONE = -1;
 
     private static final Map<String, MarkerInfo> markersByName = new HashMap<>();
     private static final Set<String> commanderNames = new HashSet<>();
     private static int mySquadId = NO_SQUAD;
+    private static byte myFireteam = FIRETEAM_NONE;
     private static double teammateNameTagDistance = 10.0;
 
     private ClientTacticalState() {
@@ -30,6 +32,7 @@ public final class ClientTacticalState {
         markersByName.clear();
         commanderNames.clear();
         mySquadId = updatedMySquadId;
+        myFireteam = FIRETEAM_NONE;
         teammateNameTagDistance = updatedNameTagDistance > 0 ? updatedNameTagDistance : 10.0;
 
         if (updatedCommanderNames != null) {
@@ -44,13 +47,20 @@ public final class ClientTacticalState {
             return;
         }
 
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        String localName = mc.player != null ? key(mc.player.getName().getString()) : "";
+
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
             for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
-                markersByName.put(key(member.playerName),
+                String memberKey = key(member.playerName);
+                markersByName.put(memberKey,
                     new MarkerInfo(squad.id, member.leader, member.fireteamLeader,
-                        member.commander));
+                        member.commander, member.fireteam));
                 if (member.commander) {
-                    commanderNames.add(key(member.playerName));
+                    commanderNames.add(memberKey);
+                }
+                if (memberKey.equals(localName)) {
+                    myFireteam = member.fireteam;
                 }
             }
         }
@@ -107,7 +117,27 @@ public final class ClientTacticalState {
         return name == null ? "" : name.toLowerCase(Locale.ROOT);
     }
 
-    private record MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
-                              boolean commander) {
+    /** 公开：获取玩家的战术标记信息。 */
+    public static MarkerInfo getMarker(String playerName) {
+        return markersByName.get(key(playerName));
+    }
+
+    /** 公开：判断指定玩家是否为指挥官。 */
+    public static boolean isCommander(String playerName) {
+        return commanderNames.contains(key(playerName));
+    }
+
+    /** 公开：获取本地玩家的火力组索引（0=A, 1=B, 2=C），不在小队中返回 -1。 */
+    public static byte getMyFireteam() {
+        return myFireteam;
+    }
+
+    public record MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
+                             boolean commander, byte fireteam) {
+        /** 兼容旧构造（无 fireteam 时默认 0 = A 组）。 */
+        public MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
+                          boolean commander) {
+            this(squadId, leader, fireteamLeader, commander, (byte) 0);
+        }
     }
 }

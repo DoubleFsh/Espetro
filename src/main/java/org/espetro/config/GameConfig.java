@@ -30,7 +30,7 @@ public class GameConfig {
     private static int factionPoolSize = 6;
     private static int respawnInvincibilityTicks = 60;
     private static double mainBaseInvulnerabilityRadius = 150.0;
-    private static int classSwitchCooldownSeconds = 60;
+    private static int classSwitchCooldownSeconds = 0;
     private static double teammateNameTagDistance = 10.0;
     private static double waitingY = 200.0;
 
@@ -55,6 +55,7 @@ public class GameConfig {
     private static int impeachmentVoteSeconds = 60;
     private static int impeachmentCooldownSeconds = 600;
     private static int commanderVacancySeconds = 180;
+    private static int battleTimeoutSeconds = 3600;
 
     // AuraTip 新手教程（仅手动 reopen/命令；默认不在进服/阶段切换自动弹出）
     private static boolean tutorialEnabled = true;
@@ -223,6 +224,10 @@ public class GameConfig {
         return commanderVacancySeconds;
     }
 
+    public static int getBattleTimeoutSeconds() {
+        return battleTimeoutSeconds;
+    }
+
     /**
      * Apply frozen ActiveMapConfig game settings (startup or map activation).
      * Does not re-read JSON from disk.
@@ -258,12 +263,13 @@ public class GameConfig {
         impeachmentVoteSeconds = s.impeachmentVoteSeconds;
         impeachmentCooldownSeconds = s.impeachmentCooldownSeconds;
         commanderVacancySeconds = s.commanderVacancySeconds;
+        battleTimeoutSeconds = s.battleTimeoutSeconds;
         // required_players is deprecated; tutorial steps are AuraTip-driven (manual).
         loaded = true;
-        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 原部署点无敌半径{} 换职冷却{}s 弹劾{}s/冷却{}s",
+        Espetro.LOGGER.info("已应用活动地图 game 快照: 选边{}s 部署{}s 揭示{}s 结算{}s 原部署点无敌半径{} 换职冷却{}s 弹劾{}s/冷却{}s 战局限时{}s",
             teamSelectSeconds, deployTimeoutSeconds, factionRevealSeconds, roundEndSeconds,
             mainBaseInvulnerabilityRadius, classSwitchCooldownSeconds,
-            impeachmentVoteSeconds, impeachmentCooldownSeconds);
+            impeachmentVoteSeconds, impeachmentCooldownSeconds, battleTimeoutSeconds);
     }
 
     public static boolean isTutorialEnabled() {

@@ -1,13 +1,18 @@
 package org.espetro.client.gui;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.ClassSelectScreenPacket;
 import org.espetro.network.NetworkManager;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -140,12 +145,13 @@ public class ClassSelectScreen extends MutilScreen {
             this.enabled = enabled;
             this.selected = selected;
             this.action = action;
-            this.texture = resolveTexture(faction.selectionImage);
+            this.texture = resolveTexture(faction.selectionImage, faction.imageData);
         }
 
         void update(ClassSelectScreenPacket.FactionInfo faction, boolean enabled, boolean selected) {
-            if (!Objects.equals(this.faction.selectionImage, faction.selectionImage)) {
-                this.texture = resolveTexture(faction.selectionImage);
+            if (!Objects.equals(this.faction.selectionImage, faction.selectionImage)
+                    || !java.util.Arrays.equals(this.faction.imageData, faction.imageData)) {
+                this.texture = resolveTexture(faction.selectionImage, faction.imageData);
             }
             this.faction = faction;
             this.enabled = enabled;
@@ -222,13 +228,77 @@ public class ClassSelectScreen extends MutilScreen {
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
 
-        private static ResourceLocation resolveTexture(String value) {
+        private static final Map<String, ResourceLocation> DISK_TEXTURE_CACHE = new HashMap<>();
+        private static final Map<String, Boolean> DISK_TEXTURE_FAILED = new HashMap<>();
+        /** 缓存服务端发来的图片字节创建的纹理，key 为 selectionImage */
+        private static final Map<String, ResourceLocation> SERVER_IMAGE_CACHE = new HashMap<>();
+
+        private static ResourceLocation resolveTexture(String value, byte[] imageData) {
             if (value == null || value.isBlank()) return null;
+            // 1. 服务端发来了图片字节 → 直接动态注册
+            if (imageData != null && imageData.length > 0) {
+                return resolveServerImage(value, imageData);
+            }
+            // 2. 尝试 ResourceLocation 格式 (espetro:textures/gui/factions/xxx.png)
             ResourceLocation location = ResourceLocation.tryParse(value);
-            if (location == null) return null;
-            return Minecraft.getInstance().getResourceManager().getResource(location).isPresent()
-                ? location
-                : null;
+            if (location != null && Minecraft.getInstance().getResourceManager()
+                    .getResource(location).isPresent()) {
+                return location;
+            }
+            // 3. 尝试从本地 EsFactions/ 目录加载（单机/局域网备用）
+            return resolveEsFactionsTexture(value);
+        }
+
+        private static ResourceLocation resolveServerImage(String key, byte[] imageData) {
+            ResourceLocation cached = SERVER_IMAGE_CACHE.get(key);
+            if (cached != null) return cached;
+            try {
+                NativeImage image = NativeImage.read(
+                    new java.io.ByteArrayInputStream(imageData));
+                DynamicTexture texture = new DynamicTexture(image);
+                String safe = Integer.toHexString(key.hashCode());
+                ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
+                    "espetro", "dynamic/srv_faction_" + safe);
+                Minecraft.getInstance().getTextureManager().register(id, texture);
+                SERVER_IMAGE_CACHE.put(key, id);
+                return id;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private static ResourceLocation resolveEsFactionsTexture(String fileName) {
+            String key = fileName.trim();
+            if (DISK_TEXTURE_FAILED.containsKey(key)) return null;
+            ResourceLocation cached = DISK_TEXTURE_CACHE.get(key);
+            if (cached != null) return cached;
+            try {
+                Path gameDir = Minecraft.getInstance().gameDirectory.toPath();
+                Path esFactionsDir = gameDir.resolve("EsFactions");
+                Path imagePath = esFactionsDir.resolve(key).normalize();
+                // 安全检查：确保路径仍在 EsFactions 目录下
+                if (!imagePath.startsWith(esFactionsDir.normalize())) {
+                    DISK_TEXTURE_FAILED.put(key, true);
+                    return null;
+                }
+                if (!Files.isRegularFile(imagePath)) {
+                    DISK_TEXTURE_FAILED.put(key, true);
+                    return null;
+                }
+                try (InputStream in = Files.newInputStream(imagePath)) {
+                    NativeImage image = NativeImage.read(in);
+                    DynamicTexture texture = new DynamicTexture(image);
+                    String safe = Integer.toHexString(key.hashCode());
+                    ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
+                        "espetro", "dynamic/faction_" + safe);
+                    Minecraft.getInstance().getTextureManager().register(id, texture);
+                    DISK_TEXTURE_CACHE.put(key, id);
+                    return id;
+                }
+            } catch (Exception e) {
+                DISK_TEXTURE_FAILED.put(key, true);
+                return null;
+            }
         }
     }
 

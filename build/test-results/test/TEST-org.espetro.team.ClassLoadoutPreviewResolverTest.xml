@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.team.ClassLoadoutPreviewResolverTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-07-29T18:44:24" hostname="cachyos-x8664" time="0.033">
+<testsuite name="org.espetro.team.ClassLoadoutPreviewResolverTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-08-08T01:42:00" hostname="DESKTOP-1GK3H0A" time="0.032">
   <properties/>
-  <testcase name="equipment + commands：显式装备槽位不被 commands 中的同位置盔甲覆盖" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.006"/>
+  <testcase name="equipment + commands：显式装备槽位不被 commands 中的同位置盔甲覆盖" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.009"/>
   <testcase name="auto_equip_wearables=true（默认）：commands 中的盔甲自动进入空槽位" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="null kit/variant 返回空预览" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
-  <testcase name="wearable_equipment 支持所有 head 别名：head/helmet/armor_head/armor.head" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="非法 equipment 槽位名不抛异常，跳过该槽位" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
-  <testcase name="显式 mainhand 优先于 commands 中的第一个背包物品" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
+  <testcase name="null kit/variant 返回空预览" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
+  <testcase name="wearable_equipment 支持所有 head 别名：head/helmet/armor_head/armor.head" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
+  <testcase name="非法 equipment 槽位名不抛异常，跳过该槽位" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
+  <testcase name="显式 mainhand 优先于 commands 中的第一个背包物品" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
   <testcase name="无装备配置时返回全空预览" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
-  <testcase name="wearable_equipment 支持所有 chest 别名" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
+  <testcase name="wearable_equipment 支持所有 chest 别名" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
   <testcase name="wearable_equipment 支持所有 mainhand/offhand 别名" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="auto_equip_wearables=false：commands 中的盔甲不自动进入槽位，全部进背包" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
+  <testcase name="auto_equip_wearables=false：commands 中的盔甲不自动进入槽位，全部进背包" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
   <testcase name="equipment 显式 mainhand + offhand" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
-  <testcase name="仅 commands 的职业：盔甲进入装备槽位，第一个非盔甲物品进入 mainHand" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="无效物品 ID 不抛异常，对应槽位为空" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
+  <testcase name="仅 commands 的职业：盔甲进入装备槽位，第一个非盔甲物品进入 mainHand" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
+  <testcase name="无效物品 ID 不抛异常，对应槽位为空" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
   <testcase name="equipment 中含 NBT 的物品应保留 NBT" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
   <testcase name="commands 中含 NBT 的物品应保留 NBT" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="commands 中数量 &gt; maxStackSize 时正确分堆，mainHand 为第一个物品" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="综合：equipment + wearable_equipment + commands 同时存在" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
+  <testcase name="commands 中数量 &gt; maxStackSize 时正确分堆，mainHand 为第一个物品" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
+  <testcase name="综合：equipment + wearable_equipment + commands 同时存在" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
   <testcase name="非法数量（负数/非数字）不抛异常，使用默认数量 1" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
-  <testcase name="wearable_equipment 支持所有 legs/feet 别名" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.002"/>
+  <testcase name="wearable_equipment 支持所有 legs/feet 别名" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.001"/>
   <testcase name="null server 不抛异常，返回空预览" classname="org.espetro.team.ClassLoadoutPreviewResolverTest" time="0.0"/>
-  <system-out><![CDATA[[02:44:24] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_slot 变体 default 的 equipment 槽位无效: not_a_slot
-[02:44:24] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_item 变体 default 物品参数解析失败: minecraft:does_not_exist 1 (Unknown item 'minecraft:does_not_exist' at position 0: <--[HERE])
-[02:44:24] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 illegal_count 变体 default 物品参数解析失败: minecraft:iron_sword abc (Expected integer at position 21: ...ron_sword <--[HERE])
+  <system-out><![CDATA[[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_slot 变体 default 的 equipment 槽位无效: not_a_slot
+[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_item 变体 default 物品参数解析失败: minecraft:does_not_exist 1 (Unknown item 'minecraft:does_not_exist' at position 0: <--[HERE])
+[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 illegal_count 变体 default 物品参数解析失败: minecraft:iron_sword abc (Expected integer at position 21: ...ron_sword <--[HERE])
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

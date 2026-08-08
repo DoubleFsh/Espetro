@@ -11,6 +11,7 @@
   "VehTypes": [
     "tank",
     "apc",
+    "ifv",
     "transport",
     "transport_helicopter"
   ],

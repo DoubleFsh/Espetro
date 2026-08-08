@@ -38,6 +38,11 @@ public final class CommanderGovernanceManager {
 
     private final Map<String, TeamGovernance> byTeam = new HashMap<>();
 
+    /** 最近断线的指挥官及其时间戳（UUID → 系统毫秒），用于 2 分钟内重连恢复 */
+    private final Map<UUID, Long> recentCommanderDisconnect = new HashMap<>();
+    private final Map<UUID, String> recentCommanderTeam = new HashMap<>();
+    private static final long RECONNECT_GRACE_MILLIS = 2 * 60 * 1000; // 2 分钟
+
     public static final class TeamGovernance {
         public State state = State.IDLE;
         public UUID commander;
@@ -81,6 +86,8 @@ public final class CommanderGovernanceManager {
             g.tickCounter = 0;
             g.endGameTime = 0L;
         }
+        recentCommanderDisconnect.clear();
+        recentCommanderTeam.clear();
         NetworkManager.broadcastGovernanceState(this);
     }
 
@@ -265,6 +272,9 @@ public final class CommanderGovernanceManager {
         }
 
         if (isCommander) {
+            // 记录断线指挥官，2 分钟内重连可恢复身份
+            recentCommanderDisconnect.put(uuid, System.currentTimeMillis());
+            recentCommanderTeam.put(uuid, team);
             // Incumbent left (including mid-impeachment) → vacancy.
             if (g.state == State.IMPEACHMENT_VOTE) {
                 g.challenger = null;
@@ -307,6 +317,56 @@ public final class CommanderGovernanceManager {
                 NetworkManager.broadcastGovernanceState(this);
             }
         }
+    }
+
+    /**
+     * 尝试恢复断线重连的指挥官。仅在 2 分钟内重连且仍在原队伍时生效。
+     * @param player 重连的玩家
+     * @return true 如果成功恢复，false 否则
+     */
+    public boolean tryRestoreCommanderOnRejoin(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        Long disconnectTime = recentCommanderDisconnect.get(uuid);
+        String recordedTeam = recentCommanderTeam.get(uuid);
+        if (disconnectTime == null || recordedTeam == null) {
+            return false;
+        }
+        // 超时
+        if (System.currentTimeMillis() - disconnectTime > RECONNECT_GRACE_MILLIS) {
+            recentCommanderDisconnect.remove(uuid);
+            recentCommanderTeam.remove(uuid);
+            return false;
+        }
+        // 确认玩家仍在原队伍
+        VoteManager vm = VoteManager.getInstance();
+        String currentTeam = null;
+        if (vm.getAttackPlayers().contains(uuid)) {
+            currentTeam = "ATTACK";
+        } else if (vm.getDefendPlayers().contains(uuid)) {
+            currentTeam = "DEFEND";
+        }
+        if (!recordedTeam.equals(currentTeam)) {
+            recentCommanderDisconnect.remove(uuid);
+            recentCommanderTeam.remove(uuid);
+            return false;
+        }
+        // 恢复指挥官身份
+        TeamGovernance g = getTeam(recordedTeam);
+        // 取消正在进行的补位流程
+        if (g.state == State.VACANCY_VOLUNTEER || g.state == State.VACANCY_VOTE) {
+            g.state = State.IDLE;
+            g.volunteers.clear();
+            g.votes.clear();
+            g.challenger = null;
+            g.tickCounter = 0;
+            g.endGameTime = 0L;
+        }
+        assignCommander(recordedTeam, uuid, "reconnect");
+        // 清理记录
+        recentCommanderDisconnect.remove(uuid);
+        recentCommanderTeam.remove(uuid);
+        Espetro.broadcastToTeam(recordedTeam, "§a指挥官 " + player.getName().getString() + " 已重新上线，恢复指挥权");
+        return true;
     }
 
     private void cancelImpeachment(String team, TeamGovernance g, String message) {

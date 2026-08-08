@@ -1,19 +1,34 @@
 package org.espetro.client.gui;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.MapVoteStatePacket;
 import org.espetro.network.NetworkManager;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Forced global map-vote screen with up to six candidates. */
 public final class MapVoteScreen extends MutilScreen {
+    /** 16:9 横向预览图显示尺寸。 */
+    private static final int IMG_W = 192;
+    private static final int IMG_H = 108;
+
     private static MapVoteStatePacket latest = new MapVoteStatePacket(
         false, 0, 0L, List.of(), java.util.Map.of(), null, null, null);
+
+    /** 缓存已从网络包解码的地图预览纹理：mapFolder → ResourceLocation。 */
+    private static final Map<String, ResourceLocation> previewTextureCache = new LinkedHashMap<>();
 
     private final List<MapCardButton> mapButtons = new ArrayList<>();
     private long receivedAtMs;
@@ -26,10 +41,35 @@ public final class MapVoteScreen extends MutilScreen {
         super(Component.literal("地图投票"));
         receivedAtMs = System.currentTimeMillis();
         receivedRemaining = latest.remainingSeconds;
+        preloadPreviewTextures();
+    }
+
+    /** 从网络包 Candidate.previewBytes 解码并注册纹理。 */
+    private static void preloadPreviewTextures() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+
+        for (MapVoteStatePacket.Candidate c : latest.candidates) {
+            if (c.previewBytes == null || c.previewBytes.length == 0) continue;
+            String key = c.mapFolder;
+            if (previewTextureCache.containsKey(key)) continue;
+
+            try (InputStream in = new ByteArrayInputStream(c.previewBytes)) {
+                NativeImage image = NativeImage.read(in);
+                DynamicTexture texture = new DynamicTexture(image);
+                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(
+                    "espetro", "map_preview/" + key);
+                mc.getTextureManager().register(rl, texture);
+                previewTextureCache.put(key, rl);
+            } catch (IOException e) {
+                // 解码失败视为无预览图
+            }
+        }
     }
 
     public static void update(MapVoteStatePacket packet) {
         latest = packet;
+        preloadPreviewTextures();
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen instanceof MapVoteScreen screen) {
             boolean structureChanged = screen.mapButtons.size() != packet.candidates.size();
@@ -52,15 +92,18 @@ public final class MapVoteScreen extends MutilScreen {
             "§6§l全局地图投票", buildResultText(computeDisplaySeconds()),
             "§7全服统一计票，票数最高的地图胜出",
             EspetroMutilWidgets.GOLD);
-        int columns = 3;
-        int visibleRows = 2;
+
+        int columns = this.width < 500 ? 1 : this.width < 750 ? 2 : 3;
         int gap = 6;
-        int panelW = Math.min(width - 16, 24 + columns * 240 + (columns - 1) * gap);
-        int cardW = (panelW - 24 - (columns - 1) * gap) / columns;
-        int availableH = Math.max(96, height - 70);
-        int cardH = Math.max(46, Math.min(96, (availableH - gap) / visibleRows));
+        int cardW = IMG_W + 8;
+        // 图片下方：名称行 + 票数行
+        int cardH = IMG_H + 36;
+        int rows = (latest.candidates.size() + columns - 1) / columns;
+        int panelW = Math.min(width - 16, 24 + columns * cardW + (columns - 1) * gap);
+        int panelH = Math.min(this.height - 72, rows * cardH + (rows - 1) * gap + 8);
         int startX = (width - panelW) / 2 + 12;
         int startY = 52;
+
         for (int i = 0; i < latest.candidates.size(); i++) {
             MapVoteStatePacket.Candidate candidate = latest.candidates.get(i);
             int col = i % columns;
@@ -72,7 +115,7 @@ public final class MapVoteScreen extends MutilScreen {
                     if (tutorialPreviewMode) {
                         return;
                     }
-                    NetworkManager.sendMapVoteCast(candidate.mapFolder());
+                    NetworkManager.sendMapVoteCast(candidate.mapFolder);
                 });
             mapButtons.add(button);
             root.addChild(button);
@@ -83,8 +126,8 @@ public final class MapVoteScreen extends MutilScreen {
     private void refreshLabels() {
         for (int i = 0; i < mapButtons.size() && i < latest.candidates.size(); i++) {
             var candidate = latest.candidates.get(i);
-            int votes = latest.tally.getOrDefault(candidate.mapFolder(), 0);
-            boolean selected = candidate.mapFolder().equals(latest.myVoteMapFolder);
+            int votes = latest.tally.getOrDefault(candidate.mapFolder, 0);
+            boolean selected = candidate.mapFolder.equals(latest.myVoteMapFolder);
             mapButtons.get(i).update(candidate, votes, selected, latest.active);
         }
         updateStatusHeader(true);
@@ -129,7 +172,7 @@ public final class MapVoteScreen extends MutilScreen {
         return false;
     }
 
-    /** Same three-by-two card language as formation voting, without requiring an image asset. */
+    /** 16:9 预览图卡片，显示地图截图或占位文本。 */
     private static final class MapCardButton extends GuiElement {
         private MapVoteStatePacket.Candidate candidate;
         private int votes;
@@ -173,7 +216,8 @@ public final class MapVoteScreen extends MutilScreen {
             int by = y + getY();
             int bw = getWidth();
             int bh = getHeight();
-            // 透明卡片：仅细边框 + 选中/hover 描边，无大面积暗底与网格装饰。
+
+            // 透明卡片：仅细边框 + 选中/hover 描边
             int border = selected ? 0xFFE8B85C
                 : hasFocus() && enabled ? 0xFFC2C8D5 : 0x805B6260;
             if (selected) {
@@ -183,16 +227,40 @@ public final class MapVoteScreen extends MutilScreen {
             }
             graphics.renderOutline(bx, by, bw, bh, border);
 
-            int previewBottom = by + Math.max(24, bh - 26);
+            // 上方预览图片区域（16:9）
+            int imgAreaW = IMG_W;
+            int imgAreaH = IMG_H;
+            int imgX = bx + (bw - imgAreaW) / 2;
+            int imgY = by + 3;
+
+            ResourceLocation previewTex = previewTextureCache.get(candidate.mapFolder);
+            if (previewTex != null) {
+                graphics.blit(previewTex, imgX, imgY, imgAreaW, imgAreaH,
+                    0f, 0f, imgAreaW, imgAreaH, imgAreaW, imgAreaH);
+            } else {
+                // 暂无预览图：灰色背景 + 占位文字
+                graphics.fill(imgX, imgY, imgX + imgAreaW, imgY + imgAreaH, 0x40303030);
+                graphics.renderOutline(imgX, imgY, imgAreaW, imgAreaH, 0x605B6260);
+                String placeholder = "§8暂未添加图片";
+                graphics.drawCenteredString(Minecraft.getInstance().font,
+                    Component.literal(placeholder),
+                    bx + bw / 2, imgY + imgAreaH / 2 - 5,
+                    EspetroMutilWidgets.DIM);
+            }
+
+            // 地图名称
             String mapName = EspetroMutilWidgets.trimToWidth(
-                (selected ? "§a✔ " : "§f") + candidate.displayName(), Math.max(20, bw - 10));
+                (selected ? "§a✔ " : "§f") + candidate.displayName, Math.max(20, bw - 10));
             graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(mapName), bx + bw / 2, by + Math.max(8, (previewBottom - by) / 2 - 4),
+                Component.literal(mapName), bx + bw / 2, by + IMG_H + 8,
                 EspetroMutilWidgets.TEXT);
+
+            // 票数
             String footer = "§7票数 §e" + votes;
             graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(footer), bx + bw / 2, by + bh - 17,
+                Component.literal(footer), bx + bw / 2, by + IMG_H + 22,
                 enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM);
+
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
     }

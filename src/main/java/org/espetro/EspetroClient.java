@@ -36,6 +36,9 @@ public class EspetroClient {
 
         org.espetro.client.gui.AuraTipRadialController.initialize();
         org.espetro.client.gui.RadioRadialController.initialize();
+        org.espetro.client.gui.VehicleWheelController.initialize();
+        org.espetro.client.gui.VehicleSupplyHud.register();
+        org.espetro.client.gui.SeatSwitchHandler.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(org.espetro.client.EquipZoneRenderer::onRenderLevel);
         // AuraTip 默认画在 HUD；部署等主 GUI 打开时再叠一层到 Screen 之上
@@ -43,6 +46,8 @@ public class EspetroClient {
             .addListener(org.espetro.client.gui.AuraTipAboveScreen::onScreenRenderPost);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRightClickBlock);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.LeaderOverheadRenderer::onRenderLevelStage);
     }
 
     // ==================== 事件处理方法 ====================
@@ -71,6 +76,7 @@ public class EspetroClient {
             Espetro.KEY_RADIAL instanceof net.minecraft.client.KeyMapping key ? key : null;
         org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
         org.espetro.client.gui.RadioRadialController.tick(mc);
+        org.espetro.client.gui.VehicleWheelController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
         // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
         if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
@@ -104,19 +110,10 @@ public class EspetroClient {
                 org.espetro.network.NetworkManager.requestGameState();
             }
         }
-        // J键 - 请求职业选择 (在部署/战斗阶段允许)
+        // J键 - 主城打开组队面板，对战中请求职业选择
         if (Espetro.KEY_CLASS != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_CLASS).consumeClick()) {
-            // 不允许快捷键覆盖当前阶段强制显示的选择/重部署界面。
-            if (mc.screen == null
-                && org.espetro.client.gui.ClientGameState.canOpenClassSelection()) {
-                String playerTeam = org.espetro.client.gui.ClientGameState.getPlayerTeam();
-                if (playerTeam == null) {
-                    org.espetro.network.NetworkManager.requestGameState();
-                } else {
-                    String factionId = org.espetro.client.gui.ClientGameState.getPlayerFactionId();
-                    org.espetro.network.NetworkManager.requestClassSelection(factionId);
-                }
-            }
+            if (mc.screen != null) return;
+            org.espetro.client.gui.ClientGameState.tryOpenJKeyScreen();
         }
     }
 

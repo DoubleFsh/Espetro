@@ -8,8 +8,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import org.espetro.network.TeamSelectStatePacket;
 
 /**
- * 攻防方选择界面
- * 展示攻击方/防守方图片，图片下方显示名称标签
+ * 攻守方选择界面
+ * 展示攻击方/防守方编制图片，图片下方显示名称标签。
+ * 中途加入时若服务端已发送编制选择图则优先使用；否则回退到默认攻/防图片。
  */
 public class TeamSelectionScreen extends MutilScreen {
     private static int attackCount;
@@ -19,19 +20,25 @@ public class TeamSelectionScreen extends MutilScreen {
     private static boolean selectionActive;
     /** 本机当前已选队伍："ATTACK" / "DEFEND" / null。 */
     private static String myTeam;
+    /** 因平衡被锁定的队伍："ATTACK" / "DEFEND" / null。 */
+    private static String lockedTeam;
+    /** 攻击方编制选择图 ResourceLocation 字符串（服务端下发）。 */
+    private static String attackFactionImage;
+    /** 防守方编制选择图 ResourceLocation 字符串（服务端下发）。 */
+    private static String defendFactionImage;
 
-    private static final ResourceLocation ATTACK_TEXTURE =
+    private static final ResourceLocation DEFAULT_ATTACK =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/attack_faction.png");
-    private static final ResourceLocation DEFEND_TEXTURE =
+    private static final ResourceLocation DEFAULT_DEFEND =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/defend_faction.png");
 
-    // 图片最大显示尺寸（等比例缩放，不超过此尺寸）
-    private static final int IMG_MAX = 128;
+    // 16:9 横向图片显示尺寸
+    private static final int IMG_W = 192;
+    private static final int IMG_H = 108;
     // 图片间距
     private static final int IMG_GAP = 48;
     // 纹理原始尺寸（128x128 含透明留白，避免边缘黑边）
-    private static final int ATK_TEX_W = 128, ATK_TEX_H = 128;
-    private static final int DEF_TEX_W = 128, DEF_TEX_H = 128;
+    private static final int TEX_W = 128, TEX_H = 128;
 
     /** 选中态边框：进攻红 / 防守蓝（不透明，始终可见）。 */
     private static final int ATTACK_BORDER = 0xFFFF5E56;
@@ -50,20 +57,28 @@ public class TeamSelectionScreen extends MutilScreen {
     private static final int HEADER_TIMER_Y = 54;
     private static final int HEADER_H = 66;
 
-    private EspetroMutilWidgets.ImageButton attackButton;
-    private EspetroMutilWidgets.ImageButton defendButton;
+    private TeamFactionImageButton attackButton;
+    private TeamFactionImageButton defendButton;
 
     public TeamSelectionScreen() {
         super(Component.literal("选择队伍"));
     }
 
     public static void updateTeamState(TeamSelectStatePacket packet) {
+        int oldAtk = attackCount;
+        int oldDef = defendCount;
+        String oldAtkImg = attackFactionImage;
+        String oldDefImg = defendFactionImage;
+
         attackCount = packet.attackCount;
         defendCount = packet.defendCount;
         remainingSeconds = packet.remainingSeconds;
         receivedAtMs = System.currentTimeMillis();
         selectionActive = packet.active;
         myTeam = packet.myTeam;
+        lockedTeam = packet.lockedTeam;
+        attackFactionImage = packet.attackFactionImage;
+        defendFactionImage = packet.defendFactionImage;
         // 同步到 ClientGameState，避免本地与权威状态漂移。
         if (packet.myTeam != null && !packet.myTeam.isBlank()) {
             ClientGameState.setPlayerTeam(packet.myTeam);
@@ -71,15 +86,24 @@ public class TeamSelectionScreen extends MutilScreen {
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen instanceof TeamSelectionScreen screen) {
-            // 只刷新选中边框，绝不 rebuild 整棵 MUtil 树（否则每秒广播会高度闪烁）。
-            screen.refreshSelectionBorders();
+            // 编制图片变了 → 重建按钮
+            if (!eq(oldAtkImg, attackFactionImage) || !eq(oldDefImg, defendFactionImage)) {
+                screen.rebuildMutilRoot();
+            } else {
+                // 只刷新选中边框
+                screen.refreshSelectionBorders();
+            }
         }
+    }
+
+    private static boolean eq(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 
     @Override
     public void onClose() {
-        // 由服务端在选定队伍或阶段推进后替换界面。中途加入者处于
-        // BATTLE 阶段，不能仅以全局 TEAM_SELECT 阶段判断是否允许退出。
+        // 由服务端在选定队伍或阶段推进后替换界面。
     }
 
     @Override
@@ -89,7 +113,6 @@ public class TeamSelectionScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 静态不透明纯黑底（与部署/其他阶段 GUI 一致），不依赖失明层。
         EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
@@ -108,55 +131,77 @@ public class TeamSelectionScreen extends MutilScreen {
             "§8选择后将进入编制投票阶段", EspetroMutilWidgets.DIM));
 
         // 两个图片 + 间距 + 两侧留白
-        int contentW = IMG_MAX * 2 + IMG_GAP;
-        int panelW = Math.min(500, Math.max(contentW + 40, this.width - 36));
+        int contentW = IMG_W * 2 + IMG_GAP;
+        int panelW = Math.min(540, Math.max(contentW + 40, this.width - 36));
 
-        // 图片区 + 文字标签区
-        int panelH = IMG_MAX + 26;
+        int panelH = IMG_H + 26;
         int panelX = (this.width - panelW) / 2;
         int panelY = HEADER_H + Math.max(8, (this.height - HEADER_H - panelH) / 2);
 
-        // 两张图片居中排列
-        int totalImgW = IMG_MAX * 2 + IMG_GAP;
+        int totalImgW = IMG_W * 2 + IMG_GAP;
         int imgsStartX = panelX + (panelW - totalImgW) / 2;
         int imgY = panelY + 2;
 
-        // 攻击方图片（左侧，等比例缩放）
+        ResourceLocation atkTex = resolveTexture(attackFactionImage, DEFAULT_ATTACK);
+        ResourceLocation defTex = resolveTexture(defendFactionImage, DEFAULT_DEFEND);
+
+        // 攻击方图片（左侧，16:9 横向）
         int attackImgX = imgsStartX;
-        attackButton = new EspetroMutilWidgets.ImageButton(attackImgX, imgY, IMG_MAX, IMG_MAX,
-            ATK_TEX_W, ATK_TEX_H, ATTACK_TEXTURE,
-            () -> TeamSelectionGui.selectTeam("ATTACK"))
-            .setHoverBorderColor(ATTACK_HOVER);
+        attackButton = new TeamFactionImageButton(attackImgX, imgY, IMG_W, IMG_H, TEX_W, TEX_H, atkTex,
+            () -> { if (!"ATTACK".equals(lockedTeam)) TeamSelectionGui.selectTeam("ATTACK"); },
+            ATTACK_BORDER, ATTACK_HOVER);
         root.addChild(attackButton);
 
-        // 防守方图片（右侧，等比例缩放）
-        int defendImgX = imgsStartX + IMG_MAX + IMG_GAP;
-        defendButton = new EspetroMutilWidgets.ImageButton(defendImgX, imgY, IMG_MAX, IMG_MAX,
-            DEF_TEX_W, DEF_TEX_H, DEFEND_TEXTURE,
-            () -> TeamSelectionGui.selectTeam("DEFEND"))
-            .setHoverBorderColor(DEFEND_HOVER);
+        // 防守方图片（右侧，16:9 横向）
+        int defendImgX = imgsStartX + IMG_W + IMG_GAP;
+        defendButton = new TeamFactionImageButton(defendImgX, imgY, IMG_W, IMG_H, TEX_W, TEX_H, defTex,
+            () -> { if (!"DEFEND".equals(lockedTeam)) TeamSelectionGui.selectTeam("DEFEND"); },
+            DEFEND_BORDER, DEFEND_HOVER);
         root.addChild(defendButton);
 
         // 图片下方的文字标签
-        int labelY = imgY + IMG_MAX + 6;
-        root.addChild(EspetroMutilWidgets.centeredText(attackImgX, labelY, IMG_MAX,
+        int labelY = imgY + IMG_H + 6;
+        root.addChild(EspetroMutilWidgets.centeredText(attackImgX, labelY, IMG_W,
             "§c§l攻击方", EspetroMutilWidgets.ATTACK));
-        root.addChild(EspetroMutilWidgets.centeredText(defendImgX, labelY, IMG_MAX,
+        root.addChild(EspetroMutilWidgets.centeredText(defendImgX, labelY, IMG_W,
             "§9§l防守方", EspetroMutilWidgets.DEFEND));
 
         refreshSelectionBorders();
     }
 
-    /** 按当前 myTeam 刷新两侧图片的常驻选中边框，不重建布局。 */
+    private static ResourceLocation resolveTexture(String fullPath, ResourceLocation fallback) {
+        if (fullPath == null || fullPath.isEmpty()) return fallback;
+        int colon = fullPath.indexOf(':');
+        if (colon > 0) {
+            return ResourceLocation.fromNamespaceAndPath(
+                fullPath.substring(0, colon), fullPath.substring(colon + 1));
+        }
+        ResourceLocation rl = ResourceLocation.tryParse(fullPath);
+        return rl != null ? rl : fallback;
+    }
+
+    /** 按当前 myTeam 和 lockedTeam 刷新两侧图片的边框。 */
     private void refreshSelectionBorders() {
         String team = resolveMyTeam();
         if (attackButton != null) {
             attackButton.setSelectedBorderColor("ATTACK".equals(team) ? ATTACK_BORDER : 0x00000000);
-            attackButton.setBorderColor(0x00000000);
+            if ("ATTACK".equals(lockedTeam)) {
+                attackButton.setBorderColor(ATTACK_BORDER);
+                attackButton.setHoverBorderColor(ATTACK_BORDER);
+            } else {
+                attackButton.setBorderColor(0x00000000);
+                attackButton.setHoverBorderColor(ATTACK_HOVER);
+            }
         }
         if (defendButton != null) {
             defendButton.setSelectedBorderColor("DEFEND".equals(team) ? DEFEND_BORDER : 0x00000000);
-            defendButton.setBorderColor(0x00000000);
+            if ("DEFEND".equals(lockedTeam)) {
+                defendButton.setBorderColor(DEFEND_BORDER);
+                defendButton.setHoverBorderColor(DEFEND_BORDER);
+            } else {
+                defendButton.setBorderColor(0x00000000);
+                defendButton.setHoverBorderColor(DEFEND_HOVER);
+            }
         }
     }
 
@@ -177,8 +222,12 @@ public class TeamSelectionScreen extends MutilScreen {
     protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int elapsed = (int) ((System.currentTimeMillis() - receivedAtMs) / 1000L);
         int left = Math.max(0, remainingSeconds - elapsed);
-        graphics.drawCenteredString(this.font,
-            "§c进攻方 §f" + attackCount + "   §7|   §9防守方 §f" + defendCount,
+        // 队伍人数计数
+        String countLine = "§c进攻方 §f" + attackCount + "   §7|   §9防守方 §f" + defendCount;
+        if (lockedTeam != null) {
+            countLine += "   §c\uD83D\uDD12 " + ("ATTACK".equals(lockedTeam) ? "进攻方" : "防守方") + "已锁定";
+        }
+        graphics.drawCenteredString(this.font, countLine,
             this.width / 2, HEADER_COUNT_Y, 0xFFFFFF);
         if (selectionActive) {
             graphics.drawCenteredString(this.font, "§e剩余 " + left + " 秒，可重新选择",
@@ -200,5 +249,64 @@ public class TeamSelectionScreen extends MutilScreen {
 
     void refreshSelectionBordersPublic() {
         refreshSelectionBorders();
+    }
+
+    /**
+     * 可点击的阵营图片按钮。
+     * 渲染时从纹理中裁剪中心 16:9 区域填满 IMG_W×IMG_H，支持选中/悬浮边框。
+     */
+    private static final class TeamFactionImageButton extends GuiElement {
+        private final ResourceLocation texture;
+        private final int texW, texH;
+        private final int dispW, dispH;
+        private final Runnable action;
+        private int borderColor;
+        private int hoverBorderColor;
+        private int selectedBorderColor;
+
+        TeamFactionImageButton(int x, int y, int dispW, int dispH,
+                               int texW, int texH, ResourceLocation texture,
+                               Runnable action, int borderColor, int hoverBorderColor) {
+            super(x, y, dispW, dispH);
+            this.dispW = dispW;
+            this.dispH = dispH;
+            this.texW = texW;
+            this.texH = texH;
+            this.texture = texture;
+            this.action = action;
+            this.borderColor = borderColor;
+            this.hoverBorderColor = hoverBorderColor;
+            this.selectedBorderColor = 0x00000000;
+        }
+
+        void setBorderColor(int c) { this.borderColor = c; }
+        void setHoverBorderColor(int c) { this.hoverBorderColor = c; }
+        void setSelectedBorderColor(int c) { this.selectedBorderColor = c; }
+
+        @Override
+        public boolean onMouseClick(int mouseX, int mouseY, int button) {
+            if (button == 0 && hasFocus() && action != null) {
+                action.run();
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void draw(GuiGraphics graphics, int refX, int refY, int screenWidth,
+                         int screenHeight, int mouseX, int mouseY, float opacity) {
+            if (!isVisible() || texture == null) return;
+            int bx = refX + getX();
+            int by = refY + getY();
+
+            graphics.blit(texture, bx, by, dispW, dispH, 0, 0, texW, texH, texW, texH);
+
+            // 边框
+            int outColor = selectedBorderColor != 0 ? selectedBorderColor
+                : hasFocus() ? hoverBorderColor : borderColor;
+            if (outColor != 0) {
+                graphics.renderOutline(bx, by, dispW, dispH, outColor);
+            }
+        }
     }
 }

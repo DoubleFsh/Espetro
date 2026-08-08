@@ -35,7 +35,7 @@ final class TutorialPreviewFactory {
                 "",
                 0);
             case FACTION_SELECT -> classSelectPreview();
-            case FACTION_REVEAL -> new FactionRevealScreen("示范进攻编制", "示范防守编制", 30);
+            case FACTION_REVEAL -> new FactionRevealScreen("示范进攻编制", "示范防守编制", null, null, 30);
             case DEPLOY_PANEL, SQUAD, CLASS_SELECT, DEPLOY_POINT -> null; // 无全量 packet 时仅 HUD
             case KEYS_RADIAL, RADIO_RALLY, LOGISTICS_FOB, COMMANDER_SKILLS,
                  OUTPOST, BATTLE, RESPAWN, SCORE_ROUND, MID_JOIN -> null;
@@ -44,9 +44,9 @@ final class TutorialPreviewFactory {
 
     private static Screen mapVotePreview() {
         List<MapVoteStatePacket.Candidate> candidates = new ArrayList<>();
-        candidates.add(new MapVoteStatePacket.Candidate("demo_alpha", "示范地图 A", "平坦训练场"));
-        candidates.add(new MapVoteStatePacket.Candidate("demo_bravo", "示范地图 B", "城市巷战"));
-        candidates.add(new MapVoteStatePacket.Candidate("demo_charlie", "示范地图 C", "山地防线"));
+        candidates.add(new MapVoteStatePacket.Candidate("demo_alpha", "示范地图 A", "平坦训练场", null));
+        candidates.add(new MapVoteStatePacket.Candidate("demo_bravo", "示范地图 B", "城市巷战", null));
+        candidates.add(new MapVoteStatePacket.Candidate("demo_charlie", "示范地图 C", "山地防线", null));
         Map<String, Integer> tally = new HashMap<>();
         tally.put("demo_alpha", 2);
         tally.put("demo_bravo", 1);

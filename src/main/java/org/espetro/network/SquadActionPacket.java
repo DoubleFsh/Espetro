@@ -29,7 +29,11 @@ public class SquadActionPacket {
         /** 火力组组长：转移组长给同组 targetUuid */
         TRANSFER_FIRETEAM_LEADER,
         /** 小队长：将 targetUuid 分配到 fireteamIndex (0=A,1=B,2=C) */
-        ASSIGN_FIRETEAM
+        ASSIGN_FIRETEAM,
+        /** 小队长：锁定小队，其他人无法加入 */
+        LOCK,
+        /** 小队长：解锁小队 */
+        UNLOCK
     }
 
     private final Action action;
@@ -80,6 +84,14 @@ public class SquadActionPacket {
     public static SquadActionPacket assignFireteam(UUID targetUuid, Fireteam fireteam) {
         return new SquadActionPacket(Action.ASSIGN_FIRETEAM, SquadManager.NO_SQUAD, "",
             targetUuid, fireteam != null ? fireteam.toNetwork() : (byte) -1);
+    }
+
+    public static SquadActionPacket lock() {
+        return new SquadActionPacket(Action.LOCK, SquadManager.NO_SQUAD, "");
+    }
+
+    public static SquadActionPacket unlock() {
+        return new SquadActionPacket(Action.UNLOCK, SquadManager.NO_SQUAD, "");
     }
 
     public static SquadActionPacket read(FriendlyByteBuf buf) {
@@ -142,6 +154,8 @@ public class SquadActionPacket {
                     yield SquadManager.getInstance().assignFireteam(
                         player, targetUuid, Fireteam.fromIndex(fireteamIndex));
                 }
+                case LOCK -> SquadManager.getInstance().lockSquad(player);
+                case UNLOCK -> SquadManager.getInstance().unlockSquad(player);
             };
 
             player.sendSystemMessage(Component.literal((result.success ? "\u00a7a" : "\u00a7c") + result.message));
@@ -188,6 +202,10 @@ public class SquadActionPacket {
                     result.team,
                     ClassCountManager.getInstance().getPlayerFaction(player.getUUID())
                 );
+                // 创建/加入小队后队长身份可能变化，需重推部署面板刷新 leaderOnly 过滤
+                if (action == Action.CREATE || action == Action.JOIN) {
+                    NetworkManager.syncUnifiedDeployScreen(player, -1);
+                }
             } else {
                 TeamPackManager.getInstance().syncTeamPackItem(player);
                 NetworkManager.sendSquadSync(player);

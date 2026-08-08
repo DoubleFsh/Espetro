@@ -68,6 +68,8 @@ public class VehicleManager {
     private final Map<String, Map<String, List<UUID>>> activeVehicles = new HashMap<>();
     private final Set<UUID> activeVehicleIds = new HashSet<>();
     private final Map<UUID, ActiveVehicleData> activeVehicleData = new HashMap<>();
+    /** 载具补给库存：entity UUID → supply state */
+    private final Map<UUID, VehicleSupplyState> vehicleSupplies = new HashMap<>();
     // ESPoints 使用的轻量索引；区块卸载时保留，实体被明确销毁或回合结束时移除。
     private final Map<UUID, SupplyStationSnapshot> mappedSupplyStations = new HashMap<>();
 
@@ -96,6 +98,62 @@ public class VehicleManager {
         ActiveVehicleData withLocation(Entity entity) {
             return new ActiveVehicleData(factionId, vehicleType, slotIndex, team, initial,
                 entity.level().dimension(), entity.blockPosition().immutable());
+        }
+    }
+
+    /** 单辆载具的弹药/建材库存 */
+    public static final class VehicleSupplyState {
+        private int ammo;
+        private int construction;
+        private final int maxCapacity;
+        private final boolean canCarryConstruction;
+
+        public VehicleSupplyState(int maxCapacity, boolean canCarryConstruction) {
+            this.maxCapacity = maxCapacity;
+            this.canCarryConstruction = canCarryConstruction;
+        }
+
+        public int getAmmo() { return ammo; }
+        public int getConstruction() { return construction; }
+        public int getMaxCapacity() { return maxCapacity; }
+        public boolean canCarryConstruction() { return canCarryConstruction; }
+        public int getTotalUsed() { return ammo + construction; }
+        public int getFreeSpace() { return Math.max(0, maxCapacity - ammo - construction); }
+
+        public int addAmmo(int amount) {
+            int space = getFreeSpace();
+            int added = Math.min(amount, space);
+            ammo += added;
+            return added;
+        }
+
+        public int removeAmmo(int amount) {
+            int removed = Math.min(amount, ammo);
+            ammo -= removed;
+            return removed;
+        }
+
+        public int addConstruction(int amount) {
+            if (!canCarryConstruction) return 0;
+            int space = getFreeSpace();
+            int added = Math.min(amount, space);
+            construction += added;
+            return added;
+        }
+
+        public int removeConstruction(int amount) {
+            int removed = Math.min(amount, construction);
+            construction -= removed;
+            return removed;
+        }
+
+        public boolean canAffordAmmo(int amount) { return ammo >= amount; }
+
+        public void fillAmmo() { ammo = maxCapacity; }
+        public void fillHalf() {
+            ammo = maxCapacity / 2;
+            if (canCarryConstruction) construction = maxCapacity / 2;
+            else construction = 0;
         }
     }
 
@@ -523,6 +581,7 @@ public class VehicleManager {
     @Nullable
     private ActiveVehicleData removeTrackedVehicle(UUID entityId) {
         activeVehicleIds.remove(entityId);
+        vehicleSupplies.remove(entityId);
         ActiveVehicleData data = activeVehicleData.remove(entityId);
 
         if (data != null) {
@@ -558,6 +617,17 @@ public class VehicleManager {
         activeVehicleData.put(vehicleId, new ActiveVehicleData(
             factionId, vehicleType, slotIndex, normalizedTeam, initial,
             vehicle.level().dimension(), vehicle.blockPosition().immutable()));
+        // 初始化载具补给库存
+        VehicleConfig.VehicleTypeConfig vcfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
+        if (vcfg != null && vcfg.supplyCapacity > 0) {
+            VehicleSupplyState supply = new VehicleSupplyState(vcfg.supplyCapacity, vcfg.canCarryConstruction());
+            if (initial && vcfg.supplyVeh) {
+                supply.fillHalf(); // 补给载具平分弹药和建材
+            } else if (initial) {
+                supply.fillAmmo(); // 战斗载具/普通载具装满弹药
+            }
+            vehicleSupplies.put(vehicleId, supply);
+        }
     }
 
     /** 在实体换维度或卸载进区块前保存最后坐标，停服时据此重新加载并清理。 */
@@ -633,6 +703,97 @@ public class VehicleManager {
         return total;
     }
 
+    // --- Vehicle Supply Accessors ---
+
+    /** 获取载具的补给状态（可能为 null，表示该载具无补给系统） */
+    @Nullable
+    public VehicleSupplyState getVehicleSupply(UUID entityId) {
+        return vehicleSupplies.get(entityId);
+    }
+
+    /** 获取载具的补给状态，若不存在则创建（用于首次访问时） */
+    @Nullable
+    public VehicleSupplyState getOrCreateVehicleSupply(UUID entityId, String factionId, String vehicleType) {
+        VehicleSupplyState existing = vehicleSupplies.get(entityId);
+        if (existing != null) return existing;
+        VehicleConfig.VehicleTypeConfig vcfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
+        if (vcfg == null || vcfg.supplyCapacity <= 0) return null;
+        VehicleSupplyState supply = new VehicleSupplyState(vcfg.supplyCapacity, vcfg.canCarryConstruction());
+        vehicleSupplies.put(entityId, supply);
+        return supply;
+    }
+
+    /** 在FOB/基地向载具装载弹药，返回实际装载量 */
+    public int loadAmmoToVehicle(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        return supply != null ? supply.addAmmo(amount) : 0;
+    }
+
+    /** 从载具卸载弹药，返回实际卸载量 */
+    public int unloadAmmoFromVehicle(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        return supply != null ? supply.removeAmmo(amount) : 0;
+    }
+
+    /** 向载具装载建材，返回实际装载量 */
+    public int loadConstructionToVehicle(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        return supply != null ? supply.addConstruction(amount) : 0;
+    }
+
+    /** 从载具卸载建材，返回实际卸载量 */
+    public int unloadConstructionFromVehicle(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        return supply != null ? supply.removeConstruction(amount) : 0;
+    }
+
+    /** 载具弹药是否足够支付指定量 */
+    public boolean canVehicleAffordAmmo(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        return supply != null && supply.canAffordAmmo(amount);
+    }
+
+    /** 从载具扣除弹药，返回是否成功 */
+    public boolean consumeVehicleAmmo(UUID entityId, int amount) {
+        VehicleSupplyState supply = vehicleSupplies.get(entityId);
+        if (supply == null || !supply.canAffordAmmo(amount)) return false;
+        supply.removeAmmo(amount);
+        return true;
+    }
+
+    /** 载具是否为补给或战斗载具（有补给系统） */
+    public boolean isVehicleSupplyCapable(UUID entityId) {
+        return vehicleSupplies.containsKey(entityId);
+    }
+
+    /** 获取载具所属 factionId（从 ActiveVehicleData 中查找） */
+    @Nullable
+    public String getVehicleFactionId(UUID entityId) {
+        ActiveVehicleData data = activeVehicleData.get(entityId);
+        return data != null ? data.factionId() : null;
+    }
+
+    /** 获取载具 vehicleType */
+    @Nullable
+    public String getVehicleType(UUID entityId) {
+        ActiveVehicleData data = activeVehicleData.get(entityId);
+        return data != null ? data.vehicleType() : null;
+    }
+
+    /** 获取载具所属队伍 */
+    @Nullable
+    public String getVehicleTeam(UUID entityId) {
+        ActiveVehicleData data = activeVehicleData.get(entityId);
+        return data != null ? data.team() : null;
+    }
+
+    /** 获取载具最后已知位置 */
+    @Nullable
+    public BlockPos getVehicleLastPosition(UUID entityId) {
+        ActiveVehicleData data = activeVehicleData.get(entityId);
+        return data != null ? data.lastKnownPosition() : null;
+    }
+
     /**
      * 重置所有载具
      */
@@ -677,6 +838,7 @@ public class VehicleManager {
         activeVehicles.clear();
         activeVehicleIds.clear();
         activeVehicleData.clear();
+        vehicleSupplies.clear();
         cooldowns.clear();
         mappedSupplyStations.clear();
     }

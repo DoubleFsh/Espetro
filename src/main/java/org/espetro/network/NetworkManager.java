@@ -3,20 +3,16 @@ package org.espetro.network;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import org.espetro.Espetro;
 import org.espetro.config.GameConfig;
-import org.espetro.team.ClassCountManager;
-import org.espetro.team.ClassLoadoutPreviewResolver;
-import org.espetro.team.ClassSelectManager;
-import org.espetro.team.FactionDataLoader;
-import org.espetro.team.FactionDataProvider;
-import org.espetro.team.GamePhase;
-import org.espetro.team.SquadManager;
-import org.espetro.team.VoteManager;
+import org.espetro.team.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -329,6 +325,18 @@ public class NetworkManager {
         NET.registerMessage(nextId(), EquipZoneSyncPacket.class, EquipZoneSyncPacket::write, EquipZoneSyncPacket::read, EquipZoneSyncPacket::handle);
         NET.registerMessage(nextId(), RadioRadialPacket.class,
             RadioRadialPacket::write, RadioRadialPacket::read, RadioRadialPacket::handle);
+        // 战局倒计时包
+        NET.registerMessage(nextId(), BattleTimerPacket.class,
+            BattleTimerPacket::write, BattleTimerPacket::read, BattleTimerPacket::handle);
+        // 组队匹配
+        NET.registerMessage(nextId(), PartyActionPacket.class,
+            PartyActionPacket::write, PartyActionPacket::read, PartyActionPacket::handle);
+        NET.registerMessage(nextId(), PartyListPacket.class,
+            PartyListPacket::write, PartyListPacket::read, PartyListPacket::handle);
+        NET.registerMessage(nextId(), VehicleSupplyActionPacket.class,
+            VehicleSupplyActionPacket::write, VehicleSupplyActionPacket::read, VehicleSupplyActionPacket::handle);
+        NET.registerMessage(nextId(), VehicleSupplySyncPacket.class,
+            VehicleSupplySyncPacket::write, VehicleSupplySyncPacket::read, VehicleSupplySyncPacket::handle);
     }
 
     public static void sendRadioOpen(net.minecraft.core.BlockPos pos) {
@@ -345,6 +353,84 @@ public class NetworkManager {
         List<EquipZoneSyncPacket.Zone> zones =
             org.espetro.team.ClassEquipmentZones.collectForPlayer(player);
         NET.send(PacketDistributor.PLAYER.with(() -> player), new EquipZoneSyncPacket(zones));
+    }
+
+    /** 向玩家发送载具职业选择（不依赖 Radio，战斗载具专用） */
+    public static void sendVehicleClassSelect(ServerPlayer player, String factionId) {
+        if (factionId == null) return;
+        var loader = org.espetro.team.FactionDataProvider.getOrCreateLoader();
+        var server = player.getServer();
+        if (server != null) loader.ensureLoaded(server.getResourceManager());
+        var kits = loader.getClassesForFaction(factionId);
+        var counts = org.espetro.team.ClassCountManager.getInstance();
+        String team = counts.getEffectivePlayerTeam(player.getUUID());
+        int squadId = org.espetro.team.SquadManager.getInstance().getPlayerSquadId(player.getUUID());
+        boolean inSquad = squadId != org.espetro.team.SquadManager.NO_SQUAD;
+        int squadSize = inSquad
+            ? org.espetro.team.SquadManager.getInstance().getSquadMemberUuids(team, squadId).size()
+            : 0;
+        int cooldown = counts.getClassSwitchCooldownRemaining(player.getUUID());
+        var list = new java.util.ArrayList<RadioRadialPacket.ClassEntry>();
+        if (kits != null) {
+            for (var kit : kits) {
+                if (kit == null) continue;
+                int squadCount = counts.getSquadClassCountForViewer(
+                    player.getUUID(), team, kit.id);
+                int maxCount = kit.teamCount
+                    ? Math.max(1, kit.maxPlayers)
+                    : kit.maxPerSquad > 0 ? kit.maxPerSquad : Math.max(1, kit.maxPlayers);
+                int teamCount = counts.getCount(team, kit.id);
+                String denial = "";
+                boolean cooldownBlocked = cooldown > 0;
+                if (cooldownBlocked) {
+                    denial = "职业切换冷却中，还需等待 " + cooldown + " 秒。";
+                } else if (!inSquad) {
+                    denial = "请先加入班组小队后再选择职业。";
+                } else if (kit.teammatesNeed > 0 && squadSize < kit.teammatesNeed) {
+                    denial = "小队达到 " + kit.teammatesNeed + " 人后才能选择该职业。";
+                } else if (kit.teamCount && squadCount >= kit.maxPlayers) {
+                    denial = "本小队该职业人数已满（" + squadCount + "/" + kit.maxPlayers + "）。";
+                } else if (!kit.teamCount && teamCount >= kit.maxPlayers) {
+                    denial = "该职业全队人数已满（" + teamCount + "/" + kit.maxPlayers + "）。";
+                } else if (!kit.teamCount && kit.maxPerSquad > 0 && squadCount >= kit.maxPerSquad) {
+                    denial = "本小队该职业人数已满（" + squadCount + "/" + kit.maxPerSquad + "）。";
+                }
+                boolean enabled = denial.isEmpty();
+                var variants = new java.util.ArrayList<RadioRadialPacket.VariantEntry>();
+                String defaultVariantId = "";
+                if (kit.variants != null) {
+                    var defaultVariant = kit.variants.get("default");
+                    if (defaultVariant != null) defaultVariantId = defaultVariant.id;
+                    else if (!kit.variants.isEmpty()) defaultVariantId = kit.variants.values().iterator().next().id;
+                    for (var variant : kit.variants.values()) {
+                        int variantCount = kit.teamCount
+                            ? counts.countVariantInSquad(team, squadId, kit.id, variant.id)
+                            : counts.getVariantCount(team, kit.id, variant.id);
+                        boolean variantEnabled = enabled
+                            && (!kit.strictCount || variantCount < variant.maxPlayers);
+                        String variantDenial = denial;
+                        if (enabled && !variantEnabled)
+                            variantDenial = "该装备变体人数已满（" + variantCount + "/" + variant.maxPlayers + "）。";
+                        variants.add(new RadioRadialPacket.VariantEntry(
+                            variant.id, variant.name, variantCount, variant.maxPlayers,
+                            kit.strictCount, variantEnabled, variantDenial));
+                    }
+                }
+                String icon = kit.icon != null ? kit.icon : "";
+                String iconImage = kit.iconImage != null ? kit.iconImage : "";
+                list.add(new RadioRadialPacket.ClassEntry(
+                    kit.id, kit.name, icon, iconImage,
+                    defaultVariantId, squadCount, maxCount,
+                    true, enabled, cooldownBlocked, denial, variants));
+            }
+        }
+        NET.send(PacketDistributor.PLAYER.with(() -> player), RadioRadialPacket.classList(list));
+    }
+
+    private static void sendRadioClassList(ServerPlayer player, net.minecraft.core.BlockPos radioPos) {
+        // 打开客户端 RadioRadialController，复用其职业选择逻辑
+        NET.send(PacketDistributor.PLAYER.with(() -> player),
+            RadioRadialPacket.openRequest(radioPos != null ? radioPos : net.minecraft.core.BlockPos.ZERO));
     }
 
     public static void broadcastEquipZonesForTeam(String team) {
@@ -528,11 +614,61 @@ public class NetworkManager {
         }
     }
 
+    public static void lockSquad() {
+        NET.sendToServer(SquadActionPacket.lock());
+    }
+
+    public static void unlockSquad() {
+        NET.sendToServer(SquadActionPacket.unlock());
+    }
+
     /**
-     * 发送打开阵营选择界面包给指定玩家
+     * 发送打开阵营选择界面包给指定玩家（同时发送当前队伍状态，含编制图片）。
      */
     public static void sendOpenFactionScreen(ServerPlayer player) {
         NET.send(PacketDistributor.PLAYER.with(() -> player), new OpenFactionScreenPacket());
+        // 同时发送当前队伍选择状态（含人数 + 编制图片），让中途加入者看到实时数据
+        sendCurrentTeamSelectState(player);
+    }
+
+    /** 向单个玩家发送当前的队伍选择状态。 */
+    public static void sendCurrentTeamSelectState(ServerPlayer player) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        GameStateManager gsm = GameStateManager.getInstance();
+        int attack = 0, defend = 0;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            String t = Espetro.getPlayerTeam(p);
+            if ("ATTACK".equals(t)) attack++;
+            else if ("DEFEND".equals(t)) defend++;
+        }
+        // 获取编制图片
+        ClassSelectManager csm = ClassSelectManager.getInstance();
+        String atkImg = getFactionSelectionImage(csm.getFinalAttackClass());
+        String defImg = getFactionSelectionImage(csm.getFinalDefendClass());
+        long end = server.overworld().getGameTime() + 999999L;
+        String myTeam = Espetro.getPlayerTeam(player);
+        NET.send(PacketDistributor.PLAYER.with(() -> player),
+            new TeamSelectStatePacket(attack, defend, 0, end, false, myTeam, null, atkImg, defImg));
+    }
+
+    private static String getFactionSelectionImage(String factionId) {
+        return getFactionSelectionImageStatic(factionId);
+    }
+
+    /** 公开版本，供 GameStateManager 等直接调用。 */
+    public static String getFactionSelectionImageStatic(String factionId) {
+        if (factionId == null || factionId.isEmpty()) return null;
+        org.espetro.team.FactionDataLoader loader =
+            org.espetro.team.FactionDataProvider.getOrCreateLoader();
+        if (loader != null) {
+            org.espetro.team.FactionDataLoader.FactionData faction =
+                loader.getFaction(factionId);
+            if (faction != null && faction.selectionImage != null && !faction.selectionImage.isEmpty()) {
+                return faction.selectionImage;
+            }
+        }
+        return null;
     }
 
     /**
@@ -570,10 +706,32 @@ public class NetworkManager {
             FactionDataLoader.FactionData faction = loader.getFaction(id);
             String name = faction != null ? faction.name : id;
             String selectionImage = faction != null ? faction.selectionImage : "";
+            byte[] imageData = loadEsFactionsImage(selectionImage);
             list.add(new ClassSelectScreenPacket.FactionInfo(
-                id, name, selectionImage, voteCounts.getOrDefault(id, 0)));
+                id, name, selectionImage, voteCounts.getOrDefault(id, 0), imageData));
         }
         return list;
+    }
+
+    /**
+     * 从服务端 EsFactions/ 目录加载编制图片字节。
+     * 仅当 selectionImage 为简单文件名（不含冒号）且文件存在时返回数据。
+     */
+    private static byte[] loadEsFactionsImage(String selectionImage) {
+        if (selectionImage == null || selectionImage.isBlank()) return null;
+        // 含冒号的是 ResourceLocation 格式，从 jar/资源包加载，不需要发送字节
+        if (selectionImage.contains(":")) return null;
+        try {
+            Path imagePath = FMLPaths.GAMEDIR.get().resolve("EsFactions")
+                .resolve(selectionImage).normalize();
+            Path esFactionsDir = FMLPaths.GAMEDIR.get().resolve("EsFactions").normalize();
+            if (!imagePath.startsWith(esFactionsDir)) return null;
+            if (!Files.isRegularFile(imagePath)) return null;
+            return Files.readAllBytes(imagePath);
+        } catch (Exception e) {
+            Espetro.LOGGER.debug("EsFactions 图片读取失败: {} ({})", selectionImage, e.toString());
+            return null;
+        }
     }
 
     /**
@@ -774,6 +932,8 @@ public class NetworkManager {
         FactionRevealPacket packet = new FactionRevealPacket(
             getFactionDisplayName(attackFactionId),
             getFactionDisplayName(defendFactionId),
+            getFactionSelectionImage(attackFactionId),
+            getFactionSelectionImage(defendFactionId),
             durationSeconds
         );
 
@@ -796,6 +956,18 @@ public class NetworkManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
         GamePhaseSyncPacket packet = new GamePhaseSyncPacket(phase);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
+        }
+    }
+
+    /**
+     * 广播战局倒计时到所有在线玩家。
+     */
+    public static void broadcastBattleTimer(int remainingSeconds) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        BattleTimerPacket packet = new BattleTimerPacket(remainingSeconds);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
         }
@@ -921,7 +1093,10 @@ public class NetworkManager {
         FactionDataLoader.ClassKitData[] kits = loader.getClassesForFaction(factionId);
         if (kits != null) {
             ClassCountManager counts = ClassCountManager.getInstance();
+            boolean isLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
             for (FactionDataLoader.ClassKitData kit : kits) {
+                // leaderOnly: 非队长不显示，后续向前补位
+                if (kit.leaderOnly && !isLeader) continue;
                 int count = counts.getEffectiveClassCountForViewer(player.getUUID(), team, kit.id);
                 int squadCount = counts.getSquadClassCountForViewer(player.getUUID(), team, kit.id);
                 java.util.List<UnifiedDeployScreenPacket.VariantInfo> variants = new java.util.ArrayList<>();
@@ -947,7 +1122,8 @@ public class NetworkManager {
                     kit.id, kit.name, kit.description, kit.role, kit.icon, kit.iconImage,
                     kit.maxPlayers, kit.strictCount, count, kit.troopValue, kit.healthBonus, kit.speedBonus,
                     kit.teamCount, kit.maxPerSquad, squadCount,
-                    Math.max(0, kit.teammatesNeed), variants
+                    Math.max(0, kit.teammatesNeed), kit.row, kit.unlockPerN, kit.unlockMinSquad, kit.leaderOnly,
+                    variants
                 ));
                 classCountMap.put(kit.id, count);
             }
@@ -973,7 +1149,10 @@ public class NetworkManager {
                 bd.getBastionId(), bd.getName(),
                 armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ(),
                 UnifiedDeployScreenPacket.BastionItem.TYPE_HAB,
-                bm.getFobStatus(bd)
+                bm.getFobStatus(bd),
+                0L, 0,
+                bd.getHabAvailableAt(),
+                org.espetro.logistics.LogisticsConfig.get().habActivationSeconds
             ));
         }
         bastionList.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));
@@ -1217,13 +1396,21 @@ public class NetworkManager {
         NET.send(PacketDistributor.PLAYER.with(() -> player), new OpenMapVoteScreenPacket());
     }
 
-    public static void broadcastTeamSelectState(int attack, int defend, int remaining, long endGameTime, boolean active) {
+    public static void broadcastTeamSelectState(int attack, int defend, int remaining, long endGameTime, boolean active, String lockedTeam) {
+        broadcastTeamSelectState(attack, defend, remaining, endGameTime, active, lockedTeam, null, null);
+    }
+
+    /** 带 faction 编制图片的版本。 */
+    public static void broadcastTeamSelectState(int attack, int defend, int remaining,
+                                                 long endGameTime, boolean active, String lockedTeam,
+                                                 String attackFactionImage, String defendFactionImage) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             String team = Espetro.getPlayerTeam(player);
             NET.send(PacketDistributor.PLAYER.with(() -> player),
-                new TeamSelectStatePacket(attack, defend, remaining, endGameTime, active, team));
+                new TeamSelectStatePacket(attack, defend, remaining, endGameTime, active, team, lockedTeam,
+                    attackFactionImage, defendFactionImage));
         }
     }
 
@@ -1249,10 +1436,15 @@ public class NetworkManager {
         NET.send(PacketDistributor.PLAYER.with(() -> player), new OpenHubScreenPacket(online, status));
     }
 
-    public static void broadcastRoundEnd(String winner, int seconds) {
+    public static void broadcastRoundEnd(String winner, int seconds,
+                                          String winnerShowName, String loserShowName,
+                                          int attackTickets, int defendTickets,
+                                          int resultLevel, boolean attackerTimedOut) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
-        RoundEndPacket packet = new RoundEndPacket(winner, seconds);
+        RoundEndPacket packet = new RoundEndPacket(winner, seconds,
+            winnerShowName, loserShowName, attackTickets, defendTickets,
+            resultLevel, attackerTimedOut);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
         }
@@ -1272,5 +1464,51 @@ public class NetworkManager {
 
     public static void sendMatchStatsAction(MatchStatsActionPacket.Action action, java.util.UUID target) {
         NET.sendToServer(new MatchStatsActionPacket(action, target));
+    }
+
+    // ==================== 组队匹配 ====================
+
+    public static void sendPartyCreate(String password) {
+        NET.sendToServer(PartyActionPacket.create(password));
+    }
+
+    public static void sendPartyJoin(java.util.UUID partyId, String password) {
+        NET.sendToServer(PartyActionPacket.join(partyId, password));
+    }
+
+    public static void sendPartyLeave() {
+        NET.sendToServer(PartyActionPacket.leave());
+    }
+
+    public static void sendPartyKick(java.util.UUID partyId, java.util.UUID targetId) {
+        NET.sendToServer(PartyActionPacket.kick(partyId, targetId));
+    }
+
+    public static void sendPartyToggleLock(java.util.UUID partyId) {
+        NET.sendToServer(PartyActionPacket.toggleLock(partyId));
+    }
+
+    public static void sendPartyDisband(java.util.UUID partyId) {
+        NET.sendToServer(PartyActionPacket.disband(partyId));
+    }
+
+    /** 客户端请求最新的组队列表。 */
+    public static void requestPartyList() {
+        NET.sendToServer(PartyActionPacket.requestList());
+    }
+
+    /** 服务端：向所有在线玩家广播队伍列表。 */
+    public static void broadcastPartyList(org.espetro.team.PartyManager pm) {
+        var server = org.espetro.Espetro.getServer();
+        if (server == null) return;
+        for (var player : server.getPlayerList().getPlayers()) {
+            sendPartyListTo(player);
+        }
+    }
+
+    /** 服务端：向指定玩家发送队伍列表。 */
+    public static void sendPartyListTo(net.minecraft.server.level.ServerPlayer player) {
+        NET.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+            PartyListPacket.from(org.espetro.team.PartyManager.getInstance(), player.getUUID()));
     }
 }

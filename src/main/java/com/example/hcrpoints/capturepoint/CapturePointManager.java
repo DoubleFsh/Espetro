@@ -57,6 +57,7 @@ public class CapturePointManager {
     private int currentBatch = 1; // 当前批次
     private int totalBatches = 0; // 总批数
     private String endBehavior = "terminate"; // 结束行为：terminate(终止)或loop(循环)
+    private int attackBatchCompletionReinforcement = 50; // 进攻方完成一个批次后获得的兵力增援（从CapturePoints.json读取，默认50）
     private boolean operationModeRunning = false; // 行动模式是否正在运行
     private final Map<String, String> teamRoles = new ConcurrentHashMap<>(); // 队伍角色映射：team -> role(attacker/defender)
     private final Map<String, Integer> teamReinforcements = new ConcurrentHashMap<>(); // 队伍当前兵力映射：team -> reinforcements
@@ -883,6 +884,44 @@ public class CapturePointManager {
     public String getEndBehavior() {
         return endBehavior;
     }
+
+    /**
+     * 设置进攻方完成批次后的兵力增援值
+     * @param value 兵力增加值
+     */
+    public void setAttackBatchCompletionReinforcement(int value) {
+        this.attackBatchCompletionReinforcement = Math.max(0, value);
+    }
+
+    /**
+     * 获取进攻方完成批次后的兵力增援值
+     * @return 兵力增加值
+     */
+    public int getAttackBatchCompletionReinforcement() {
+        return attackBatchCompletionReinforcement;
+    }
+
+    /**
+     * 从 CapturePoints.json 字符串中读取 attackBatchCompletionReinforcement 并应用
+     * @param capturePointsJson 原始 JSON 字符串
+     */
+    public void applyCapturePointsConfig(String capturePointsJson) {
+        if (capturePointsJson == null || capturePointsJson.isEmpty()) {
+            return;
+        }
+        try {
+            com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(capturePointsJson).getAsJsonObject();
+            if (root.has("attackBatchCompletionReinforcement")) {
+                int value = root.get("attackBatchCompletionReinforcement").getAsInt();
+                if (value > 0) {
+                    this.attackBatchCompletionReinforcement = value;
+                    ModLogger.info("从 CapturePoints.json 读取进攻批次奖励兵力: " + value);
+                }
+            }
+        } catch (Exception e) {
+            ModLogger.warn("解析 CapturePoints.json 中的 attackBatchCompletionReinforcement 失败: " + e.getMessage());
+        }
+    }
     
     /**
      * 从计划据点中计算总批次数量
@@ -936,15 +975,18 @@ public class CapturePointManager {
         
         // 如果所有据点都被进攻方占领，处理批次推进或结束
         if (allCapturedByAttacker) {
-            // 每完成一个批次，给进攻方增加200兵力
-            int cmdResult = server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "/espetro troops add ATTACK 50");
-            ModLogger.info("批次 " + currentBatch + " 完成，执行命令：espetro troops add ATTACK 50，返回值：" + cmdResult);
+            int reward = attackBatchCompletionReinforcement;
+            // 通过 Espetro 兵力接口增加兵力
+            server.getCommands().performPrefixedCommand(
+                server.createCommandSourceStack(),
+                "/espetro troops add ATTACK " + reward);
+            ModLogger.info("批次 " + currentBatch + " 完成，已通过 Espetro 兵力接口为进攻方增加 " + reward + " 兵力");
             
             // 向所有进攻方玩家发送批次完成消息
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 Team playerTeam = player.getTeam();
                 if (playerTeam != null && playerTeam.getName().equals(attackerTeam)) {
-                    player.sendSystemMessage(Component.literal("§6[据点] §e第 " + currentBatch + " 批次据点已全部占领！进攻方获得 50 兵力增援！"));
+                    player.sendSystemMessage(Component.literal("§6[据点] §e第 " + currentBatch + " 批次据点已全部占领！进攻方获得 " + reward + " 兵力增援！"));
                 }
             }
             
@@ -1264,10 +1306,17 @@ public class CapturePointManager {
                                     Team pt = p.getTeam();
                                     if (pt == null) continue;
                                     if (pt.getName().equals(attackerTeam)) {
+                                        // 设置显示时长：渐入10tick, 停留60tick(3秒), 渐出20tick
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(10, 60, 20));
+                                        // 空白主标题（副标题单独显示必须配主标题包）
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(net.minecraft.network.chat.Component.empty()));
+                                        // 副标题正文
                                         p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(attackerMsg));
                                         p.playNotifySound(net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,
                                             net.minecraft.sounds.SoundSource.MASTER, 1.0F, 1.0F);
                                     } else if (defenderTeam != null && pt.getName().equals(defenderTeam)) {
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(10, 60, 20));
+                                        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(net.minecraft.network.chat.Component.empty()));
                                         p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(defenderMsg));
                                         p.playNotifySound(net.minecraft.sounds.SoundEvents.BEACON_DEACTIVATE,
                                             net.minecraft.sounds.SoundSource.MASTER, 1.0F, 1.0F);

@@ -17,6 +17,7 @@ import org.espetro.Espetro;
 import org.espetro.bastion.BastionManager;
 import org.espetro.config.GameConfig;
 import org.espetro.network.NetworkManager;
+   import org.espetro.network.TeamSelectStatePacket;
 import org.espetro.vehicle.VehicleManager;
 import org.espetro.stats.PlayerMatchStatsManager;
 import org.espetro.mapconfig.ExternalConfigBootstrap;
@@ -50,9 +51,12 @@ public class GameStateManager {
 
     // 部署阶段计时器
     private int deployTickCounter = 0;
+    private int battleTickCounter = 0;
     // 双方编制揭示阶段计时器
     private int factionRevealTickCounter = 0;
     private static final int TICKS_PER_SECOND = 20;
+    /** 队伍平衡：双方人数差异上限，达到此值时锁定人多的一方。 */
+    static final int TEAM_BALANCE_MAX_DIFF = 3;
     /** 硬上限：防止配置/默认值过大导致单 tick 上万 setBlock（S100 尖峰）。 */
     private static final int ATTACK_WAITING_BARRIER_SIDE = 80;
     private static final int ATTACK_WAITING_BARRIER_HEIGHT = 12;
@@ -75,6 +79,8 @@ public class GameStateManager {
     private final Set<UUID> teamSelectedPlayers = new HashSet<>();
     // 战局中加入的玩家（部署点选择完成前）
     private final Set<UUID> midGameJoiners = new HashSet<>();
+    /** 开局自动分配时记录玩家队伍，用于重连还原。 */
+    private final Map<UUID, String> assignedTeams = new java.util.HashMap<>();
     // 已在部署阶段选择过职业的玩家（防止重复选择）
     private final Set<UUID> deployClassSelected = new HashSet<>();
     private int teamSelectTickCounter = 0;
@@ -316,13 +322,48 @@ public class GameStateManager {
         teamSelectTickCounter = 0;
         setPhase(GamePhase.TEAM_SELECT);
 
+        List<ServerPlayer> allPlayers = new ArrayList<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             clearPlayerRoundAssignment(player);
-            waitingForTeam.add(player.getUUID());
+            allPlayers.add(player);
             applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
-            NetworkManager.sendOpenFactionScreen(player);
         }
-        broadcastTeamSelectState();
+
+        // 自动分配：按组队信息尽量保持同队，均分人数
+        java.util.Map<UUID, String> assignments =
+            org.espetro.team.PartyManager.getInstance().computeTeamAssignment(allPlayers);
+        assignedTeams.clear();
+        assignedTeams.putAll(assignments);
+
+        for (ServerPlayer player : allPlayers) {
+            String team = assignments.get(player.getUUID());
+            if (team == null) team = "ATTACK";
+            applyTeamAssignmentToPlayer(player, team);
+            teamSelectedPlayers.add(player.getUUID());
+        }
+
+        // 组队信息在分配后无需保留
+        org.espetro.team.PartyManager.getInstance().clearAll();
+
+        broadcastTeamSelectState(false);
+        Espetro.LOGGER.info("自动分配队伍完成: 进攻{}人 防守{}人",
+            countPlayersOnTeam("ATTACK"), countPlayersOnTeam("DEFEND"));
+        startDefendCommanderVote();
+    }
+
+    /** 将一个玩家的队伍分配应用到所有相关系统。 */
+    private void applyTeamAssignmentToPlayer(ServerPlayer player, String team) {
+        if (!"ATTACK".equals(team) && !"DEFEND".equals(team)) return;
+        ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), team);
+        ClassCountManager.getInstance().setPlayerTeam(player.getUUID(), team);
+        if ("ATTACK".equals(team)) {
+            TeamManager.joinAttackTeam(player.server, player.getName().getString());
+        } else {
+            TeamManager.joinDefendTeam(player.server, player.getName().getString());
+        }
+        PlayerMatchStatsManager.getInstance().onTeamSelected(player, team);
+        player.sendSystemMessage(Component.literal(
+            "§a你已被分配到" + ("ATTACK".equals(team) ? "§c攻击方" : "§9防守方")));
     }
 
     // ========== 队伍选择阶段 ==========
@@ -333,6 +374,24 @@ public class GameStateManager {
         }
         String resolvedTeam = getTeamFromFactionStatic(factionId);
         if (!"ATTACK".equals(resolvedTeam) && !"DEFEND".equals(resolvedTeam)) {
+            return;
+        }
+
+        // 队伍平衡检查：计算选择后双方人数差异
+        String oldTeam = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
+        int attack = countPlayersOnTeam("ATTACK");
+        int defend = countPlayersOnTeam("DEFEND");
+        if ("ATTACK".equals(resolvedTeam) && !"ATTACK".equals(oldTeam)) {
+            attack++;
+            if (oldTeam != null) defend--;
+        } else if ("DEFEND".equals(resolvedTeam) && !"DEFEND".equals(oldTeam)) {
+            defend++;
+            if (oldTeam != null) attack--;
+        }
+        int diff = Math.abs(attack - defend);
+        if (diff > TEAM_BALANCE_MAX_DIFF) {
+            player.sendSystemMessage(Component.literal(
+                "§c队伍人数差异已达上限，该阵营暂时锁定。请选择另一阵营或等待人数变化。"));
             return;
         }
 
@@ -386,17 +445,61 @@ public class GameStateManager {
     private void broadcastTeamSelectState(boolean active) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
-        int attack = 0;
-        int defend = 0;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
-            if ("ATTACK".equals(team)) attack++;
-            if ("DEFEND".equals(team)) defend++;
-        }
+        int attack = countPlayersOnTeam("ATTACK");
+        int defend = countPlayersOnTeam("DEFEND");
         int remaining = Math.max(0,
             GameConfig.getTeamSelectSeconds() - teamSelectTickCounter / TICKS_PER_SECOND);
         long end = server.overworld().getGameTime() + remaining * 20L;
-        NetworkManager.broadcastTeamSelectState(attack, defend, remaining, end, active);
+        // 队伍平衡锁定：差异达到上限时锁定人多的一方
+        String lockedTeam = null;
+        int diff = Math.abs(attack - defend);
+        if (diff >= TEAM_BALANCE_MAX_DIFF) {
+            lockedTeam = attack > defend ? "ATTACK" : "DEFEND";
+        }
+        NetworkManager.broadcastTeamSelectState(attack, defend, remaining, end, active, lockedTeam,
+            getFinalFactionImageClassStatic("ATTACK"), getFinalFactionImageClassStatic("DEFEND"));
+    }
+
+    /** 向所有 midGameJoiner（尚未选边）发送最新的队伍人数和编制图片。 */
+    private void broadcastMidGameTeamState() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || midGameJoiners.isEmpty()) return;
+
+        int attack = countPlayersOnTeam("ATTACK");
+        int defend = countPlayersOnTeam("DEFEND");
+        long end = server.overworld().getGameTime() + 999999L;
+        String atkImg = NetworkManager.getFactionSelectionImageStatic(
+            ClassSelectManager.getInstance().getFinalAttackClass());
+        String defImg = NetworkManager.getFactionSelectionImageStatic(
+            ClassSelectManager.getInstance().getFinalDefendClass());
+
+        for (UUID uuid : midGameJoiners) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null || ClassCountManager.getInstance().getPlayerTeam(uuid) != null) continue;
+            String myTeam = null; // 尚未选边
+            NetworkManager.NET.send(
+                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                new TeamSelectStatePacket(attack, defend, 0, end, false, myTeam, null, atkImg, defImg));
+        }
+    }
+
+    /** 静态辅助：获取 faction 的 selectionImage，避免循环依赖。 */
+    private static String getFinalFactionImageClassStatic(String team) {
+        String id = "ATTACK".equals(team)
+            ? ClassSelectManager.getInstance().getFinalAttackClass()
+            : ClassSelectManager.getInstance().getFinalDefendClass();
+        return NetworkManager.getFactionSelectionImageStatic(id);
+    }
+
+    private int countPlayersOnTeam(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return 0;
+        int count = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String pt = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
+            if (team.equals(pt)) count++;
+        }
+        return count;
     }
 
     // ========== 阶段流转 ==========
@@ -849,6 +952,7 @@ public class GameStateManager {
         boolean hadActiveOutposts = OutpostManager.getInstance().isAvailable();
         OutpostManager.getInstance().deactivate();
         setPhase(GamePhase.BATTLE);
+        battleTickCounter = 0;
         if (hadActiveOutposts) {
             Espetro.broadcastToTeam("DEFEND", "§c⚔ 攻方已开始进攻，前哨基地已销毁！");
         }
@@ -984,9 +1088,17 @@ public class GameStateManager {
                 onFactionRevealTick();
                 break;
             case DEPLOYING:
+                // 每隔 5 秒向中途加入但尚未选边的玩家同步最新人数和编制图片
+                if (deployTickCounter % (5 * TICKS_PER_SECOND) == 0) {
+                    broadcastMidGameTeamState();
+                }
                 onDeployTick();
                 break;
             case BATTLE:
+                // 每隔 5 秒向中途加入但尚未选边的玩家同步最新人数和编制图片
+                if (battleTickCounter % (5 * TICKS_PER_SECOND) == 0) {
+                    broadcastMidGameTeamState();
+                }
                 // 开战瞬间可能仍有屏障分帧恢复队列
                 processBarrierWork();
                 if (pendingBarrierRemove.isEmpty() && pendingBarrierPlace.isEmpty()
@@ -997,6 +1109,17 @@ public class GameStateManager {
                 MinecraftServer battleServer = Espetro.getServer();
                 if (battleServer != null) {
                     CommanderGovernanceManager.getInstance().onServerTick(battleServer);
+                }
+                // 战局倒计时
+                battleTickCounter++;
+                int battleTimeoutSeconds = GameConfig.getBattleTimeoutSeconds();
+                if (battleTimeoutSeconds > 0 && battleTickCounter % TICKS_PER_SECOND == 0) {
+                    int remaining = battleTimeoutSeconds - (battleTickCounter / TICKS_PER_SECOND);
+                    if (remaining <= 0) {
+                        Espetro.broadcastToAll("§c进攻方未在一小时内占领所有据点，防守方获胜！");
+            endRound("DEFEND", true);
+                    }
+                    NetworkManager.broadcastBattleTimer(remaining);
                 }
                 break;
             case ROUND_END:
@@ -1197,8 +1320,10 @@ public class GameStateManager {
         waitingForTeam.clear();
         teamSelectedPlayers.clear();
         midGameJoiners.clear();
+        assignedTeams.clear();
         deployClassSelected.clear();
         deployTickCounter = 0;
+        battleTickCounter = 0;
         factionRevealTickCounter = 0;
         teamSelectTickCounter = 0;
         roundEndTickCounter = 0;
@@ -1245,11 +1370,22 @@ public class GameStateManager {
                 player.sendSystemMessage(Component.literal("§e战场正在装载，请稍候。"));
             }
             case TEAM_SELECT -> {
-                clearPlayerRoundAssignment(player);
-                waitingForTeam.add(player.getUUID());
-                applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
-                NetworkManager.sendOpenFactionScreen(player);
-                broadcastTeamSelectState();
+                String existing = assignedTeams.get(player.getUUID());
+                if (existing != null) {
+                    // 重连玩家直接还原原队伍
+                    clearPlayerRoundAssignment(player);
+                    applyTeamAssignmentToPlayer(player, existing);
+                    applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+                    teamSelectedPlayers.add(player.getUUID());
+                    broadcastTeamSelectState();
+                } else {
+                    // 新玩家在自动分配阶段加入：纳入下次分配或走 midGameJoin
+                    waitingForTeam.add(player.getUUID());
+                    clearPlayerRoundAssignment(player);
+                    applyMatchHoldState(player, HoldAnchor.BATTLEFIELD_WAIT);
+                    NetworkManager.sendOpenFactionScreen(player);
+                    broadcastTeamSelectState();
+                }
             }
             case ROUND_END, CLEANUP -> {
                 forcePlayerToHub(player);
@@ -1519,6 +1655,32 @@ public class GameStateManager {
     }
 
     public void onMidGameJoin(ServerPlayer player) {
+        // 检查是否有之前的队伍分配（掉线重连）
+        String assigned = assignedTeams.get(player.getUUID());
+        if (assigned != null) {
+            midGameJoiners.add(player.getUUID());
+            clearPlayerRoundAssignment(player);
+            applyTeamAssignmentToPlayer(player, assigned);
+            // applyTeamAssignmentToPlayer 只设置了 ATTACK/DEFEND 作为临时 factionId；
+            // 重连后选职业需要实际的编制 ID（如 "us_army"）。
+            ClassSelectManager selectManager = ClassSelectManager.getInstance();
+            String factionId = "ATTACK".equals(assigned)
+                ? selectManager.getFinalAttackClass()
+                : selectManager.getFinalDefendClass();
+            if (factionId == null) factionId = assigned;
+            ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), factionId);
+            // 重连直接进入部署阶段
+            if (currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE) {
+                prepareDeploySelection(player, assigned);
+                NetworkManager.queueUnifiedDeployScreen(player, getDeployTimeRemainingSeconds());
+            } else {
+                applyMatchHoldState(player, HoldAnchor.HUB_HIGH);
+            }
+            player.sendSystemMessage(Component.literal(
+                "§a已还原你的队伍分配: " + ("ATTACK".equals(assigned) ? "§c进攻方" : "§9防守方")));
+            return;
+        }
+
         midGameJoiners.add(player.getUUID());
         clearPlayerRoundAssignment(player);
         // 中途加入先在主城高空等待点选边。未选边之前必须保持旁观、失明和位置锁，
@@ -1692,12 +1854,22 @@ public class GameStateManager {
      * configured result-screen delay.
      */
     public boolean endRound(String winner) {
+        return endRound(winner, false);
+    }
+
+    /**
+     * 结束当前战局。
+     * @param attackerTimedOut 攻击方超时 → attack 票数归零
+     */
+    public boolean endRound(String winner, boolean attackerTimedOut) {
         if (currentPhase != GamePhase.BATTLE) {
+            Espetro.LOGGER.warn("[endRound] 拒绝：当前阶段={} (非 BATTLE)", currentPhase);
             return false;
         }
         String normalized = winner == null ? "" : winner.trim().toUpperCase(Locale.ROOT);
         if (!"ATTACK".equals(normalized) && !"DEFEND".equals(normalized)
             && !"DRAW".equals(normalized)) {
+            Espetro.LOGGER.warn("[endRound] 拒绝：非法赢家={}", normalized);
             return false;
         }
         pendingRoundWinner = normalized;
@@ -1705,14 +1877,67 @@ public class GameStateManager {
         roundEndTickCounter = 0;
         removeAttackWaitingBarrier();
         setPhase(GamePhase.ROUND_END);
-        NetworkManager.broadcastRoundEnd(normalized, GameConfig.getRoundEndSeconds());
+
+        // —— 收集结算数据 ——
+        TroopCountManager tcm = TroopCountManager.getInstance();
+        int atkRaw = tcm.getAttackTroops();
+        int defRaw = tcm.getDefendTroops();
+        if (attackerTimedOut) atkRaw = 0;
+
+        // 获取双方 faction show_name / name
+        String atkFactionId = ClassSelectManager.getInstance().getFinalAttackClass();
+        String defFactionId = ClassSelectManager.getInstance().getFinalDefendClass();
+        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
+        String atkShow = getFactionShowName(loader, atkFactionId, "进攻方");
+        String defShow = getFactionShowName(loader, defFactionId, "防守方");
+
+        // 计算结果等级
+        int diff, level;
+        String winShow, loseShow;
+        if ("DRAW".equals(normalized)) {
+            diff = 0; level = 0;
+            winShow = null; loseShow = null;
+        } else if ("ATTACK".equals(normalized)) {
+            diff = atkRaw - defRaw;
+            level = calcResultLevel(diff);
+            winShow = atkShow; loseShow = defShow;
+        } else { // DEFEND
+            diff = defRaw - atkRaw;
+            level = calcResultLevel(diff);
+            winShow = defShow; loseShow = atkShow;
+        }
+
+        int displaySeconds = GameConfig.getRoundEndSeconds();
+        NetworkManager.broadcastRoundEnd(normalized, displaySeconds,
+            winShow, loseShow, atkRaw, defRaw, level, attackerTimedOut);
+
         String result = switch (normalized) {
             case "ATTACK" -> "§c进攻方胜利";
             case "DEFEND" -> "§9防守方胜利";
             default -> "§e平局";
         };
         Espetro.broadcastToAll("§6===== " + result + " §6=====");
+        Espetro.LOGGER.info("[endRound] winner={} atkTickets={} defTickets={} level={} timedOut={}",
+            normalized, atkRaw, defRaw, level, attackerTimedOut);
         return true;
+    }
+
+    /** 根据票数差异计算结果等级（从赢方视角）。 */
+    private static int calcResultLevel(int diff) {
+        if (diff > 200) return 5;  // 完胜
+        if (diff > 100) return 4;  // 重大胜利
+        if (diff > 50)  return 3;  // 决定性胜利
+        if (diff > 25)  return 2;  // 险胜
+        if (diff > 0)   return 1;  // 惨烈胜利
+        return 0;                  // 平局
+    }
+
+    private static String getFactionShowName(FactionDataLoader loader, String factionId, String fallback) {
+        if (loader == null || factionId == null) return fallback;
+        FactionDataLoader.FactionData fd = loader.getFaction(factionId);
+        if (fd == null) return fallback;
+        if (fd.showName != null && !fd.showName.isEmpty()) return fd.showName;
+        return fd.name != null && !fd.name.isEmpty() ? fd.name : fallback;
     }
 
     private void beginCleanup() {

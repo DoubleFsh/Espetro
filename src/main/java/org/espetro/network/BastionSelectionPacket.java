@@ -146,7 +146,8 @@ public class BastionSelectionPacket {
         BastionData bastion,
         BastionManager manager
     ) {
-        manager.clearWaiting(player.getUUID());
+        // 延迟一 tick 解锁：防止客户端尚未确认传送即发送移动包导致非法移动踢人
+        player.server.execute(() -> manager.clearWaiting(player.getUUID()));
         player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
         player.removeAllEffects();
 

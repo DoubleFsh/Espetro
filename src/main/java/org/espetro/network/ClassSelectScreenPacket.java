@@ -30,12 +30,19 @@ public class ClassSelectScreenPacket {
         public final String name;
         public final String selectionImage;
         public final int voteCount;
+        /** 服务端从 EsFactions/ 读取的图片数据（可为 null） */
+        public final byte[] imageData;
 
         public FactionInfo(String id, String name, String selectionImage, int voteCount) {
+            this(id, name, selectionImage, voteCount, null);
+        }
+
+        public FactionInfo(String id, String name, String selectionImage, int voteCount, byte[] imageData) {
             this.id = id;
             this.name = name;
             this.selectionImage = selectionImage != null ? selectionImage : "";
             this.voteCount = voteCount;
+            this.imageData = imageData;
         }
     }
 
@@ -72,7 +79,8 @@ public class ClassSelectScreenPacket {
             String name = buf.readUtf();
             String selectionImage = buf.readUtf();
             int voteCount = buf.readVarInt();
-            factions.add(new FactionInfo(id, name, selectionImage, voteCount));
+            byte[] imageData = buf.readBoolean() ? buf.readByteArray() : null;
+            factions.add(new FactionInfo(id, name, selectionImage, voteCount, imageData));
         }
         String opponentTeamName = buf.readUtf();
         String opponentFaction = buf.readUtf();
@@ -92,6 +100,9 @@ public class ClassSelectScreenPacket {
             buf.writeUtf(info.name);
             buf.writeUtf(info.selectionImage);
             buf.writeVarInt(info.voteCount);
+            boolean hasImage = info.imageData != null;
+            buf.writeBoolean(hasImage);
+            if (hasImage) buf.writeByteArray(info.imageData);
         }
         buf.writeUtf(opponentTeamName != null ? opponentTeamName : "");
         buf.writeUtf(opponentFaction != null ? opponentFaction : "");

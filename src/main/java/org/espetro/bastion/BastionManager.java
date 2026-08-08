@@ -1549,10 +1549,11 @@ public class BastionManager {
 
         // 改选原部署点：取消未完成的 Rally 波次队列。
         org.espetro.team.TeamPackManager.getInstance().cancelPendingRespawn(player.getUUID());
-        clearWaiting(player.getUUID());
 
         // 传送玩家到原部署点。该坐标由队伍复活点 JSON 配置保存，不再因目标区块未加载而取消。
         player.teleportTo(deployPoint.level, deployPoint.pos.getX() + 0.5, deployPoint.pos.getY() + 0.1, deployPoint.pos.getZ() + 0.5, 0f, 0f);
+        // 先传送后清除等待，防止空窗期间移动包绕过检查
+        clearWaiting(player.getUUID());
 
         // 设置生存模式
         player.setGameMode(GameType.SURVIVAL);

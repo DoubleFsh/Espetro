@@ -1,2 +1,3 @@
 org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin player f_9743_
+org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin awaitingPositionFromClient f_9766_
 org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin teleport (DDDFF)V m_9774_

@@ -2,10 +2,12 @@ package org.espetro.network;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.espetro.Espetro;
+import org.espetro.logistics.LogisticsConfig;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.ClassEquipment;
 import org.espetro.team.ClassEquipmentZones;
@@ -26,7 +28,9 @@ public class ClassSelectPacket {
         /** J 键统一部署界面：只允许等待选点或位于本方原部署点。 */
         DEPLOY_SCREEN,
         /** 右键己方 Radio 打开的 AuraTip 职业轮盘。 */
-        RADIO
+        RADIO,
+        /** 战斗载具轮盘的更换职业。 */
+        VEHICLE
     }
 
     private final String teamOrFaction; // ATTACK/DEFEND 或 factionId
@@ -34,28 +38,41 @@ public class ClassSelectPacket {
     private final String variantId;
     private final Source source;
     private final BlockPos sourcePos;
+    private final java.util.UUID vehicleId; // VEHICLE 源专用
 
     public ClassSelectPacket(String teamOrFaction, String classId) {
-        this(teamOrFaction, classId, "", Source.DEPLOY_SCREEN, BlockPos.ZERO);
+        this(teamOrFaction, classId, "", Source.DEPLOY_SCREEN, BlockPos.ZERO, null);
     }
 
     public ClassSelectPacket(String teamOrFaction, String classId, String variantId) {
-        this(teamOrFaction, classId, variantId, Source.DEPLOY_SCREEN, BlockPos.ZERO);
+        this(teamOrFaction, classId, variantId, Source.DEPLOY_SCREEN, BlockPos.ZERO, null);
     }
 
     public ClassSelectPacket(String teamOrFaction, String classId, String variantId,
                              Source source, BlockPos sourcePos) {
+        this(teamOrFaction, classId, variantId, source, sourcePos, null);
+    }
+
+    public ClassSelectPacket(String teamOrFaction, String classId, String variantId,
+                             Source source, BlockPos sourcePos, java.util.UUID vehicleId) {
         this.teamOrFaction = teamOrFaction;
         this.classId = classId;
         this.variantId = variantId != null ? variantId : "";
         this.source = source != null ? source : Source.DEPLOY_SCREEN;
         this.sourcePos = sourcePos != null ? sourcePos.immutable() : BlockPos.ZERO;
+        this.vehicleId = vehicleId;
     }
 
     public static ClassSelectPacket fromRadio(String teamOrFaction, String classId,
                                                String variantId, BlockPos radioPos) {
         return new ClassSelectPacket(
             teamOrFaction, classId, variantId, Source.RADIO, radioPos);
+    }
+
+    public static ClassSelectPacket fromVehicle(String teamOrFaction, String classId,
+                                                 String variantId, java.util.UUID vehicleId) {
+        return new ClassSelectPacket(
+            teamOrFaction, classId, variantId, Source.VEHICLE, BlockPos.ZERO, vehicleId);
     }
 
     public static ClassSelectPacket read(FriendlyByteBuf buf) {
@@ -69,7 +86,8 @@ public class ClassSelectPacket {
             source = Source.DEPLOY_SCREEN;
         }
         BlockPos sourcePos = buf.readBlockPos();
-        return new ClassSelectPacket(teamOrFaction, classId, variantId, source, sourcePos);
+        java.util.UUID vehicleId = buf.readBoolean() ? buf.readUUID() : null;
+        return new ClassSelectPacket(teamOrFaction, classId, variantId, source, sourcePos, vehicleId);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -78,6 +96,8 @@ public class ClassSelectPacket {
         buf.writeUtf(variantId);
         buf.writeUtf(source.name());
         buf.writeBlockPos(sourcePos);
+        buf.writeBoolean(vehicleId != null);
+        if (vehicleId != null) buf.writeUUID(vehicleId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -112,10 +132,15 @@ public class ClassSelectPacket {
              * - Radio：点击位置仍是附近己方有效 Radio。
              * 不再把普通 HAB、个人上次部署点或前哨当作 J 键换职区。
              */
-            boolean allowed = source == Source.RADIO
-                ? RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos)
-                : BastionManager.getInstance().isWaitingForBastion(player.getUUID())
+            boolean allowed;
+            if (source == Source.RADIO) {
+                allowed = RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos);
+            } else if (source == Source.VEHICLE) {
+                allowed = vehicleId != null && isNearVehicle(player, vehicleId);
+            } else {
+                allowed = BastionManager.getInstance().isWaitingForBastion(player.getUUID())
                     || ClassEquipmentZones.isPlayerNearOriginalSpawn(player);
+            }
             if (!allowed) {
                 denyOutOfRange(player);
                 return;
@@ -137,6 +162,23 @@ public class ClassSelectPacket {
                 && countManager.getPlayerVariant(player.getUUID()).equals(currentVariant);
             String actualFactionId = countManager.getPlayerFaction(player.getUUID());
             String selectedVariantId = countManager.getPlayerVariant(player.getUUID());
+
+            // 载具换职业：从载具消耗弹药
+            if (source == Source.VEHICLE && vehicleId != null) {
+                var vsm = org.espetro.vehicle.VehicleManager.getInstance();
+                if (!vsm.consumeVehicleAmmo(vehicleId, getVehicleClassChangeCost())) {
+                    player.displayClientMessage(Component.literal("§c载具弹药不足，无法更换职业。"), true);
+                    return;
+                }
+                var supply = vsm.getVehicleSupply(vehicleId);
+                if (supply != null) {
+                    NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
+                        new VehicleSupplySyncPacket(vehicleId,
+                            supply.getAmmo(), supply.getConstruction(),
+                            supply.getMaxCapacity(), supply.canCarryConstruction()));
+                }
+            }
+
             /*
              * 死亡/中途加入的等待部署状态只预留职业名额，不在高空旁观位发装。
              * 真正落地统一由 GameStateManager.onMidGameDeployComplete 发放一次。
@@ -170,5 +212,16 @@ public class ClassSelectPacket {
         NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
             new ClassCountSyncPacket(message, true));
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(message));
+    }
+
+    /** 载具换职业弹药消耗 */
+    private static int getVehicleClassChangeCost() {
+        return LogisticsConfig.get().defaultResupplyAmmoCost;
+    }
+
+    /** 检测玩家是否在载具附近（20格） */
+    private static boolean isNearVehicle(ServerPlayer player, java.util.UUID vehicleId) {
+        BlockPos pos = org.espetro.vehicle.VehicleManager.getInstance().getVehicleLastPosition(vehicleId);
+        return pos != null && player.blockPosition().distSqr(pos) <= 400; // 20格
     }
 }

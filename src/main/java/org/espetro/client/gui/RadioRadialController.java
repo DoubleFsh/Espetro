@@ -47,11 +47,17 @@ public final class RadioRadialController {
 
     private static boolean initialized;
     private static BlockPos lastRadioPos = BlockPos.ZERO;
+    private static java.util.UUID pendingVehicleId; // 车辆换职业时非 null
     private static List<RadioRadialPacket.ClassEntry> cachedClasses = List.of();
     /** AuraTip 的 open() 在当前轮盘活跃时只会关闭；等关闭动画结束后再开目标菜单。 */
     private static ResourceLocation pendingMenu;
     /** 活跃 Overlay 期间禁止替换注册表，避免闪烁和菜单丢失。 */
     private static boolean pendingPublish;
+
+    /** 由车辆轮盘调用，在下一次职业列表到达时标记为车辆换职 */
+    public static void markNextClassListAsVehicle(java.util.UUID vehicleId) {
+        pendingVehicleId = vehicleId;
+    }
 
     private RadioRadialController() {
     }
@@ -82,9 +88,17 @@ public final class RadioRadialController {
             }
             if (!classId.isEmpty()) {
                 String faction = ClientGameState.getPlayerFactionId();
-                // 服务端会重新校验 Radio 位置、队伍、人数、上限和冷却。
-                NetworkManager.sendRadioClassSelect(
-                    faction != null ? faction : "", classId, variantId, lastRadioPos);
+                if (pendingVehicleId != null) {
+                    // 载具换职业
+                    NetworkManager.NET.sendToServer(
+                        org.espetro.network.ClassSelectPacket.fromVehicle(
+                            faction != null ? faction : "", classId, variantId,
+                            pendingVehicleId));
+                } else {
+                    // Radio 换职业
+                    NetworkManager.sendRadioClassSelect(
+                        faction != null ? faction : "", classId, variantId, lastRadioPos);
+                }
             }
         });
         Actions.register(DO_ACTION, params -> {
@@ -104,6 +118,7 @@ public final class RadioRadialController {
             initialize();
         }
         lastRadioPos = radioPos != null ? radioPos.immutable() : BlockPos.ZERO;
+        pendingVehicleId = null; // 清除车辆上下文
         NetworkManager.sendRadioOpen(lastRadioPos);
     }
 

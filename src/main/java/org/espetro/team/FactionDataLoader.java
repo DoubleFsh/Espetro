@@ -194,11 +194,29 @@ public class FactionDataLoader {
 
     /** Whether one external formation can run on the selected map. */
     public boolean isCompatibleWithMap(String factionId, ActiveMapConfig map) {
-        if (map == null || !map.usable || !factions.containsKey(factionId)) return false;
+        if (map == null) {
+            Espetro.LOGGER.warn("[编制兼容] {} → 失败: map 为空", factionId);
+            return false;
+        }
+        if (!map.usable) {
+            Espetro.LOGGER.warn("[编制兼容] {} → 失败: map.usable=false", factionId);
+            return false;
+        }
+        if (!factions.containsKey(factionId)) {
+            Espetro.LOGGER.warn("[编制兼容] {} → 失败: factions 中未找到", factionId);
+            return false;
+        }
         List<String> declared = factionVehicleTypes.get(factionId);
-        if (declared == null) return false;
+        if (declared == null) {
+            Espetro.LOGGER.warn("[编制兼容] {} → 失败: factionVehicleTypes 中无此编制", factionId);
+            return false;
+        }
         for (String type : declared) {
-            if (!map.vehSpawn.vehicleTypes.contains(type)) return false;
+            if (!map.vehSpawn.vehicleTypes.contains(type)) {
+                Espetro.LOGGER.warn("[编制兼容] {} → 失败: VehTypes 中 '{}' 不在地图 VehSpawn ({}) 中",
+                    factionId, type, map.vehSpawn.vehicleTypes);
+                return false;
+            }
         }
         Map<String, VehicleData> vehicles = factionVehicles.getOrDefault(factionId, Map.of());
         for (Map.Entry<String, VehicleData> entry : vehicles.entrySet()) {
@@ -206,12 +224,31 @@ public class FactionDataLoader {
             VehicleData data = entry.getValue();
             List<org.espetro.mapconfig.VehSpawnSnapshot.SpawnPoint> points =
                 map.vehSpawn.spawnPointsByType.get(type);
-            if (points == null || data.entities == null || data.entities.size() > points.size()) {
+            if (points == null) {
+                Espetro.LOGGER.warn("[编制兼容] {} → 失败: 载具类型 '{}' 在地图 spawnPointsByType 中无出生点",
+                    factionId, type);
+                return false;
+            }
+            if (data.entities == null) {
+                Espetro.LOGGER.warn("[编制兼容] {} → 失败: 载具类型 '{}' 的 entities 为 null",
+                    factionId, type);
+                return false;
+            }
+            if (data.entities.size() > points.size()) {
+                Espetro.LOGGER.warn("[编制兼容] {} → 失败: 载具类型 '{}' entities({}) > spawn点数({})",
+                    factionId, type, data.entities.size(), points.size());
                 return false;
             }
             for (String entityId : data.entities) {
                 ResourceLocation rl = ResourceLocation.tryParse(entityId);
-                if (rl == null || !net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                if (rl == null) {
+                    Espetro.LOGGER.warn("[编制兼容] {} → 失败: 载具实体 '{}' ResourceLocation 解析失败",
+                        factionId, entityId);
+                    return false;
+                }
+                if (!net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                    Espetro.LOGGER.warn("[编制兼容] {} → 失败: 载具实体 '{}' 不在 ENTITY_TYPE 注册表中",
+                        factionId, entityId);
                     return false;
                 }
             }
@@ -406,12 +443,16 @@ public class FactionDataLoader {
             groupedClasses.put(factionId, new ArrayList<>());
         }
 
+        java.util.Map<String, Integer> factionClassCounts = new java.util.LinkedHashMap<>();
         for (ClassKitData kit : classKits.values()) {
             if (kit == null || kit.factionId == null) {
+                Espetro.LOGGER.warn("[重建缓存诊断] 跳过一个 null 或 factionId=null 的职业: kit={}", kit);
                 continue;
             }
             groupedClasses.computeIfAbsent(kit.factionId, ignored -> new ArrayList<>()).add(kit);
+            factionClassCounts.merge(kit.factionId, 1, Integer::sum);
         }
+        Espetro.LOGGER.info("[重建缓存诊断] classKits 中各类 factionId 的职业数: {}", factionClassCounts);
 
         for (Map.Entry<String, List<ClassKitData>> entry : groupedClasses.entrySet()) {
             List<ClassKitData> kits = entry.getValue();
@@ -423,6 +464,8 @@ public class FactionDataLoader {
             classesByFaction.put(entry.getKey(), kitArray);
             classIdsByFaction.put(entry.getKey(), classIds);
         }
+        Espetro.LOGGER.info("[重建缓存诊断] classesByFaction 的 factionId 集合: {}, factions.keySet: {}",
+            classesByFaction.keySet(), factions.keySet());
     }
 
     // ==================== 载具方法（编制自定义） ====================
@@ -473,6 +516,9 @@ public class FactionDataLoader {
         public String factionId;
         public String team;
         public String color = "FFFFFF";
+        /** 胜利结算时展示的阵营名称（未配置则回退到 name）。 */
+        @SerializedName(value = "show_name", alternate = {"showName"})
+        public String showName;
     }
 
     /**
@@ -573,6 +619,22 @@ public class FactionDataLoader {
          */
         @SerializedName(value = "teammates_need", alternate = {"teammatesNeed"})
         public int teammatesNeed = 0;
+
+        /** 步兵职业显示行号（1-5），0/缺省 = 不参与 5 行网格（如载具兵不显示在步兵区）。 */
+        @SerializedName(value = "row", alternate = {"grid_row", "gridRow"})
+        public int row = 0;
+
+        /** 每 N 个小队成员解锁 1 个该职业名额（例：2 = 每 2 人 1 个名额）。0 = 不限制。 */
+        @SerializedName(value = "unlock_per_n", alternate = {"unlockPerN"})
+        public int unlockPerN = 0;
+
+        /** 小队达到此人数后解锁该职业。优先级高于 unlock_per_n。0 = 不限制。 */
+        @SerializedName(value = "unlock_min_squad", alternate = {"unlockMinSquad"})
+        public int unlockMinSquad = 0;
+
+        /** 仅小队长可选；非队长不显示，后续职业向前补位。 */
+        @SerializedName(value = "leader_only", alternate = {"leaderOnly"})
+        public boolean leaderOnly = false;
 
         public int maxPlayers = 5;
         public int healthBonus = 0;
@@ -694,6 +756,14 @@ public class FactionDataLoader {
         public String nbt;
         /** 单类载具的固定部署坐标配置。 */
         public VehicleDeploymentData deployment;
+        /** 补给载具：可装载弹药和建材，默认容量 3000 */
+        @SerializedName("supplyveh")
+        public Boolean supplyVeh;
+        /** 步兵战斗载具：仅弹药，默认容量 500，可用于更换职业 */
+        @SerializedName("fightveh")
+        public Boolean fightVeh;
+        /** 载具补给总容量（覆盖默认值） */
+        public Integer capacity;
     }
 
     /**

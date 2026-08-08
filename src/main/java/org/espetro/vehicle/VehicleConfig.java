@@ -42,6 +42,16 @@ public class VehicleConfig {
         /** Type-level SNBT applied to every slot unless a slot overrides it. */
         @Nullable
         public String nbt;
+        /** 补给载具：可装载弹药和建材 */
+        public boolean supplyVeh;
+        /** 步兵战斗载具：仅弹药，可用于更换职业 */
+        public boolean fightVeh;
+        /** 载具补给总容量 */
+        public int supplyCapacity;
+        /** 是否可装载建材 */
+        public boolean canCarryConstruction() { return supplyVeh; }
+        /** 是否可用于更换职业 */
+        public boolean canChangeClass() { return fightVeh; }
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
             this.max = max;
@@ -165,6 +175,17 @@ public class VehicleConfig {
                 cfg.displayName = firstNonBlank(data.displayName, type);
                 cfg.troopValue = Math.max(0, data.troopValue);
                 cfg.nbt = firstNonBlank(data.nbt, null);
+                cfg.supplyVeh = data.supplyVeh != null && data.supplyVeh;
+                cfg.fightVeh = data.fightVeh != null && data.fightVeh;
+                if (data.capacity != null && data.capacity > 0) {
+                    cfg.supplyCapacity = data.capacity;
+                } else if (cfg.supplyVeh) {
+                    cfg.supplyCapacity = 3000;
+                } else if (cfg.fightVeh) {
+                    cfg.supplyCapacity = 500;
+                } else {
+                    cfg.supplyCapacity = 300;
+                }
                 if (data.entityTags != null) {
                     for (String tag : data.entityTags) {
                         if (tag != null && !tag.isBlank()) cfg.entityTags.add(tag);
@@ -212,6 +233,18 @@ public class VehicleConfig {
         cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
         cfg.troopValue = Math.max(0, vd.troopValue);
         cfg.nbt = firstNonBlank(vd.nbt, null);
+        // 载具补给类型和容量
+        cfg.supplyVeh = vd.supplyVeh != null && vd.supplyVeh;
+        cfg.fightVeh = vd.fightVeh != null && vd.fightVeh;
+        if (vd.capacity != null && vd.capacity > 0) {
+            cfg.supplyCapacity = vd.capacity;
+        } else if (cfg.supplyVeh) {
+            cfg.supplyCapacity = 3000;
+        } else if (cfg.fightVeh) {
+            cfg.supplyCapacity = 500;
+        } else {
+            cfg.supplyCapacity = 300;
+        }
         if (vd.entityTags != null) {
             for (String tag : vd.entityTags) {
                 if (tag != null && !tag.isBlank()) {

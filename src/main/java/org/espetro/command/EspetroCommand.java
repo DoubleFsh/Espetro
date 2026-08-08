@@ -394,6 +394,20 @@ public class EspetroCommand {
                     })
                 )
             )
+            // 组队匹配管理
+            .then(Commands.literal("party")
+                .then(Commands.literal("maxsize")
+                    .then(Commands.argument("size", IntegerArgumentType.integer(1, 100))
+                        .executes(ctx -> {
+                            int size = IntegerArgumentType.getInteger(ctx, "size");
+                            org.espetro.team.PartyManager.setMaxPartySize(size);
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§a组队上限已设置为 " + size + " 人。"));
+                            return 1;
+                        })
+                    )
+                )
+            )
         );
         
         // 简短别名

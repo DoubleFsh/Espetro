@@ -319,6 +319,10 @@ public class UnifiedDeployScreenPacket {
         public final int teammatesNeed;
         public int squadCurrentCount;
         public final List<VariantInfo> variants;
+        public final int row;
+        public final int unlockPerN;
+        public final int unlockMinSquad;
+        public final boolean leaderOnly;
 
         public ClassInfo(String classId, String name, String description, String role, String icon,
                          int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
@@ -340,6 +344,16 @@ public class UnifiedDeployScreenPacket {
                          boolean teamCount, int maxPerSquad, int squadCurrentCount,
                          int teammatesNeed,
                          List<VariantInfo> variants) {
+            this(classId, name, description, role, icon, iconImage, maxPlayers, strictCount, currentCount,
+                troopValue, healthBonus, speedBonus, teamCount, maxPerSquad, squadCurrentCount, teammatesNeed,
+                0, 0, 0, false, variants);
+        }
+
+        public ClassInfo(String classId, String name, String description, String role, String icon, String iconImage,
+                         int maxPlayers, boolean strictCount, int currentCount, int troopValue, int healthBonus, float speedBonus,
+                         boolean teamCount, int maxPerSquad, int squadCurrentCount,
+                         int teammatesNeed, int row, int unlockPerN, int unlockMinSquad, boolean leaderOnly,
+                         List<VariantInfo> variants) {
             this.classId = classId;
             this.name = name;
             this.description = description;
@@ -356,6 +370,10 @@ public class UnifiedDeployScreenPacket {
             this.maxPerSquad = Math.max(0, maxPerSquad);
             this.squadCurrentCount = Math.max(0, squadCurrentCount);
             this.teammatesNeed = Math.max(0, teammatesNeed);
+            this.row = row;
+            this.unlockPerN = unlockPerN;
+            this.unlockMinSquad = unlockMinSquad;
+            this.leaderOnly = leaderOnly;
             this.variants = variants != null ? variants : new ArrayList<>();
         }
 
@@ -376,6 +394,10 @@ public class UnifiedDeployScreenPacket {
             this.maxPerSquad = Math.max(0, buf.readVarInt());
             this.squadCurrentCount = Math.max(0, buf.readVarInt());
             this.teammatesNeed = Math.max(0, buf.readVarInt());
+            this.row = buf.readVarInt();
+            this.unlockPerN = buf.readVarInt();
+            this.unlockMinSquad = buf.readVarInt();
+            this.leaderOnly = buf.readBoolean();
             int variantCount = buf.readVarInt();
             this.variants = new ArrayList<>(variantCount);
             for (int i = 0; i < variantCount; i++) {
@@ -400,6 +422,10 @@ public class UnifiedDeployScreenPacket {
             buf.writeVarInt(maxPerSquad);
             buf.writeVarInt(squadCurrentCount);
             buf.writeVarInt(teammatesNeed);
+            buf.writeVarInt(row);
+            buf.writeVarInt(unlockPerN);
+            buf.writeVarInt(unlockMinSquad);
+            buf.writeBoolean(leaderOnly);
             buf.writeVarInt(variants.size());
             for (VariantInfo variant : variants) variant.write(buf);
         }
@@ -521,23 +547,33 @@ public class UnifiedDeployScreenPacket {
         public final long nextWaveAtEpochMs;
         /** 个人冷却总时长（秒），用于 GUI 显示 n/m；0 表示未知。 */
         public final int waveSeconds;
+        /** HAB 激活就绪时刻（epoch ms）；0 表示无需等待激活。 */
+        public final long habAvailableAtEpochMs;
+        /** HAB 激活总时长（秒），用于客户端本地倒计时显示。 */
+        public final int habActivationTotalSeconds;
 
         public BastionItem(java.util.UUID id, String name, String pos) {
             this(id, name, pos,
-                id.getMostSignificantBits() == 0L ? TYPE_OUTPOST : TYPE_HAB, "", 0L, 0);
+                id.getMostSignificantBits() == 0L ? TYPE_OUTPOST : TYPE_HAB, "", 0L, 0, 0L, 0);
         }
 
         public BastionItem(java.util.UUID id, String name, String pos, String type, String status) {
-            this(id, name, pos, type, status, 0L, 0);
+            this(id, name, pos, type, status, 0L, 0, 0L, 0);
         }
 
         public BastionItem(java.util.UUID id, String name, String pos, String type, String status,
                            long nextWaveAtEpochMs) {
-            this(id, name, pos, type, status, nextWaveAtEpochMs, 0);
+            this(id, name, pos, type, status, nextWaveAtEpochMs, 0, 0L, 0);
         }
 
         public BastionItem(java.util.UUID id, String name, String pos, String type, String status,
                            long nextWaveAtEpochMs, int waveSeconds) {
+            this(id, name, pos, type, status, nextWaveAtEpochMs, waveSeconds, 0L, 0);
+        }
+
+        public BastionItem(java.util.UUID id, String name, String pos, String type, String status,
+                           long nextWaveAtEpochMs, int waveSeconds,
+                           long habAvailableAtEpochMs, int habActivationTotalSeconds) {
             this.id = id;
             this.name = name;
             this.pos = pos;
@@ -545,6 +581,8 @@ public class UnifiedDeployScreenPacket {
             this.status = status == null ? "" : status;
             this.nextWaveAtEpochMs = Math.max(0L, nextWaveAtEpochMs);
             this.waveSeconds = Math.max(0, waveSeconds);
+            this.habAvailableAtEpochMs = Math.max(0L, habAvailableAtEpochMs);
+            this.habActivationTotalSeconds = Math.max(0, habActivationTotalSeconds);
         }
 
         public BastionItem(FriendlyByteBuf buf) {
@@ -555,6 +593,8 @@ public class UnifiedDeployScreenPacket {
             this.status = buf.readUtf();
             this.nextWaveAtEpochMs = Math.max(0L, buf.readLong());
             this.waveSeconds = Math.max(0, buf.readVarInt());
+            this.habAvailableAtEpochMs = Math.max(0L, buf.readLong());
+            this.habActivationTotalSeconds = Math.max(0, buf.readVarInt());
         }
 
         public void write(FriendlyByteBuf buf) {
@@ -565,6 +605,8 @@ public class UnifiedDeployScreenPacket {
             buf.writeUtf(status);
             buf.writeLong(nextWaveAtEpochMs);
             buf.writeVarInt(waveSeconds);
+            buf.writeLong(habAvailableAtEpochMs);
+            buf.writeVarInt(habActivationTotalSeconds);
         }
 
         /**
