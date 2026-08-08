@@ -34,6 +34,7 @@
       "strict_count": true,
       "name": "载具组员",
       "icon": "crewman",
+      "vehicle_crew": true,
       "description": "改装载具驾驶员与操作员",
       "role": "载具操作",
       "maxPlayers": 2,

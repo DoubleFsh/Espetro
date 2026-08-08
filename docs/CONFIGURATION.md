@@ -463,6 +463,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
       "description": "标准步兵",
       "role": "突击",
       "icon": "rifleman",
+      "vehicle_crew": false,
       "maxPlayers": 8,
       "teammates_need": 2,
       "healthBonus": 0,
@@ -527,6 +528,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `faction_id` | String | **必填**；编制所属阵营，直接使用此处字符串，不需要另行注册 |
 | `team` | String | 必须使用 `ATTACK` 或 `DEFEND` |
 | `color` | String | 六位 RGB，不带 `#` |
+| `max_habs_per_radio` | Integer | 每个 Radio 作用范围内允许存在的己方 HAB 数量；默认 `2` |
 
 编制图片的源文件分辨率不限。客户端会完整采样整张纹理，并将其拉伸或缩放到与内置编制图片完全相同的固定卡片图片区，不会裁剪；因此宽高比不同的图片可能发生形变。没有配置、路径无效或客户端资源包中不存在时，卡片仍保持相同尺寸，并在编制名下显示“还没配置图片喵”。服务器与客户端需要安装包含该资源的同一模组或资源包。
 
@@ -538,6 +540,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | --- | --- | --- |
 | `name`, `description`, `role` | String | GUI 信息 |
 | `icon` | String | 可选；`assets/espetro/textures/gui/roles/` 下不带扩展名的职业图标短名 |
+| `vehicle_crew` | Boolean | 可选；`true` 表示该职业可使用受限载具座位。缺失时为兼容旧编制，仅 `icon: "crewman"` 自动视为载具组员；显式 `false` 可关闭该兼容识别。也接受 `vehicleCrew` |
 | `IconImage` | String | 可选；**文件系统完整路径**的职业图标（优先于 `icon`），例 `/home/shu/图片/Icon/rifleman.png` |
 | `maxPlayers` | Integer | 必须大于 0。默认（`team_count: false`）为编制/队伍总上限；`team_count: true` 时为**每个班组小队**上限 |
 | `team_count` | Boolean | 默认 `false`；也接受 `teamCount`。`true` 时人数在班组小队内统计，未入小队不可选该职业 |
@@ -583,6 +586,13 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 - **变体**：无论 `strict_count` 如何，**选变体 = 选父职业的一个席位**；`strict_count: true` 时再叠加变体自身上限。
 - **换职入口**：服务端只接受部署选点等待状态、本方原部署点 `6` 格范围和附近己方 Radio 职业轮盘发出的选职请求。普通 HAB、前哨与玩家上一次部署坐标不属于 J 键换职区；Radio 请求会在点击职业时再次校验位置和归属。
 
+#### `vehicle_crew` 与载具座位
+
+- 该限制只在当前战场的 `DEPLOYING`、`BATTLE` 阶段生效，管理员同样不能绕过；主城与非活动战场不限制。
+- SBW/DragonRise 坦克的 0、1、2 号座位、步战/APC 的 0、1 号座位及直升机的 0 号座位要求职业配置 `vehicle_crew: true`。其余座位和其他载具类型不限制。
+- 首次上车和车内换座都由服务端校验。非载具组员上车时会自动顺位到第一个空闲的非受限座位；若不存在这种座位，则拒绝上车并提示载具没有空余位置。玩家在受限座位上更换为其他职业或离开小队时会立即下车。
+- `superbwarfare`、`dragonrise_reforge` 都是 Espetro 的软依赖；未安装时不会加载座位兼容代码，也不会影响 Espetro 启动。
+
 
 任何变体无效、（`strict_count: true` 时）人数不相等，都会在启动时输出 `[编制拒载]` 警告并拒绝载入整个编制，不会只跳过出错职业。
 
@@ -601,9 +611,8 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `count` | 16 | 单次补给数量 |
 | `max` | 64 | 背包上限 |
 
-只有实际补入至少一种物品时才进入补给冷却并尝试扣除 `ammo_cost`。Radio/FOB
-弹药库存大于 0、但不足完整费用时，玩家仍会得到本次补给，并扣除全部剩余弹药，
-使库存归零；库存已经为 0 时不发放补给。
+只有实际存在弹药缺口且补入至少一种物品时才进入补给冷却并扣除 `ammo_cost`。
+覆盖弹药箱的 Radio 必须能够完整支付费用；不足时整次取消，不发物品也不部分扣款。
 
 ### `VehTypes` 与 `vehicles.<vehicle_type>`
 
@@ -616,11 +625,17 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `respawn_minutes` | 5 | 单辆刷新冷却 |
 | `troop_value` | 0 | 载具死亡/被摧毁时扣除的所属队伍兵力 |
 | `entity_tags` | `[]` | 生成后附加到实体的 tag 数组 |
+| `fightveh` | false | 战斗载具；可在本方基地或载具补给站装卸弹药，不可运输建材 |
+| `supplyveh` | false | 补给载具；可在基地或 Radio 附近装卸弹药和建材 |
+| `capacity` | 按类型 | 弹药与建材共享总容量；战斗载具默认 500、补给载具默认 3000、其它载具默认 300 |
+| `initial_deploy_delay_seconds.attack` | 0 | 此编制作为进攻方时，从布防阶段开始到系统自动生成首批载具的等待秒数 |
+| `initial_deploy_delay_seconds.defend` | 0 | 此编制作为防守方时，从布防阶段开始到系统自动生成首批载具的等待秒数 |
 
 编制文件不再保存部署坐标。部署位置完全由获胜地图的 `VehSpawn.json` 决定。
-每局布防开始时，`entity` 数组中的每个配置槽位会先生成一辆首发载具；
-`per_max_count` 大于 1 的剩余容量仍由指挥官后续部署使用，不会让首发波次在同一
-点位叠放多辆。
+布防阶段开始时为每个类型设置首次部署倒计时；倒计时结束后，系统按 `entity` 数组与
+`VehSpawn.json` 点位的顺序自动生成每个槽位的一辆首发载具。延迟未到前不会强加载出生区块。
+首发之后，指挥官可从左 Alt 根轮盘的“载具部署”入口补充部署。部署界面按事件增量更新
+在场数和绝对完成时间，不逐帧重建界面。
 
 ## 随 JAR 导出的示例编制
 

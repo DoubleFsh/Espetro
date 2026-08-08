@@ -1,59 +1,84 @@
 package org.espetro.client.gui;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
-
 /**
- * 兵力统计HUD叠加层
- * 在屏幕左上角仅显示己方兵力。
+ * 兵力统计缓存：由网络包 / 阵营变更驱动。
+ * 世界 HUD 不再绘制；仅 {@link UnifiedDeployScreen} 在右上角倒计时下方读取缓存展示。
  */
-public class TroopCountOverlay {
+public final class TroopCountOverlay {
 
-    private static int attackTroops = 0;
-    private static int defendTroops = 0;
-    private static boolean visible = false;
+    private static int attackTroops;
+    private static int defendTroops;
+    private static boolean visible;
+    private static String cachedTeam;
+    private static String displayLine;
 
-    /**
-     * 更新兵力数据
-     */
-    public static void updateTroopCounts(int attack, int defend) {
-        attackTroops = attack;
-        defendTroops = defend;
-        visible = true;
+    private TroopCountOverlay() {
     }
 
-    /**
-     * 隐藏兵力统计
-     */
+    public static void updateTroopCounts(int attack, int defend) {
+        attackTroops = Math.max(0, attack);
+        defendTroops = Math.max(0, defend);
+        visible = true;
+        if (cachedTeam == null) {
+            cachedTeam = ClientGameState.getPlayerTeam();
+        }
+        rebuildDisplay();
+        notifyDeployScreen();
+    }
+
     public static void hide() {
         visible = false;
+        displayLine = null;
+        notifyDeployScreen();
     }
 
-    /**
-     * 显示兵力统计
-     */
     public static void show() {
         visible = true;
+        rebuildDisplay();
+        notifyDeployScreen();
     }
 
-    /**
-     * 渲染叠加层
-     */
-    static void drawElement(GuiGraphics graphics, Minecraft mc) {
-        if (!visible || mc.level == null) return;
+    public static void onTeamChanged(String team) {
+        cachedTeam = team;
+        rebuildDisplay();
+        notifyDeployScreen();
+    }
 
-        String myTeam = ClientGameState.getPlayerTeam();
-        if (myTeam == null) return;
+    /** 供 UnifiedDeployScreen 右上角展示；null 表示不显示。 */
+    public static String getDisplayLine() {
+        return displayLine;
+    }
 
-        int troops = "ATTACK".equals(myTeam) ? attackTroops : defendTroops;
-        String label = "ATTACK".equals(myTeam) ? "§c■ 进攻方" : "§9■ 防守方";
+    public static boolean isVisible() {
+        return visible && displayLine != null;
+    }
+
+    private static void rebuildDisplay() {
+        if (!visible) {
+            displayLine = null;
+            return;
+        }
+        String team = cachedTeam;
+        if (team == null || team.isBlank()) {
+            displayLine = null;
+            return;
+        }
+        boolean attack = "ATTACK".equals(team);
+        boolean defend = "DEFEND".equals(team);
+        if (!attack && !defend) {
+            displayLine = null;
+            return;
+        }
+        int troops = attack ? attackTroops : defendTroops;
+        String label = attack ? "§c■ 进攻方" : "§9■ 防守方";
         String color = troops > 50 ? "§a" : (troops > 20 ? "§e" : "§c");
+        displayLine = label + ": " + color + troops;
+    }
 
-        PoseStack poseStack = graphics.pose();
-        poseStack.pushPose();
-        graphics.drawString(mc.font, Component.literal(label + ": " + color + troops), 10, 10, 0xFFFFFF);
-        poseStack.popPose();
+    private static void notifyDeployScreen() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc != null && mc.screen instanceof UnifiedDeployScreen screen) {
+            screen.updateTroopLabel(displayLine);
+        }
     }
 }

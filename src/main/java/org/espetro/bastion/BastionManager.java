@@ -205,6 +205,10 @@ public class BastionManager {
                 team, getBastionLimitPerTeam(), name, pos);
             return null;
         }
+        if (structureKind == StructureKind.RADIO && wouldRadioCoverageOverlap(level, pos)) {
+            Espetro.LOGGER.warn("Radio 作用范围与现有 Radio 重叠，拒绝创建: {} ({})", name, pos);
+            return null;
+        }
 
         BastionData bastion = new BastionData(team, name, pos, level, structureKind);
         bastion.setArmorStandPosition(pos.above());
@@ -418,6 +422,33 @@ public class BastionManager {
     }
 
     /**
+     * Checks all teams in the dimension. This is also called by the low-level
+     * creation path so commands or future integrations cannot bypass placement validation.
+     */
+    public boolean wouldRadioCoverageOverlap(ServerLevel level, BlockPos pos) {
+        if (level == null || pos == null) return true;
+        LogisticsConfig.LogisticsSettings settings = LogisticsConfig.get();
+        double separation = RadioCoveragePolicy.minimumCenterDistance(
+            settings.radioBuildRadius, settings.radioExclusionRadius);
+        for (BastionData bastion : bastions.values()) {
+            if (!bastion.isActive() || !bastion.isRadio() || bastion.getLevel() != level) {
+                continue;
+            }
+            if (RadioCoveragePolicy.overlaps(
+                bastion.getPosition().distSqr(pos), separation)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public double getMinimumRadioCenterDistance() {
+        LogisticsConfig.LogisticsSettings settings = LogisticsConfig.get();
+        return RadioCoveragePolicy.minimumCenterDistance(
+            settings.radioBuildRadius, settings.radioExclusionRadius);
+    }
+
+    /**
      * 覆盖 pos 的己方活跃 Radio（同维度），按建材升序（最少优先）。
      */
     public List<BastionData> findCoveringRadios(ServerLevel level, BlockPos pos, String team) {
@@ -488,23 +519,16 @@ public class BastionManager {
     }
 
     /**
-     * Radio 库存推进：仅自动建弹药箱，不再自动建 HAB。
+     * 已废弃：弹药箱改由 Alt「建造工事」手动放置，存入建材不再自动建成弹药箱。
+     * 保留空实现以免旧调用方崩溃。
      */
     public void advanceFobConstruction(BastionData bastion) {
-        if (bastion == null || !bastion.isActive() || !bastion.isRadio()) {
-            return;
-        }
-        LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
-        if (!bastion.isAmmoCrateBuilt()
-            && bastion.consumeConstructionSupplies(config.ammoCrateConstructionCost)) {
-            bastion.setAmmoCrateBuilt(true);
-            Espetro.broadcastToTeam(bastion.getTeam(),
-                "§b[Radio] §f" + bastion.getName() + " §b的弹药箱已建成。");
-        }
+        // no-op
     }
 
     public boolean tryConsumeFobAmmunition(BastionData bastion, int amount) {
-        return bastion != null && bastion.isActive() && bastion.isRadio() && bastion.isAmmoCrateBuilt()
+        // 弹药箱手建后由交互入口校验；此处只扣 Radio 弹药库存
+        return bastion != null && bastion.isActive() && bastion.isRadio()
             && bastion.consumeAmmunitionSupplies(Math.max(0, amount));
     }
 
@@ -513,7 +537,10 @@ public class BastionManager {
             return "无效";
         }
         if (bastion.isRadio() && !bastion.isLegacyCombined()) {
-            return bastion.isAmmoCrateBuilt() ? "Radio 弹药箱可用" : "Radio 等待弹药箱";
+            return bastion.isAmmoCrateBuilt()
+                ? "Radio 弹药库存可用（弹药箱已建）"
+                : "Radio 库存 " + bastion.getConstructionSupplies() + "/"
+                    + bastion.getAmmunitionSupplies() + "（弹药箱需手动建造）";
         }
         if (!bastion.isActive()) {
             return "HAB 已失效";

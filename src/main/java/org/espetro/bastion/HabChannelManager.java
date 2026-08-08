@@ -143,6 +143,12 @@ public final class HabChannelManager {
             player.sendSystemMessage(Component.literal("§c覆盖此处的己方 Radio 已失效，建造取消。"));
             return;
         }
+        // Completion-time recheck prevents two simultaneous channels exceeding the Radio limit.
+        String limitError = DeployActions.checkHabPerRadioLimit(player, channel.team);
+        if (limitError != null) {
+            player.sendSystemMessage(Component.literal(limitError));
+            return;
+        }
         if (!bypass && cost > 0
             && !manager.tryDebitConstructionFromCoveringRadios(
                 channel.level, channel.targetPos, channel.team, cost)) {

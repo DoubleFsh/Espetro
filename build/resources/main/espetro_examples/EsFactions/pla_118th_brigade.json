@@ -495,6 +495,7 @@
         ]
       },
       "icon": "crewman",
+      "vehicle_crew": true,
       "IconImage": "/home/shu/图片/Icon/crewman.png",
       "strict_count": false,
       "team_count": false,

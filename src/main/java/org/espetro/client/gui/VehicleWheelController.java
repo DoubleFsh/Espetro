@@ -9,7 +9,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.VehicleSupplyActionPacket;
@@ -17,71 +18,65 @@ import org.espetro.network.VehicleSupplySyncPacket;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
-/**
- * 载具轮盘控制器（按住F呼出，AuraTip 轮盘）。
- *
- * <p>装卸按钮支持按住持续交互：每20tick（1秒）发送一次包。</p>
- */
+/** Hold-F AuraTip wheel for the vehicle currently under the crosshair. */
 public final class VehicleWheelController {
 
     private static final String OWNER = "espetro_vehicle";
     private static final int OPEN_DELAY_TICKS = 6;
-    private static final int HOLD_INTERVAL = 20; // tick per second
-    private static final double SEARCH_RANGE = 10.0;
-    private static final int TOTAL_SLOTS = 6;
-    // 轮盘参数（与 RadialMenuBuilder 保持一致）
+    private static final double INTERACT_RANGE = 5.0;
     private static final int WHEEL_INNER = 44;
     private static final int WHEEL_OUTER = 100;
 
     private static final ResourceLocation ROOT = id("vehicle_root");
     private static final ResourceLocation ACTION_ID = id("vehicle_action");
-    private static final ResourceLocation ICON_LOAD_AMMO = id("textures/gui/squad/fob_status.png");
-    private static final ResourceLocation ICON_UNLOAD = id("textures/gui/squad/deposit_supply.png");
-    private static final ResourceLocation ICON_RESUPPLY = id("textures/gui/squad/ammo_resupply.png");
-    private static final ResourceLocation ICON_CLASS = id("textures/gui/squad/class_select.png");
-
-    // 装卸 slot 名称
-    public static final String HOLD_LOAD_AMMO = "LOAD_AMMO";
-    public static final String HOLD_UNLOAD_AMMO = "UNLOAD_AMMO";
-    public static final String HOLD_LOAD_CONSTR = "LOAD_CONSTRUCTION";
-    public static final String HOLD_UNLOAD_CONSTR = "UNLOAD_CONSTRUCTION";
+    private static final ResourceLocation ICON_AMMO_WHITE =
+        id("textures/gui/squad/ammo_supply_white.png");
+    private static final ResourceLocation ICON_AMMO_RED =
+        id("textures/gui/squad/ammo_supply.png");
+    private static final ResourceLocation ICON_CONSTRUCTION_WHITE =
+        id("textures/gui/squad/vehicle_supply_load.png");
+    private static final ResourceLocation ICON_CONSTRUCTION_RED =
+        id("textures/gui/squad/vehicle_supply_unload.png");
+    private static final String COLOR_LOAD = "#FFFFFFFF";
+    private static final String COLOR_UNLOAD = "#FFFF4A4A";
 
     private static boolean initialized;
     private static boolean keyWasDown;
     private static boolean ownsOverlay;
     private static boolean consumedUntilRelease;
+    private static boolean snapshotReady;
+    private static boolean pendingMenuPublish;
     private static int heldTicks;
     private static UUID currentVehicleId;
     private static VehicleSupplySyncPacket cachedSupply;
 
-    // 按住装卸跟踪
-    private static String holdAction;       // 当前按住的 action name（null = 无）
-    private static int holdProgress;         // 0..20
-    private static int holdTotalInteractions; // 本次按住已完成的交互次数
-    private static boolean pendingReopen;    // 等AuraTip关闭后重新打开轮盘
+    private static String holdAction;
+    private static int holdProgress;
+    private static boolean pendingReopen;
 
-    private VehicleWheelController() {}
-
-    public static boolean isWheelActive() {
-        return ownsOverlay || RadialMenuOverlay.INSTANCE.isActive();
+    private VehicleWheelController() {
     }
 
-    /** 是否正在按住装卸按钮 */
+    public static boolean isWheelActive() {
+        return ownsOverlay;
+    }
+
     public static boolean isHolding() {
         return holdAction != null;
     }
 
-    /** 按住进度 (0..20) */
     public static int getHoldProgress() {
         return holdProgress;
     }
 
-    /** 颜色: 弹药=红色, 建材=黄色 */
     public static int getHoldColor() {
-        if (holdAction == null) return 0xFFCC4444;
-        return holdAction.contains("AMMO") ? 0xFFCC4444 : 0xFFCCAA00;
+        return holdAction != null && holdAction.contains("CONSTRUCTION")
+            ? 0xFFCCAA00 : 0xFFCC4444;
     }
 
     @Nullable
@@ -89,33 +84,22 @@ public final class VehicleWheelController {
         return cachedSupply;
     }
 
-    private static ResourceLocation id(String path) {
-        return new ResourceLocation("espetro", path);
-    }
-
     public static void initialize() {
         if (initialized) return;
         initialized = true;
 
-        // 装卸动作 → 转为按住模式，不直接发包
         Actions.register(ACTION_ID, params -> {
             String actionName = params.getString("action", "");
             if (actionName.isEmpty() || currentVehicleId == null) return;
-
-            if (HOLD_LOAD_AMMO.equals(actionName) || HOLD_UNLOAD_AMMO.equals(actionName)
-                || HOLD_LOAD_CONSTR.equals(actionName) || HOLD_UNLOAD_CONSTR.equals(actionName)) {
-                // 进入按住模式：仅设状态，由 tick() 负责重建轮盘
+            if (isTransferAction(actionName)) {
                 holdAction = actionName;
                 holdProgress = 0;
-                holdTotalInteractions = 0;
                 sendSupplyAction(actionName);
                 consumedUntilRelease = true;
                 ownsOverlay = true;
                 pendingReopen = true;
                 return;
             }
-
-            // RESUPPLY / CHANGE_CLASS → 即时单次
             try {
                 VehicleSupplyActionPacket.Action action =
                     VehicleSupplyActionPacket.Action.valueOf(actionName);
@@ -124,243 +108,254 @@ public final class VehicleWheelController {
                 }
                 NetworkManager.NET.sendToServer(
                     new VehicleSupplyActionPacket(currentVehicleId, action));
-            } catch (IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException ignored) {
+                return;
+            }
             consumedUntilRelease = true;
             ownsOverlay = false;
         });
+    }
 
-        publishMenus();
+    private static boolean isTransferAction(String action) {
+        return action.equals("LOAD_AMMO") || action.equals("UNLOAD_AMMO")
+            || action.equals("LOAD_CONSTRUCTION") || action.equals("UNLOAD_CONSTRUCTION");
     }
 
     private static void sendSupplyAction(String actionName) {
         try {
-            VehicleSupplyActionPacket.Action action =
-                VehicleSupplyActionPacket.Action.valueOf(actionName);
-            NetworkManager.NET.sendToServer(
-                new VehicleSupplyActionPacket(currentVehicleId, action));
-            holdTotalInteractions++;
-        } catch (IllegalArgumentException ignored) {}
+            NetworkManager.NET.sendToServer(new VehicleSupplyActionPacket(
+                currentVehicleId, VehicleSupplyActionPacket.Action.valueOf(actionName)));
+        } catch (IllegalArgumentException ignored) {
+        }
     }
 
-    private static void publishMenus() {
-        List<cc.sighs.auratip.data.RadialMenuData> menus = new ArrayList<>();
-        menus.add(buildRootMenu());
-        RadialMenuRegistry.setMenus(OWNER, menus);
+    private static void publishMenu() {
+        if (cachedSupply == null || !cachedSupply.hasAnyAction()) return;
+        RadialMenuRegistry.setMenus(OWNER, List.of(buildRootMenu()));
+        pendingMenuPublish = false;
     }
 
     private static cc.sighs.auratip.data.RadialMenuData buildRootMenu() {
-        return new RadialMenuBuilder(ROOT)
+        RadialMenuBuilder builder = new RadialMenuBuilder(ROOT)
             .radii(WHEEL_INNER, WHEEL_OUTER)
             .animationSpeed(1.25f)
-            .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            .slot("espetro.veh.load_ammo", ICON_LOAD_AMMO,
-                Actions.script(ACTION_ID, Map.of("action", HOLD_LOAD_AMMO)),
-                Component.literal("装载弹药"), "#FFCC4444")
-            .slot("espetro.veh.unload_ammo", ICON_UNLOAD,
-                Actions.script(ACTION_ID, Map.of("action", HOLD_UNLOAD_AMMO)),
-                Component.literal("卸载弹药"), "#FFCC4444")
-            .slot("espetro.veh.load_constr", ICON_LOAD_AMMO,
-                Actions.script(ACTION_ID, Map.of("action", HOLD_LOAD_CONSTR)),
-                Component.literal("装载建材"), "#FFCCAA00")
-            .slot("espetro.veh.unload_constr", ICON_UNLOAD,
-                Actions.script(ACTION_ID, Map.of("action", HOLD_UNLOAD_CONSTR)),
-                Component.literal("卸载建材"), "#FFCCAA00")
-            .slot("espetro.veh.resupply", ICON_RESUPPLY,
-                Actions.script(ACTION_ID, Map.of("action", "RESUPPLY_INFANTRY")),
-                Component.literal("补给步兵"), "#FF4488CC")
-            .slot("espetro.veh.class", ICON_CLASS,
+            .ringColors(List.of("#E6141719", "#F02A2D2F"));
+
+        if (cachedSupply.canTransferAmmo()) {
+            builder = builder
+                .slot("espetro.veh.load_ammo", ICON_AMMO_WHITE,
+                    Actions.script(ACTION_ID, Map.of("action", "LOAD_AMMO")),
+                    Component.literal("装载弹药"), COLOR_LOAD)
+                .slot("espetro.veh.unload_ammo", ICON_AMMO_RED,
+                    Actions.script(ACTION_ID, Map.of("action", "UNLOAD_AMMO")),
+                    Component.literal("卸下弹药"), COLOR_UNLOAD);
+        }
+        if (cachedSupply.canTransferConstruction()) {
+            builder = builder
+                .slot("espetro.veh.load_construction", ICON_CONSTRUCTION_WHITE,
+                    Actions.script(ACTION_ID, Map.of("action", "LOAD_CONSTRUCTION")),
+                    Component.literal("装载建材"), COLOR_LOAD)
+                .slot("espetro.veh.unload_construction", ICON_CONSTRUCTION_RED,
+                    Actions.script(ACTION_ID, Map.of("action", "UNLOAD_CONSTRUCTION")),
+                    Component.literal("卸下建材"), COLOR_UNLOAD);
+        }
+        if (cachedSupply.isSupplyVehicle()) {
+            builder = builder.slot("espetro.veh.change_class", ICON_AMMO_WHITE,
                 Actions.script(ACTION_ID, Map.of("action", "CHANGE_CLASS")),
-                Component.literal("更换职业"), "#FF44AA44")
-            .build();
+                Component.literal("更换职业"), COLOR_LOAD);
+        }
+        return builder.build();
     }
 
-    // ==================== Tick ====================
-
-    public static void updateSupply(VehicleSupplySyncPacket pkt) {
-        if (pkt.isRequest()) return;
-        cachedSupply = pkt;
-        publishMenus();
-        // 仅在轮盘已激活时刷新显示，避免远程同步包意外弹出轮盘
-        if (!ownsOverlay && !RadialMenuOverlay.INSTANCE.isActive()) return;
-        RadialMenuOverlay.INSTANCE.close();
-        RadialMenuClientApi.open(ROOT);
-        ownsOverlay = true;
+    /** Called on the client thread by the packet handler. */
+    public static void updateSupply(VehicleSupplySyncPacket packet) {
+        if (packet == null || packet.isRequest() || currentVehicleId == null
+            || !currentVehicleId.equals(packet.getVehicleId())) return;
+        String previousLayout = layoutSignature(cachedSupply);
+        cachedSupply = packet;
+        snapshotReady = packet.hasAnyAction();
+        if (!previousLayout.equals(layoutSignature(packet))) {
+            if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) {
+                pendingMenuPublish = true;
+            } else {
+                publishMenu();
+            }
+        }
     }
 
-    public static void tick(Minecraft mc) {
-        if (!initialized) return;
-        if (mc == null || mc.player == null) { reset(); return; }
+    private static String layoutSignature(@Nullable VehicleSupplySyncPacket packet) {
+        if (packet == null) return "";
+        return (packet.canTransferAmmo() ? "A" : "-")
+            + (packet.canTransferConstruction() ? "C" : "-")
+            + (packet.isSupplyVehicle() ? "S" : "-");
+    }
 
-        if (mc.screen != null) {
-            if (ownsOverlay) { RadialMenuOverlay.INSTANCE.close(); ownsOverlay = false; }
-            keyWasDown = false; heldTicks = 0; consumedUntilRelease = false;
-            holdAction = null; holdProgress = 0;
-            pendingReopen = false;
+    public static void tick(Minecraft minecraft) {
+        if (!initialized || minecraft == null || minecraft.player == null) {
+            reset();
+            return;
+        }
+        if (minecraft.screen != null) {
+            closeOwnedOverlay();
+            keyWasDown = false;
+            heldTicks = 0;
             return;
         }
 
-        long handle = mc.getWindow().getWindow();
-        boolean fDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_F) == GLFW.GLFW_PRESS;
-
-        // F 释放 → 关闭
-        if (!fDown) {
-            if (keyWasDown && ownsOverlay) {
-                RadialMenuOverlay.INSTANCE.close();
-                ownsOverlay = false;
-            }
-            keyWasDown = false; heldTicks = 0; consumedUntilRelease = false;
-            holdAction = null; holdProgress = 0;
+        long window = minecraft.getWindow().getWindow();
+        boolean down = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F) == GLFW.GLFW_PRESS;
+        if (!down) {
+            if (keyWasDown) closeOwnedOverlay();
+            keyWasDown = false;
+            heldTicks = 0;
+            consumedUntilRelease = false;
+            holdAction = null;
+            holdProgress = 0;
             pendingReopen = false;
             currentVehicleId = null;
+            cachedSupply = null;
+            snapshotReady = false;
+            if (pendingMenuPublish && !RadialMenuOverlay.INSTANCE.isActive()) publishMenu();
             return;
         }
 
-        // F 刚按下 → 查找载具
         if (!keyWasDown) {
-            currentVehicleId = findNearbyVehicle(mc);
-            if (currentVehicleId == null) { keyWasDown = true; return; }
-            NetworkManager.NET.sendToServer(
-                new VehicleSupplySyncPacket(currentVehicleId, -1, -1, -1, false));
+            currentVehicleId = findLookedAtVehicle(minecraft);
+            snapshotReady = false;
+            cachedSupply = null;
+            if (currentVehicleId != null) {
+                NetworkManager.NET.sendToServer(VehicleSupplySyncPacket.request(currentVehicleId));
+            }
         }
         keyWasDown = true;
+        if (currentVehicleId == null) return;
 
         if (consumedUntilRelease) {
-            // AuraTip 关闭后需要重新打开轮盘（按住装卸模式）
             if (!RadialMenuOverlay.INSTANCE.isActive() && pendingReopen) {
                 pendingReopen = false;
-                publishMenus();
+                publishMenu();
                 RadialMenuClientApi.open(ROOT);
-                return;
+                ownsOverlay = true;
             }
-            // 轮盘已打开，处理按住装卸
-            if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) {
-                tickHold(mc, handle);
-            }
+            if (ownsOverlay && RadialMenuOverlay.INSTANCE.isActive()) tickHold(minecraft, window);
             return;
         }
-
         if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) return;
 
         heldTicks++;
-        if (heldTicks >= OPEN_DELAY_TICKS) {
+        if (heldTicks >= OPEN_DELAY_TICKS && snapshotReady) {
+            publishMenu();
             RadialMenuClientApi.open(ROOT);
             ownsOverlay = true;
         }
     }
 
-    /** 处理装卸按钮的按住逻辑 */
-    private static void tickHold(Minecraft mc, long handle) {
-        int slotIdx = getSlotUnderCursor(mc);
-        boolean leftDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-
-        // 判断当前光标是否位于装卸 slot 上
-        boolean onHoldSlot = false;
-        if (slotIdx >= 0 && slotIdx < 4) { // 前4个slot是装卸
-            onHoldSlot = true;
+    private static List<String> visibleActions() {
+        List<String> actions = new ArrayList<>(5);
+        if (cachedSupply != null && cachedSupply.canTransferAmmo()) {
+            actions.add("LOAD_AMMO");
+            actions.add("UNLOAD_AMMO");
         }
+        if (cachedSupply != null && cachedSupply.canTransferConstruction()) {
+            actions.add("LOAD_CONSTRUCTION");
+            actions.add("UNLOAD_CONSTRUCTION");
+        }
+        if (cachedSupply != null && cachedSupply.isSupplyVehicle()) actions.add("CHANGE_CLASS");
+        return actions;
+    }
 
-        if (!onHoldSlot || !leftDown) {
-            // 不再按住装卸 → 清除状态
+    private static void tickHold(Minecraft minecraft, long window) {
+        int slot = getSlotUnderCursor(minecraft);
+        List<String> actions = visibleActions();
+        String action = slot >= 0 && slot < actions.size() ? actions.get(slot) : null;
+        boolean leftDown = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+            == GLFW.GLFW_PRESS;
+        if (action == null || !isTransferAction(action) || !leftDown) {
             holdAction = null;
             holdProgress = 0;
             return;
         }
-
-        // 确定当前 action 名称
-        String currentSlotAction = switch (slotIdx) {
-            case 0 -> HOLD_LOAD_AMMO;
-            case 1 -> HOLD_UNLOAD_AMMO;
-            case 2 -> HOLD_LOAD_CONSTR;
-            case 3 -> HOLD_UNLOAD_CONSTR;
-            default -> null;
-        };
-
-        // 如果切换了 slot，重置
-        if (holdAction != null && !holdAction.equals(currentSlotAction)) {
-            holdProgress = 0;
-            holdTotalInteractions = 0;
-        }
-        holdAction = currentSlotAction;
+        if (!action.equals(holdAction)) holdProgress = 0;
+        holdAction = action;
         holdProgress++;
-
-        if (holdProgress >= HOLD_INTERVAL) {
+        int interval = Math.max(1, cachedSupply == null ? 20 : cachedSupply.getTransferIntervalTicks());
+        if (holdProgress >= interval) {
             holdProgress = 0;
-            sendSupplyAction(holdAction);
+            sendSupplyAction(action);
         }
     }
 
-    /** 获取光标所在的轮盘 slot 索引（0..TOTAL_SLOTS-1），-1 表示不在任何 slot 上 */
-    private static int getSlotUnderCursor(Minecraft mc) {
-        long handle = mc.getWindow().getWindow();
-        double[] rawX = new double[1], rawY = new double[1];
-        GLFW.glfwGetCursorPos(handle, rawX, rawY);
+    private static int getSlotUnderCursor(Minecraft minecraft) {
+        int slots = visibleActions().size();
+        if (slots == 0) return -1;
+        long window = minecraft.getWindow().getWindow();
+        double[] rawX = new double[1];
+        double[] rawY = new double[1];
+        GLFW.glfwGetCursorPos(window, rawX, rawY);
+        double x = rawX[0] * minecraft.getWindow().getGuiScaledWidth()
+            / minecraft.getWindow().getWidth();
+        double y = rawY[0] * minecraft.getWindow().getGuiScaledHeight()
+            / minecraft.getWindow().getHeight();
+        double dx = x - minecraft.getWindow().getGuiScaledWidth() / 2.0;
+        double dy = y - minecraft.getWindow().getGuiScaledHeight() / 2.0;
+        double distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < WHEEL_INNER || distance > WHEEL_OUTER) return -1;
 
-        int guiW = mc.getWindow().getGuiScaledWidth();
-        int guiH = mc.getWindow().getGuiScaledHeight();
-        int winW = mc.getWindow().getWidth();
-        int winH = mc.getWindow().getHeight();
-
-        double guiX = rawX[0] * guiW / winW;
-        double guiY = rawY[0] * guiH / winH;
-
-        double cx = guiW / 2.0;
-        double cy = guiH / 2.0;
-        double dx = guiX - cx;
-        double dy = guiY - cy;
-        double dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < WHEEL_INNER || dist > WHEEL_OUTER) return -1;
-
-        // angle: -180..180, 0 = right, 90 = up (screen coords, Y inverted)
-        double angleDeg = Math.toDegrees(Math.atan2(-dy, dx));
-        if (angleDeg < 0) angleDeg += 360;
-        // AuraTip 第一个 slot 从顶部 (90°) 开始顺时针
-        // slot 0: 90°, slot 1: 30°, slot 2: -30°(=330°), slot 3: -90°(=270°), slot 4: -150°(=210°), slot 5: -210°(=150°)
-        // 即: 90, 30, 330, 270, 210, 150 (顺时针)
-        double[] slotAngles = {90, 30, 330, 270, 210, 150};
+        double angle = Math.toDegrees(Math.atan2(-dy, dx));
+        if (angle < 0) angle += 360;
+        double step = 360.0 / slots;
         int best = -1;
-        double bestDiff = 60;
-        for (int i = 0; i < TOTAL_SLOTS; i++) {
-            double diff = Math.abs(angleDeg - slotAngles[i]);
-            if (diff > 180) diff = 360 - diff;
-            if (diff < bestDiff && diff < 30) { // 每段 60°，±30°
+        double bestDifference = step / 2.0 + 0.01;
+        for (int i = 0; i < slots; i++) {
+            double center = 90.0 - i * step;
+            if (center < 0) center += 360;
+            double difference = Math.abs(angle - center);
+            if (difference > 180) difference = 360 - difference;
+            if (difference < bestDifference) {
                 best = i;
-                bestDiff = diff;
+                bestDifference = difference;
             }
         }
         return best;
     }
 
-    private static void reset() {
-        keyWasDown = false; heldTicks = 0; consumedUntilRelease = false;
+    @Nullable
+    private static UUID findLookedAtVehicle(Minecraft minecraft) {
+        if (minecraft.player == null || minecraft.level == null) return null;
+        Vec3 eye = minecraft.player.getEyePosition(1.0F);
+        Vec3 look = minecraft.player.getLookAngle();
+        Vec3 end = eye.add(look.scale(INTERACT_RANGE));
+        EntityHitResult hit = ProjectileUtil.getEntityHitResult(
+            minecraft.player, eye, end,
+            minecraft.player.getBoundingBox().expandTowards(look.scale(INTERACT_RANGE)).inflate(1.0D),
+            entity -> entity != minecraft.player && entity.isPickable(),
+            INTERACT_RANGE * INTERACT_RANGE);
+        if (hit == null) return null;
+        Entity root = hit.getEntity().getRootVehicle();
+        return root == null || root == minecraft.player ? null : root.getUUID();
+    }
+
+    private static void closeOwnedOverlay() {
+        if (ownsOverlay && RadialMenuOverlay.INSTANCE.isActive()) {
+            RadialMenuOverlay.INSTANCE.close();
+        }
         ownsOverlay = false;
-        holdAction = null; holdProgress = 0;
+    }
+
+    private static void reset() {
+        closeOwnedOverlay();
+        keyWasDown = false;
+        heldTicks = 0;
+        consumedUntilRelease = false;
+        snapshotReady = false;
+        currentVehicleId = null;
+        cachedSupply = null;
+        holdAction = null;
+        holdProgress = 0;
         pendingReopen = false;
     }
 
-    // ==================== 客户端载具查找 ====================
-
-    private static UUID findNearbyVehicle(Minecraft mc) {
-        if (mc.player == null || mc.level == null) return null;
-        Entity ridden = mc.player.getVehicle();
-        if (ridden != null && isVehicleEntity(ridden)) return ridden.getUUID();
-        Vec3 pos = mc.player.position();
-        AABB box = new AABB(pos.x - SEARCH_RANGE, pos.y - SEARCH_RANGE, pos.z - SEARCH_RANGE,
-            pos.x + SEARCH_RANGE, pos.y + SEARCH_RANGE, pos.z + SEARCH_RANGE);
-        double best = Double.MAX_VALUE;
-        UUID bestId = null;
-        for (Entity e : mc.level.getEntities(mc.player, box, VehicleWheelController::isVehicleEntity)) {
-            double d = e.distanceToSqr(mc.player);
-            if (d < best) { best = d; bestId = e.getUUID(); }
-        }
-        return bestId;
-    }
-
-    private static boolean isVehicleEntity(Entity e) {
-        for (String tag : e.getTags()) {
-            if (tag.startsWith("espetro_team_")) return true;
-        }
-        String name = e.getType().getDescriptionId();
-        return name.contains("dragonrise") || name.contains("fcp") || name.contains("vehicle");
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath("espetro", path);
     }
 }

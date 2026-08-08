@@ -26,7 +26,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.20";
+    public static final String PROTOCOL_VERSION = "1.21";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -337,6 +337,21 @@ public class NetworkManager {
             VehicleSupplyActionPacket::write, VehicleSupplyActionPacket::read, VehicleSupplyActionPacket::handle);
         NET.registerMessage(nextId(), VehicleSupplySyncPacket.class,
             VehicleSupplySyncPacket::write, VehicleSupplySyncPacket::read, VehicleSupplySyncPacket::handle);
+        NET.registerMessage(nextId(), FobSupplySyncPacket.class,
+            FobSupplySyncPacket::write, FobSupplySyncPacket::read, FobSupplySyncPacket::handle);
+        NET.registerMessage(nextId(), BuildFortificationPacket.class,
+            BuildFortificationPacket::write, BuildFortificationPacket::read, BuildFortificationPacket::handle);
+        NET.registerMessage(nextId(), FortificationCatalogPacket.class,
+            FortificationCatalogPacket::write, FortificationCatalogPacket::read,
+            FortificationCatalogPacket::handle);
+    }
+
+    public static void sendBuildFortification(String fortId) {
+        NET.sendToServer(new BuildFortificationPacket(fortId));
+    }
+
+    public static void requestFortificationCatalog() {
+        NET.sendToServer(FortificationCatalogPacket.request());
     }
 
     public static void sendRadioOpen(net.minecraft.core.BlockPos pos) {
@@ -1023,6 +1038,15 @@ public class NetworkManager {
      * 向指挥官发送载具部署界面
      */
     public static void sendVehicleDeployScreen(ServerPlayer player, String factionId) {
+        sendVehicleDeployScreen(player, factionId, true);
+    }
+
+    public static void syncVehicleDeployScreen(ServerPlayer player, String factionId) {
+        sendVehicleDeployScreen(player, factionId, false);
+    }
+
+    private static void sendVehicleDeployScreen(ServerPlayer player, String factionId,
+                                                boolean openScreen) {
         java.util.Map<String, org.espetro.vehicle.VehicleConfig.VehicleTypeConfig> configs =
             org.espetro.vehicle.VehicleConfig.getFactionVehicles(factionId);
         java.util.List<VehicleDeployScreenPacket.VehicleInfo> list = new java.util.ArrayList<>();
@@ -1031,15 +1055,19 @@ public class NetworkManager {
         for (java.util.Map.Entry<String, org.espetro.vehicle.VehicleConfig.VehicleTypeConfig> entry : configs.entrySet()) {
             String type = entry.getKey();
             org.espetro.vehicle.VehicleConfig.VehicleTypeConfig cfg = entry.getValue();
-            int current = vm.getActiveCount(factionId, type);
-            long cooldown = vm.getCooldownRemaining(factionId, type);
+            String team = Espetro.getPlayerTeam(player);
+            int current = team == null ? vm.getActiveCount(factionId, type)
+                : vm.getActiveCount(team, factionId, type);
+            long cooldown = vm.getCooldownRemaining(team, factionId, type);
             String displayName = org.espetro.vehicle.VehicleManager.getDisplayName(factionId, type);
 
             list.add(new VehicleDeployScreenPacket.VehicleInfo(
-                type, displayName, cfg.max, current, (int)(cooldown / 1000), cfg.respawnMinutes));
+                type, displayName, cfg.max, current,
+                System.currentTimeMillis() + cooldown, cfg.respawnMinutes));
         }
 
-        NET.send(PacketDistributor.PLAYER.with(() -> player), new VehicleDeployScreenPacket(list));
+        NET.send(PacketDistributor.PLAYER.with(() -> player),
+            new VehicleDeployScreenPacket(openScreen, list));
     }
 
     /**
@@ -1068,6 +1096,16 @@ public class NetworkManager {
             ServerPlayer player, int deployTimeRemaining, boolean openScreen) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
+
+        // The same packet backs the main GUI in both deployment and battle. Always
+        // attach the current authoritative phase timer so opening J mid-battle does
+        // not render an empty timer until a later BattleTimerPacket arrives.
+        GameStateManager gameState = GameStateManager.getInstance();
+        int phaseTimeRemaining = switch (gameState.getCurrentPhase()) {
+            case DEPLOYING -> gameState.getDeployTimeRemainingSeconds();
+            case BATTLE -> gameState.getBattleTimeRemainingSeconds();
+            default -> deployTimeRemaining;
+        };
 
         String team = Espetro.getPlayerTeam(player);
         if (team == null) return;
@@ -1196,7 +1234,7 @@ public class NetworkManager {
             hasDeploy, deployPos, bastionList,
             isCmd, vehicleList,
             squadList, mySquadId,
-            deployTimeRemaining, team,
+            phaseTimeRemaining, team,
             commanderNames, GameConfig.getTeammateNameTagDistance(),
             bm.isWaitingForBastion(player.getUUID()),
             org.espetro.team.OutpostManager.getInstance()

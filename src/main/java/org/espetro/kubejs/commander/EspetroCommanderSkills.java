@@ -207,15 +207,6 @@ public final class EspetroCommanderSkills {
             .cooldownSeconds(60)
             .register();
 
-        create("vehicle_supply_station")
-            .displayName("载具补给站")
-            .description("获得可放置的载具补给站物品，由指挥官自行摆放")
-            .stats("§8补给载具 | 冷却: 120秒")
-            .icon("espetro:textures/gui/commander_skills/vehicle_supply_station.png")
-            .activate()
-            .cooldownSeconds(120)
-            .register();
-
         create(DEFAULT_ARTILLERY_SKILL_ID)
             .displayName("155火炮支援")
             .description("打开 ESPoints 战术地图选择炮击坐标，再交给 KubeJS 执行火力效果")

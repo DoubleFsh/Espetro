@@ -9,7 +9,8 @@
     "selection_image": "espetro:textures/gui/attack_faction.png",
     "faction_id": "EXAMPLE_ATK",
     "color": "AA5555",
-    "team": "ATTACK"
+    "team": "ATTACK",
+    "max_habs_per_radio": 2
   },
   "vehicles": {
     "tank": {
@@ -20,6 +21,9 @@
       "troop_value": 5,
       "per_max_count": 1,
       "respawn_minutes": 1,
+      "fightveh": true,
+      "capacity": 500,
+      "initial_deploy_delay_seconds": { "attack": 0, "defend": 0 },
       "entity_tags": [
         "espetro_example"
       ]

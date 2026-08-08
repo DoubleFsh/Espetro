@@ -1,15 +1,17 @@
-k2026-08-08 09:41:56,350 Test worker WARN Advanced terminal features are not available in this environment
-k[09:41:56] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
-l[09:41:56] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 16, 跳过 10
-$&�[09:42:00] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: C:\Users\Administrator\AppData\Local\Temp\junit3945157403893288590\compatible.json (Test)
-$&�[09:42:00] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {compatible=1}
-$&�[09:42:00] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [compatible], factions.keySet: [compatible]
-$&`[09:42:00] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
-$&�[09:42:00] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: C:\Users\Administrator\AppData\Local\Temp\junit3945157403893288590\overflow.json (Test)
-$&[09:42:00] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {overflow=1}
-$&�[09:42:00] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [overflow], factions.keySet: [overflow]
-$&`[09:42:00] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
-$&�[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [编制兼容] overflow → 失败: 载具类型 'tank' entities(2) > spawn点数(1)
-;?�[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_slot 变体 default 的 equipment 槽位无效: not_a_slot
-;G�[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_item 变体 default 物品参数解析失败: minecraft:does_not_exist 1 (Unknown item 'minecraft:does_not_exist' at position 0: <--[HERE])
-;L�[09:42:00] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 illegal_count 变体 default 物品参数解析失败: minecraft:iron_sword abc (Expected integer at position 21: ...ron_sword <--[HERE])
+j2026-08-09 04:35:20,570 Test worker WARN Advanced terminal features are not available in this environment
+i[04:35:20] [Test worker/WARN] [or.es.Espetro/]: 忽略无效工事配置: ../invalid 的 id 格式无效
+�[04:35:20] [Test worker/INFO] [or.es.Espetro/]: 已冻结工事配置: 1 条，主基地补给半径=256.0，补给站半径=1.0
++*j[04:35:20] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
++,k[04:35:20] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 16, 跳过 10
+/1x[04:35:22] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit944645308571429866/compatible.json (Test)
+/1�[04:35:22] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {compatible=1}
+/1�[04:35:22] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [compatible], factions.keySet: [compatible]
+/1_[04:35:22] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
+/1v[04:35:22] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit944645308571429866/overflow.json (Test)
+/1~[04:35:22] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {overflow=1}
+/1�[04:35:22] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [overflow], factions.keySet: [overflow]
+/1_[04:35:22] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
+/1�[04:35:22] [Test worker/WARN] [or.es.Espetro/]: [编制兼容] overflow → 失败: 载具类型 'tank' entities(2) > spawn点数(1)
+KO�[04:35:22] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_slot 变体 default 的 equipment 槽位无效: not_a_slot
+KW�[04:35:22] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 invalid_item 变体 default 物品参数解析失败: minecraft:does_not_exist 1 (Unknown item 'minecraft:does_not_exist' at position 0: <--[HERE])
+K\�[04:35:22] [Test worker/WARN] [or.es.Espetro/]: [预览解析] 职业 illegal_count 变体 default 物品参数解析失败: minecraft:iron_sword abc (Expected integer at position 21: ...ron_sword <--[HERE])

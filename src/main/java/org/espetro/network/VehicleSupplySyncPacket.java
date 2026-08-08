@@ -1,86 +1,116 @@
 package org.espetro.network;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
-import org.espetro.vehicle.VehicleManager;
 
 import java.util.UUID;
 import java.util.function.Supplier;
 
-/**
- * 载具补给状态同步包（服务端→客户端）
- * 在每次载具装载/卸载操作后发送，更新客户端显示的补给条。
- */
-public class VehicleSupplySyncPacket {
+/** Server-authoritative vehicle inventory and radial capability snapshot. */
+public final class VehicleSupplySyncPacket {
 
+    private final boolean request;
     private final UUID vehicleId;
     private final int ammo;
     private final int construction;
     private final int maxCapacity;
-    private final boolean canCarryConstruction;
+    private final boolean supplyVehicle;
+    private final boolean fightVehicle;
+    private final boolean transferAmmo;
+    private final boolean transferConstruction;
+    private final int transferIntervalTicks;
 
-    public VehicleSupplySyncPacket(UUID vehicleId, int ammo, int construction,
-                                    int maxCapacity, boolean canCarryConstruction) {
+    private VehicleSupplySyncPacket(boolean request, UUID vehicleId, int ammo, int construction,
+                                    int maxCapacity, boolean supplyVehicle, boolean fightVehicle,
+                                    boolean transferAmmo, boolean transferConstruction,
+                                    int transferIntervalTicks) {
+        this.request = request;
         this.vehicleId = vehicleId;
         this.ammo = ammo;
         this.construction = construction;
         this.maxCapacity = maxCapacity;
-        this.canCarryConstruction = canCarryConstruction;
+        this.supplyVehicle = supplyVehicle;
+        this.fightVehicle = fightVehicle;
+        this.transferAmmo = transferAmmo;
+        this.transferConstruction = transferConstruction;
+        this.transferIntervalTicks = Math.max(1, transferIntervalTicks);
+    }
+
+    public static VehicleSupplySyncPacket request(UUID vehicleId) {
+        return new VehicleSupplySyncPacket(true, vehicleId, 0, 0, 0,
+            false, false, false, false, 20);
+    }
+
+    public static VehicleSupplySyncPacket state(UUID vehicleId, int ammo, int construction,
+                                                int maxCapacity, boolean supplyVehicle,
+                                                boolean fightVehicle, boolean transferAmmo,
+                                                boolean transferConstruction,
+                                                int transferIntervalTicks) {
+        return new VehicleSupplySyncPacket(false, vehicleId, ammo, construction, maxCapacity,
+            supplyVehicle, fightVehicle, transferAmmo, transferConstruction,
+            transferIntervalTicks);
     }
 
     public UUID getVehicleId() { return vehicleId; }
     public int getAmmo() { return ammo; }
     public int getConstruction() { return construction; }
     public int getMaxCapacity() { return maxCapacity; }
-    public boolean canCarryConstruction() { return canCarryConstruction; }
-    /** 用于判断是否为客户端请求（ammo < 0 表示客户端请求） */
-    public boolean isRequest() { return ammo < 0; }
+    public boolean isSupplyVehicle() { return supplyVehicle; }
+    public boolean isFightVehicle() { return fightVehicle; }
+    public boolean canTransferAmmo() { return transferAmmo; }
+    public boolean canTransferConstruction() { return transferConstruction; }
+    public int getTransferIntervalTicks() { return transferIntervalTicks; }
+    public boolean canCarryConstruction() { return supplyVehicle; }
+    public boolean isRequest() { return request; }
+    public boolean hasAnyAction() {
+        return transferAmmo || transferConstruction || supplyVehicle;
+    }
 
     public static VehicleSupplySyncPacket read(FriendlyByteBuf buf) {
-        return new VehicleSupplySyncPacket(
-            buf.readUUID(), buf.readVarInt(), buf.readVarInt(),
-            buf.readVarInt(), buf.readBoolean());
+        boolean request = buf.readBoolean();
+        UUID id = buf.readUUID();
+        if (request) return request(id);
+        return state(id, buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+            buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
+            buf.readVarInt());
     }
 
     public void write(FriendlyByteBuf buf) {
+        buf.writeBoolean(request);
         buf.writeUUID(vehicleId);
+        if (request) return;
         buf.writeVarInt(ammo);
         buf.writeVarInt(construction);
         buf.writeVarInt(maxCapacity);
-        buf.writeBoolean(canCarryConstruction);
+        buf.writeBoolean(supplyVehicle);
+        buf.writeBoolean(fightVehicle);
+        buf.writeBoolean(transferAmmo);
+        buf.writeBoolean(transferConstruction);
+        buf.writeVarInt(transferIntervalTicks);
     }
 
-    public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            var sender = ctx.get().getSender();
+    public void handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context context = supplier.get();
+        context.enqueueWork(() -> {
+            ServerPlayer sender = context.getSender();
             if (sender != null) {
-                // 服务端收到：客户端请求同步 → 返回当前补给状态
-                handleServerRequest(sender);
+                VehicleSupplySyncPacket response =
+                    VehicleSupplyActionPacket.createSyncResponse(sender, vehicleId);
+                if (response != null) {
+                    NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> sender), response);
+                }
             } else {
-                // 客户端收到：更新 UI
                 try {
                     Class.forName("org.espetro.client.ClientPacketHandlers")
                         .getMethod("handleVehicleSupplySync", VehicleSupplySyncPacket.class)
                         .invoke(null, this);
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (ReflectiveOperationException e) {
+                    org.espetro.Espetro.LOGGER.error("处理载具补给同步失败", e);
                 }
             }
         });
-        ctx.get().setPacketHandled(true);
-    }
-
-    private void handleServerRequest(net.minecraft.server.level.ServerPlayer player) {
-        VehicleManager vm = VehicleManager.getInstance();
-        String factionId = vm.getVehicleFactionId(vehicleId);
-        String vehicleType = vm.getVehicleType(vehicleId);
-        if (factionId == null || vehicleType == null) return;
-        VehicleManager.VehicleSupplyState supply = vm.getOrCreateVehicleSupply(vehicleId, factionId, vehicleType);
-        if (supply == null) return;
-        VehicleSupplySyncPacket response = new VehicleSupplySyncPacket(vehicleId,
-            supply.getAmmo(), supply.getConstruction(),
-            supply.getMaxCapacity(), supply.canCarryConstruction());
-        NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);
+        context.setPacketHandled(true);
     }
 }

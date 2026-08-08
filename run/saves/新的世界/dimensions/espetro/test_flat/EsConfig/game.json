@@ -11,6 +11,7 @@
     "faction_reveal_seconds": 3,
     "round_end_seconds": 10,
     "respawn_invincibility_ticks": 60,
+    "main_base_invulnerability_radius": 150.0,
     "teammate_name_tag_distance": 10.0,
     "waiting_y": 200
   },

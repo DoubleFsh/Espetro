@@ -227,6 +227,7 @@ public class Espetro {
                 TeamPackManager.init();
                 // 初始化兵站管理器
                 BastionManager.getInstance();
+                org.espetro.bastion.FortificationConfig.loadDefaults();
                 // 初始化前哨基地管理器
                 org.espetro.team.OutpostManager.init();
                 // 初始化指挥官技能管理器
@@ -292,6 +293,9 @@ public class Espetro {
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
                 GameStateManager.getInstance().onPlayerJoin(serverPlayer);
+                NetworkManager.NET.send(
+                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> serverPlayer),
+                    org.espetro.network.FortificationCatalogPacket.forPlayer(serverPlayer));
                 // 指挥官断线重连恢复（仅 BATTLE / DEPLOYING 阶段尝试）
                 if (phase == GamePhase.BATTLE || phase == GamePhase.DEPLOYING) {
                     CommanderGovernanceManager.getInstance().tryRestoreCommanderOnRejoin(serverPlayer);
@@ -308,6 +312,8 @@ public class Espetro {
                 // 退服前强制写回主城坐标与重生点（主城维度不重置）
                 GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
                 StaminaManager.removePlayer(serverPlayer.getUUID());
+                org.espetro.network.VehicleSupplyActionPacket.clearPlayerRateLimit(
+                    serverPlayer.getUUID());
                 try {
                     TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
                 } catch (Throwable t) {
@@ -335,6 +341,7 @@ public class Espetro {
             String squadTeam = SquadManager.getInstance().removePlayer(event.getEntity().getUUID());
             countManager.removePlayer(event.getEntity());
             org.espetro.ping.VehicleSeatPingCache.clear(event.getEntity().getUUID());
+            org.espetro.vehicle.VehicleSeatAccessPolicy.clear(event.getEntity().getUUID());
             NetworkManager.broadcastClassCounts(classCountTeam, classCountFaction);
             if (squadTeam != null) {
                 TeamPackManager.getInstance().reconcileTeam(squadTeam);
@@ -428,6 +435,8 @@ public class Espetro {
             serverInstance = event.getServer();
             disableNaturalRegeneration(event.getServer());
             ServerRuntimeMaintenance.getInstance().reset();
+            org.espetro.bastion.FortificationConfig.loadServerConfig();
+            org.espetro.bastion.FobSupplyTracker.clearAll();
             // 初始化并冻结所有外部配置（仅此一次）
             loadStartupConfigs(event.getServer());
             // 初始化职业人数记分板
@@ -436,6 +445,7 @@ public class Espetro {
             BastionManager.getInstance().reset();
             TeamPackManager.getInstance().reset();
             SupplyManager.getInstance().reset();
+            org.espetro.bastion.FobSupplyTracker.clearAll();
             GameStateManager.getInstance().resetGame();
         }
 
@@ -449,6 +459,7 @@ public class Espetro {
             BastionManager.getInstance().reset();
             TeamPackManager.getInstance().reset();
             SupplyManager.getInstance().reset();
+            org.espetro.bastion.FobSupplyTracker.clearAll();
             int removedVehicles = VehicleManager.getInstance().removeAllDeployedVehicles(event.getServer());
             LOGGER.info("停服战局清理完成: 已删除{}辆部署载具, 已恢复/删除{}个屏障方块",
                 removedVehicles, removedBarrierBlocks);
@@ -464,6 +475,7 @@ public class Espetro {
             ServerRuntimeMaintenance.getInstance().reset();
             BattlefieldWorldManager.getInstance().resetAfterServerStop();
             StaminaManager.clear();
+            org.espetro.network.VehicleSupplyActionPacket.clearRateLimits();
             serverInstance = null;
         }
 

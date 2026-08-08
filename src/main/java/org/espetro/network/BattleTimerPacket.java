@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 
 /**
  * 战局倒计时同步包 (S→C)。
- * 每30秒广播一次，最后10秒每秒广播。
+ * 服务端每秒广播一次；客户端以收到的秒数为锚点在本地递减。
  */
 public class BattleTimerPacket {
 

@@ -14,7 +14,8 @@ public class ClientGameState {
     // 玩家当前选择的攻守方：ATTACK 或 DEFEND
     private static String playerTeam = null;
     // 战局倒计时剩余秒数，-1 表示无倒计时
-    private static int battleTimeRemaining = -1;
+    private static int battleTimerAnchorSeconds = -1;
+    private static long battleTimerAnchorMs;
 
     public static void setCurrentPhase(GamePhase phase) {
         currentPhase = phase;
@@ -34,6 +35,8 @@ public class ClientGameState {
 
     public static void setPlayerTeam(String team) {
         playerTeam = team;
+        // 事件驱动：阵营变化时刷新兵力 HUD 缓存（不查服、不扫记分板）
+        TroopCountOverlay.onTeamChanged(team);
     }
 
     public static String getPlayerTeam() {
@@ -41,11 +44,20 @@ public class ClientGameState {
     }
 
     public static void setBattleTimeRemaining(int seconds) {
-        battleTimeRemaining = seconds;
+        battleTimerAnchorSeconds = seconds < 0 ? -1 : seconds;
+        battleTimerAnchorMs = System.currentTimeMillis();
     }
 
     public static int getBattleTimeRemaining() {
-        return battleTimeRemaining;
+        return calculateAnchoredRemaining(
+            battleTimerAnchorSeconds, battleTimerAnchorMs, System.currentTimeMillis());
+    }
+
+    static int calculateAnchoredRemaining(int anchorSeconds, long anchorMs, long nowMs) {
+        if (anchorSeconds < 0) return -1;
+        long elapsedMs = Math.max(0L, nowMs - anchorMs);
+        long elapsedSeconds = elapsedMs / 1000L;
+        return (int) Math.max(0L, anchorSeconds - elapsedSeconds);
     }
 
     /**

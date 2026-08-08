@@ -9,7 +9,6 @@ import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
 import org.espetro.bastion.DeployActions;
 import org.espetro.logistics.LogisticsConfig;
-import org.espetro.logistics.SupplyManager;
 import org.espetro.team.TeamPackManager;
 
 import java.util.function.Supplier;
@@ -19,7 +18,6 @@ public record RadialActionPacket(Action action) {
     public enum Action {
         DEPLOY_RADIO,
         DEPLOY_RALLY,
-        DEPOSIT_SUPPLIES,
         FOB_STATUS,
         /** 在己方 Radio 建造半径内部署 HAB；追加在末尾以保持旧 ordinal。 */
         DEPLOY_HAB,
@@ -50,7 +48,6 @@ public record RadialActionPacket(Action action) {
             case DEPLOY_HAB -> DeployActions.startHabChannel(player);
             case DEPLOY_VEHICLE -> DeployActions.openVehicleDeploy(player);
             case DEPLOY_RALLY -> deployRally(player);
-            case DEPOSIT_SUPPLIES -> deposit(player);
             case FOB_STATUS -> showStatus(player);
         }
     }
@@ -61,19 +58,6 @@ public record RadialActionPacket(Action action) {
         player.sendSystemMessage(Component.literal(error != null
             ? error
             : "§a已领取 Rally 部署包，找到合适位置放置。"));
-    }
-
-    private static void deposit(ServerPlayer player) {
-        BastionData bastion = nearestFob(player);
-        if (bastion == null) {
-            player.sendSystemMessage(Component.literal("§c附近没有己方 Radio。"));
-            return;
-        }
-        SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
-        player.sendSystemMessage(Component.literal(result.success()
-            ? "§a已存入 §6" + result.construction() + " 建材 §a与 §b"
-                + result.ammunition() + " 弹药。"
-            : result.error()));
     }
 
     private static void showStatus(ServerPlayer player) {

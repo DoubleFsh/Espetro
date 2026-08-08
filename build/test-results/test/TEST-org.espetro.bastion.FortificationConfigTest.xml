@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.bastion.FortificationConfigTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-08-08T20:35:20" hostname="cachyos-x8664" time="0.336">
+  <properties/>
+  <testcase name="loadsBoundedServiceSettingsAndRejectsUnsafeEntries(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.336"/>
+  <system-out><![CDATA[2026-08-09 04:35:20,570 Test worker WARN Advanced terminal features are not available in this environment
+[04:35:20] [Test worker/WARN] [or.es.Espetro/]: 忽略无效工事配置: ../invalid 的 id 格式无效
+[04:35:20] [Test worker/INFO] [or.es.Espetro/]: 已冻结工事配置: 1 条，主基地补给半径=256.0，补给站半径=1.0
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

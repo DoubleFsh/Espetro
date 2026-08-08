@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * 右键己方 Radio → AuraTip：
- * 变更职业（二层职业列表，含 icon，无预览）/ 存入补给 / 补充弹药。
+ * 变更职业（二层职业列表，含 icon，无预览）。步兵补给只在弹药箱进行。
  */
 public final class RadioRadialController {
 
@@ -36,10 +36,6 @@ public final class RadioRadialController {
 
     private static final ResourceLocation ICON_CLASS =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/roles/rifleman.png");
-    private static final ResourceLocation ICON_DEPOSIT =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/deposit_supply.png");
-    private static final ResourceLocation ICON_RESUPPLY =
-        ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/ammo_supply.png");
     private static final IRadialIcon ICON_BACK = ReturnArrowIcon.INSTANCE;
     private static final ResourceLocation ICON_UNAVAILABLE =
         ResourceLocation.fromNamespaceAndPath(
@@ -102,12 +98,7 @@ public final class RadioRadialController {
             }
         });
         Actions.register(DO_ACTION, params -> {
-            String action = params.getString("action", "");
-            if ("DEPOSIT".equals(action)) {
-                NetworkManager.sendRadialAction(RadialActionPacket.Action.DEPOSIT_SUPPLIES);
-            } else if ("RESUPPLY".equals(action)) {
-                NetworkManager.sendRadioResupply(lastRadioPos);
-            }
+            // Reserved for compatibility; Radio root has no logistics mutations.
         });
         publishMenus();
     }
@@ -170,15 +161,10 @@ public final class RadioRadialController {
             .radii(44, 96)
             .animationSpeed(1.25f)
             .ringColors(List.of("#E6141719", "#F02A2D2F"))
+            // 存入/补弹已取消：补给靠 F 键载具装卸，补弹在工事弹药箱上
             .slot("espetro.radio.change_class", ICON_CLASS,
                 Actions.script(NAVIGATE, Map.of("target", "classes")),
                 Component.literal("变更职业"), "#FFD5B25C")
-            .slot("espetro.radio.deposit", ICON_DEPOSIT,
-                Actions.script(DO_ACTION, Map.of("action", "DEPOSIT")),
-                Component.literal("存入补给和弹药"), "#FF6EA07A")
-            .slot("espetro.radio.resupply", ICON_RESUPPLY,
-                Actions.script(DO_ACTION, Map.of("action", "RESUPPLY")),
-                Component.literal("补充弹药和补给"), "#FF6B9DB5")
             .build());
         menus.add(buildClassMenuData());
         for (RadioRadialPacket.ClassEntry entry : cachedClasses) {

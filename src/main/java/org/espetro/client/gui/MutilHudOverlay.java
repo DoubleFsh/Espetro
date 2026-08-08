@@ -7,17 +7,14 @@ import se.mickelus.mutil.gui.GuiElement;
 /**
  * Persistent MUtil root for Espetro HUD elements.
  *
- * <p>The tree is rebuilt only when GUI scale changes. Packet updates mutate the
- * backing HUD state, so ordinary render ticks never replace the element tree.</p>
+ * <p>兵力已迁至 {@link UnifiedDeployScreen} 右上角时间下方；本层保留体力条与
+ * Radio 范围补给状态。</p>
  */
 public final class MutilHudOverlay {
 
     private static GuiElement root;
     private static int width = -1;
     private static int height = -1;
-    private static int tickCounter;
-    /** 每 N 帧渲染一次；跳过中间帧，降低 HUD 渲染开销。设为 1 即每帧渲染。 */
-    private static final int HUD_RENDER_INTERVAL = 50 ;
 
     private MutilHudOverlay() {
     }
@@ -26,34 +23,18 @@ public final class MutilHudOverlay {
         if (minecraft == null || minecraft.level == null || minecraft.options.hideGui) {
             return;
         }
-        tickCounter++;
-        if (tickCounter % HUD_RENDER_INTERVAL != 0) {
-            return;
-        }
         int nextWidth = graphics.guiWidth();
         int nextHeight = graphics.guiHeight();
         if (root == null || width != nextWidth || height != nextHeight) {
             width = nextWidth;
             height = nextHeight;
             root = new GuiElement(0, 0, width, height);
-            root.addChild(new TroopElement());
             root.addChild(new StaminaElement());
+            root.addChild(FobSupplyHud.createElement());
         }
-        root.updateAnimations();
+        // HUD widgets have no time-based MUtil animations. State changes are pushed by
+        // their sync events, so the render path must not poll/update the tree per frame.
         root.draw(graphics, 0, 0, width, height, -1, -1, partialTick);
-    }
-
-    private static final class TroopElement extends GuiElement {
-        private TroopElement() {
-            super(0, 0, 230, 24);
-        }
-
-        @Override
-        public void draw(GuiGraphics graphics, int x, int y, int drawWidth, int drawHeight,
-                         int mouseX, int mouseY, float partialTick) {
-            TroopCountOverlay.drawElement(graphics, Minecraft.getInstance());
-            super.draw(graphics, x, y, drawWidth, drawHeight, mouseX, mouseY, partialTick);
-        }
     }
 
     private static final class StaminaElement extends GuiElement {

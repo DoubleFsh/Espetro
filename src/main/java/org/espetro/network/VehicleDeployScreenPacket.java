@@ -7,84 +7,75 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/**
- * 载具部署界面包（S→C）
- * 指挥官右键部署棍时推送，替代聊天可点击消息
- */
-public class VehicleDeployScreenPacket {
+/** Vehicle deployment snapshot; background updates never force-open a screen. */
+public final class VehicleDeployScreenPacket {
 
+    private final boolean openScreen;
     private final List<VehicleInfo> vehicles;
 
-    public VehicleDeployScreenPacket(List<VehicleInfo> vehicles) {
-        this.vehicles = vehicles;
-    }
-
-    public VehicleDeployScreenPacket(FriendlyByteBuf buf) {
-        int size = buf.readVarInt();
-        this.vehicles = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
-            vehicles.add(new VehicleInfo(
-                buf.readUtf(),    // type
-                buf.readUtf(),    // displayName
-                buf.readVarInt(), // max
-                buf.readVarInt(), // current
-                buf.readVarInt(), // cooldownRemaining (seconds, fits in varint for our use)
-                buf.readVarInt()  // respawnMinutes
-            ));
-        }
+    public VehicleDeployScreenPacket(boolean openScreen, List<VehicleInfo> vehicles) {
+        this.openScreen = openScreen;
+        this.vehicles = List.copyOf(vehicles);
     }
 
     public static VehicleDeployScreenPacket read(FriendlyByteBuf buf) {
-        return new VehicleDeployScreenPacket(buf);
+        boolean open = buf.readBoolean();
+        int size = Math.min(128, Math.max(0, buf.readVarInt()));
+        List<VehicleInfo> vehicles = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            vehicles.add(new VehicleInfo(
+                buf.readUtf(128), buf.readUtf(256), buf.readVarInt(), buf.readVarInt(),
+                buf.readLong(), buf.readVarInt()));
+        }
+        return new VehicleDeployScreenPacket(open, vehicles);
     }
 
     public void write(FriendlyByteBuf buf) {
-        buf.writeVarInt(vehicles.size());
-        for (VehicleInfo v : vehicles) {
-            buf.writeUtf(v.type);
-            buf.writeUtf(v.displayName);
-            buf.writeVarInt(v.max);
-            buf.writeVarInt(v.current);
-            buf.writeVarInt(v.cooldownRemaining);
-            buf.writeVarInt(v.respawnMinutes);
+        buf.writeBoolean(openScreen);
+        buf.writeVarInt(Math.min(vehicles.size(), 128));
+        for (int i = 0; i < vehicles.size() && i < 128; i++) {
+            VehicleInfo vehicle = vehicles.get(i);
+            buf.writeUtf(vehicle.type, 128);
+            buf.writeUtf(vehicle.displayName, 256);
+            buf.writeVarInt(vehicle.max);
+            buf.writeVarInt(vehicle.current);
+            buf.writeLong(vehicle.readyAtEpochMs);
+            buf.writeVarInt(vehicle.respawnMinutes);
         }
     }
 
-    public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
+    public void handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context context = supplier.get();
+        context.enqueueWork(() -> {
             try {
                 Class.forName("org.espetro.client.ClientPacketHandlers")
                     .getMethod("handleVehicleDeployScreen", VehicleDeployScreenPacket.class)
                     .invoke(null, this);
-            } catch (Exception e) {
-                org.espetro.Espetro.LOGGER.error("Failed to handle VehicleDeployScreenPacket", e);
+            } catch (ReflectiveOperationException e) {
+                org.espetro.Espetro.LOGGER.error("处理载具部署同步失败", e);
             }
         });
-        ctx.get().setPacketHandled(true);
+        context.setPacketHandled(true);
     }
 
-    public List<VehicleInfo> getVehicles() {
-        return vehicles;
-    }
+    public boolean shouldOpenScreen() { return openScreen; }
+    public List<VehicleInfo> getVehicles() { return vehicles; }
 
-    /**
-     * 单个载具信息
-     */
-    public static class VehicleInfo {
+    public static final class VehicleInfo {
         public final String type;
         public final String displayName;
         public final int max;
         public final int current;
-        public final int cooldownRemaining; // 秒
+        public final long readyAtEpochMs;
         public final int respawnMinutes;
 
         public VehicleInfo(String type, String displayName, int max, int current,
-                           int cooldownRemaining, int respawnMinutes) {
+                           long readyAtEpochMs, int respawnMinutes) {
             this.type = type;
             this.displayName = displayName;
             this.max = max;
             this.current = current;
-            this.cooldownRemaining = cooldownRemaining;
+            this.readyAtEpochMs = readyAtEpochMs;
             this.respawnMinutes = respawnMinutes;
         }
     }

@@ -383,9 +383,9 @@ public class BastionEventHandler {
         if (error == null && !manager.hasBastionCapacity(team)) {
             error = "§c本方生效 Radio 数量已达到上限（" + manager.getBastionLimitPerTeam() + "个）！";
         }
-        if (error == null
-            && manager.findNearestRadio(level, pos, team, radio.exclusionRadius) != null) {
-            error = "§c附近已有己方 Radio，排斥半径为 " + (int) radio.exclusionRadius + " 格。";
+        if (error == null && manager.wouldRadioCoverageOverlap(level, pos)) {
+            error = "§c附近已有 Radio，作用范围不能重叠；中心至少间隔 "
+                + (int) Math.ceil(manager.getMinimumRadioCenterDistance()) + " 格。";
         }
         if (error == null && radio.teammateCount > 0) {
             int nearby = countNearbyTeammates(player, team, pos, radio.teammateRadius);
@@ -673,7 +673,7 @@ public class BastionEventHandler {
      * <ul>
      *   <li>普通右键：由客户端 {@code RadioRadialController} 发 OPEN 包打开 AuraTip 轮盘，
      *       此处只拦截原版/旧逻辑，避免直接补弹把轮盘盖掉。</li>
-     *   <li>潜行右键：快捷存入补给（轮盘里也有同名操作）。</li>
+     *   <li>潜行右键不再存入任何物资。</li>
      * </ul>
      */
     @SubscribeEvent
@@ -698,23 +698,7 @@ public class BastionEventHandler {
             return; // 敌方静默
         }
 
-        // 仅潜行右键保留快捷存入；普通右键走电台轮盘（C→S OPEN / RESUPPLY）
-        if (player.isShiftKeyDown()) {
-            SupplyManager.DepositResult result = SupplyManager.getInstance().depositAll(player, bastion);
-            if (result.success()) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "§a已存入 Radio §7| §6建材 +" + result.construction()
-                        + " §7| §b弹药 +" + result.ammunition()
-                        + " §7| 库存 §6" + bastion.getConstructionSupplies()
-                        + "§7/§b" + bastion.getAmmunitionSupplies()
-                        + " §7| " + BastionManager.getInstance().getFobStatus(bastion)));
-            } else {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    result.error() + " §7| §6" + bastion.getConstructionSupplies()
-                        + " 建材 §7| §b" + bastion.getAmmunitionSupplies()
-                        + " 弹药 §7| " + BastionManager.getInstance().getFobStatus(bastion)));
-            }
-        }
+        // 背包→Radio 存入已取消；补给仅通过 F 键载具装卸。普通右键由客户端开轮盘。
     }
 
     @SubscribeEvent
@@ -734,50 +718,49 @@ public class BastionEventHandler {
     }
 
     /**
-     * 玩家右击兵站潜影盒 - 弹药补给
+     * 玩家右击弹药箱（工事放置的潜影盒）— 职业弹药补给（含冷却）。
      */
     @SubscribeEvent
     public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (event.getLevel().isClientSide()) return;
         ServerLevel level = (ServerLevel) event.getLevel();
         BlockPos clickedPos = event.getPos();
         BlockState state = level.getBlockState(clickedPos);
 
-        // 检查是否是潜影盒
-        if (!state.is(Blocks.RED_SHULKER_BOX) && !state.is(Blocks.BLUE_SHULKER_BOX)) return;
+        // 工事弹药箱使用原版 shulker_box；兼容旧红/蓝箱
+        boolean isShulker = state.is(Blocks.SHULKER_BOX)
+            || state.is(Blocks.RED_SHULKER_BOX)
+            || state.is(Blocks.BLUE_SHULKER_BOX);
+        if (!isShulker) return;
 
-        // 根据潜影盒位置查找兵站
-        BastionData bastion = BastionManager.getInstance().findBastionByShulkerPos(clickedPos);
-        if (bastion == null) return;
-
-        // 检查是否是同一个队伍
         String team = Espetro.getPlayerTeam(player);
-        if (team == null || !team.equals(bastion.getTeam())) {
-            event.setCanceled(true);
-            return; // 静默，不给敌方提示
-        }
+        if (team == null) return;
 
-        if (player.isShiftKeyDown()) {
-            SupplyManager.DepositResult deposit = SupplyManager.getInstance().depositAll(player, bastion);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(deposit.success()
-                ? "§a已向 FOB 存入 §6" + deposit.construction() + " 建材 §a与 §b"
-                    + deposit.ammunition() + " 弹药。"
-                : deposit.error()));
-            event.setCanceled(true);
+        BastionData radio = FortificationManager.getInstance()
+            .findRadioForAmmoCrate(level, clickedPos, team);
+        if (radio == null) {
+            // 非我方弹药箱：若是登记工事则静默取消开箱
+            if (FortificationManager.getInstance().isAmmoCrateAt(level, clickedPos, team)
+                || BastionManager.getInstance().findBastionByShulkerPos(clickedPos) != null) {
+                event.setCanceled(true);
+            }
             return;
         }
 
-        performAmmoResupply(player, bastion);
         event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+        performAmmoResupply(player, radio);
     }
 
     /**
      * 从 Radio 领取职业弹药补给（原潜影盒逻辑，供潜影盒与 Radio 实体两个入口复用）。
      */
     public static void performAmmoResupply(ServerPlayer player, BastionData bastion) {
-        if (!bastion.isAmmoCrateBuilt()) {
+        // 弹药箱与 Radio 解耦：调用方须已确认弹药箱实体存在；此处只校验 Radio 库存
+        if (bastion == null || !bastion.isActive()) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c该 Radio 尚未建成弹药箱，需要继续存入建材。"));
+                "§c附近没有可用的己方 Radio 弹药库存。"));
             return;
         }
 
@@ -878,6 +861,7 @@ public class BastionEventHandler {
         }
 
         BastionManager.getInstance().recordResupply(player.getUUID());
+        FobSupplyTracker.notifySupplyChanged(bastion);
         String chargeDetail = ammoCost > 0
             ? "消耗 §b" + ammoCost + " Radio 弹药"
             : "本职业补给无需消耗 Radio 弹药";

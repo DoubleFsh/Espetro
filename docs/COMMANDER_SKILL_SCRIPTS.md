@@ -157,25 +157,9 @@ EspetroCommanderSkills.on('drone_detection', event => {
 
 ### 载具补给站
 
-```js
-EspetroCommanderSkills.on('vehicle_supply_station', event => {
-  const x = event.blockX()
-  const y = event.blockY()
-  const z = event.blockZ()
-
-  event.level().getBlock(x + 2, y, z).set('minecraft:barrel')
-
-  const entity = event.level().createEntity('minecraft:armor_stand')
-  entity.setPositionAndRotation(x + 0.5, y, z + 0.5, 0, 0)
-  entity.mergeNbt({
-    CustomName: '{"text":"载具补给站"}',
-    CustomNameVisible: 1,
-    Tags: ['espetro_vehicle_supply_station', 'espetro_commander_skill']
-  })
-  entity.spawn()
-  return true
-})
-```
+载具补给站已从指挥官技能移入 Alt 轮盘的“建造工事”，不再注册
+`vehicle_supply_station` 技能。实体、回退方块、费用和使用权限由
+`config/espetro/fortifications.json` 定义。
 
 ### 155火炮支援
 

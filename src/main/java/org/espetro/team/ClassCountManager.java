@@ -369,6 +369,7 @@ public class ClassCountManager {
                 kit.icon, kit.iconImage);
         classSwitchCooldowns.start(
             uuid, GameConfig.getClassSwitchCooldownSeconds(), System.currentTimeMillis());
+        org.espetro.vehicle.VehicleSeatAccessPolicy.revalidateCurrentSeat(player);
         return SelectionResult.SUCCESS;
     }
 
@@ -524,6 +525,7 @@ public class ClassCountManager {
         // 在线玩家必须立刻清空，不能在离队后携带职业物品或沿用职业状态。
         if (onlinePlayer != null) {
             ClassEquipment.clearEquipment(onlinePlayer);
+            org.espetro.vehicle.VehicleSeatAccessPolicy.revalidateCurrentSeat(onlinePlayer);
         }
         PlayerMatchStatsManager.getInstance().onClassCleared(uuid);
         if (notify && onlinePlayer != null) {

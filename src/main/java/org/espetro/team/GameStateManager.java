@@ -557,8 +557,9 @@ public class GameStateManager {
         // 编制选择最终处理
         ClassSelectManager.getInstance().finalizeSelection();
 
-        // 玩家进入战场前，放下双方编制在 JSON 中声明的整批首发载具。
-        deployInitialFactionVehicles();
+        // 布防阶段开始计时；达到各类型首次部署延迟后由系统自动生成首批载具。
+        ClassSelectManager selection = ClassSelectManager.getInstance();
+        scheduleInitialFactionVehicles(selection);
 
         // 所有玩家先进入统一等待点，选择部署点后才进入战场。
         teleportAllToSpawnPoints();
@@ -582,7 +583,6 @@ public class GameStateManager {
         factionRevealTickCounter = 0;
 
         ClassSelectManager selectManager = ClassSelectManager.getInstance();
-        prepareInitialFactionVehicleChunks();
         NetworkManager.broadcastFactionRevealScreen(
             selectManager.getFinalAttackClass(),
             selectManager.getFinalDefendClass(),
@@ -590,6 +590,42 @@ public class GameStateManager {
         );
 
         Espetro.LOGGER.info("双方编制揭示开始，持续{}秒", GameConfig.getFactionRevealSeconds());
+    }
+
+    /**
+     * 首发载具以布防阶段开始时刻为统一计时原点。到期前不加载出生区块；到期后
+     * VehicleManager 分批异步加载并自动生成，战斗阶段不会被较长延迟阻塞。
+     */
+    private void scheduleInitialFactionVehicles(ClassSelectManager selection) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+
+        String attackFaction = selection.getFinalAttackClass();
+        String defendFaction = selection.getFinalDefendClass();
+        VehicleManager vehicleManager = VehicleManager.getInstance();
+        vehicleManager.armInitialDeployCooldowns(
+            attackFaction, "ATTACK", defendFaction, "DEFEND");
+
+        ServerLevel level = BattlefieldContext.requireBattlefield(server);
+        long deploymentStartedAt = System.currentTimeMillis();
+        int attackCount = prepareInitialFactionVehiclesForTeam(
+            "ATTACK", attackFaction, level, deploymentStartedAt);
+        int defendCount = prepareInitialFactionVehiclesForTeam(
+            "DEFEND", defendFaction, level, deploymentStartedAt);
+        int deployedNow = vehicleManager.activateInitialVehicleDeployment();
+        VehicleManager.InitialDeploymentStatus status =
+            vehicleManager.getInitialDeploymentStatus();
+        Espetro.LOGGER.info(
+            "首批载具自动部署已安排: 攻方{}辆，守方{}辆，立即落地{}辆，等待{}辆",
+            attackCount, defendCount, deployedNow, status.pending());
+    }
+
+    private int prepareInitialFactionVehiclesForTeam(
+        String team, String factionId, ServerLevel level, long deploymentStartedAt
+    ) {
+        if (factionId == null || factionId.isBlank()) return 0;
+        return VehicleManager.getInstance().prepareInitialVehicles(
+            factionId, team, level, deploymentStartedAt);
     }
 
     /**
@@ -607,60 +643,6 @@ public class GameStateManager {
             NetworkManager.queueUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
         }
         // 职业选择界面已通过 UnifiedDeployScreen 自动打开，不再发送聊天消息
-    }
-
-    /** 编制揭示期间异步预热首批载具出生区块，不提前生成实体。 */
-    private void prepareInitialFactionVehicleChunks() {
-        MinecraftServer server = Espetro.getServer();
-        if (server == null) return;
-
-        ServerLevel level = BattlefieldContext.requireBattlefield(server);
-        ClassSelectManager selectManager = ClassSelectManager.getInstance();
-        VehicleManager vehicleManager = VehicleManager.getInstance();
-        int attackCount = prepareInitialFactionVehiclesForTeam(
-            "ATTACK", selectManager.getFinalAttackClass(), level);
-        int defendCount = prepareInitialFactionVehiclesForTeam(
-            "DEFEND", selectManager.getFinalDefendClass(), level);
-        vehicleManager.processInitialVehicleDeployments();
-
-        Espetro.LOGGER.info("首批载具出生区块开始预热: 攻方{}辆，守方{}辆",
-            attackCount, defendCount);
-    }
-
-    /**
-     * 布防阶段开始时，为本局最终攻守编制生成一整批 JSON 中配置的载具。
-     */
-    private void deployInitialFactionVehicles() {
-        MinecraftServer server = Espetro.getServer();
-        if (server == null) return;
-
-        ServerLevel level = BattlefieldContext.requireBattlefield(server);
-        ClassSelectManager selectManager = ClassSelectManager.getInstance();
-        VehicleManager vehicleManager = VehicleManager.getInstance();
-        // 兼容揭示时间配置为 0 或预热尚未启动的情况；ledger 会去重。
-        int attackCount = prepareInitialFactionVehiclesForTeam(
-            "ATTACK", selectManager.getFinalAttackClass(), level);
-        int defendCount = prepareInitialFactionVehiclesForTeam(
-            "DEFEND", selectManager.getFinalDefendClass(), level);
-        int deployedNow = vehicleManager.activateInitialVehicleDeployment();
-        VehicleManager.InitialDeploymentStatus status =
-            vehicleManager.getInitialDeploymentStatus();
-
-        Espetro.LOGGER.info(
-            "布防首批载具已激活: 新安排攻方{}辆，守方{}辆，立即落地{}辆，待落地{}辆",
-            attackCount, defendCount, deployedNow, status.pending());
-    }
-
-    private int prepareInitialFactionVehiclesForTeam(
-        String team,
-        String factionId,
-        ServerLevel level
-    ) {
-        if (factionId == null || factionId.isBlank()) {
-            return 0;
-        }
-
-        return VehicleManager.getInstance().prepareInitialVehicles(factionId, team, level);
     }
 
     /** 将所有已选队玩家放入统一部署等待状态。 */
@@ -725,6 +707,18 @@ public class GameStateManager {
             return 0;
         }
         return Math.max(0, GameConfig.getDeployTimeoutSeconds() - (deployTickCounter / TICKS_PER_SECOND));
+    }
+
+    /** Current server-authoritative battle timer; {@code -1} means not in battle. */
+    public int getBattleTimeRemainingSeconds() {
+        if (currentPhase != GamePhase.BATTLE) {
+            return -1;
+        }
+        int timeoutSeconds = GameConfig.getBattleTimeoutSeconds();
+        if (timeoutSeconds <= 0) {
+            return -1;
+        }
+        return Math.max(0, timeoutSeconds - (battleTickCounter / TICKS_PER_SECOND));
     }
 
     private void broadcastDefenseSetupActionBar(int secondsRemaining) {
@@ -925,18 +919,6 @@ public class GameStateManager {
      * 开始对战
      */
     private void startBattle() {
-        VehicleManager vehicleManager = VehicleManager.getInstance();
-        if (!vehicleManager.isInitialVehicleDeploymentSettled()) {
-            vehicleManager.processInitialVehicleDeployments();
-            if (deployTickCounter % (TICKS_PER_SECOND * 20) == 0) {
-                VehicleManager.InitialDeploymentStatus status =
-                    vehicleManager.getInitialDeploymentStatus();
-                Espetro.LOGGER.warn(
-                    "布防计时已结束，等待首批载具落地后开战: spawned={}, failed={}, pending={}",
-                    status.spawned(), status.failed(), status.pending());
-            }
-            return;
-        }
         if (!battleStartPending) {
             battleStartPending = true;
             queueAttackWaitingBarrierRemoval();
@@ -980,18 +962,7 @@ public class GameStateManager {
         TroopCountManager.getInstance().initializeTroops();
         CommanderGovernanceManager.getInstance().syncCommandersFromVoteManager();
 
-        // 扣除初始载具的 troopValue（初始载具占用兵力预算）
-        VehicleManager vm = VehicleManager.getInstance();
-        int attackVehicleCost = vm.getInitialTroopValueForTeam("ATTACK");
-        int defendVehicleCost = vm.getInitialTroopValueForTeam("DEFEND");
-        if (attackVehicleCost > 0) {
-            TroopCountManager.getInstance().modifyAttackTroops(-attackVehicleCost);
-            Espetro.LOGGER.info("攻方初始载具占用 {} 兵力，剩余: {}", attackVehicleCost, TroopCountManager.getInstance().getAttackTroops());
-        }
-        if (defendVehicleCost > 0) {
-            TroopCountManager.getInstance().modifyDefendTroops(-defendVehicleCost);
-            Espetro.LOGGER.info("守方初始载具占用 {} 兵力，剩余: {}", defendVehicleCost, TroopCountManager.getInstance().getDefendTroops());
-        }
+        // 自动首发与后续部署一致：载具被摧毁时再扣 troopValue，不在开战时预扣。
 
         org.espetro.network.NetworkManager.broadcastTroopCounts(
             TroopCountManager.getInstance().getAttackTroops(),
@@ -1339,6 +1310,8 @@ public class GameStateManager {
         CommanderGovernanceManager.getInstance().reset();
         ClassCountManager.getInstance().resetAll();
         VehicleManager.getInstance().reset();
+        org.espetro.bastion.FortificationManager.getInstance().reset();
+        org.espetro.bastion.FobSupplyTracker.clearAll();
         TroopCountManager.getInstance().resetTroops();
         // 回城 / 回合清理：摧毁全部兵站（不扣兵力），在卸载战场维度前清掉运行时结构
         // （内部会取消 HAB 读条并临时加载卸载区核心后清理）

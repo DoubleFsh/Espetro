@@ -4,6 +4,7 @@
       "baseTick": "Lcom/atsuishio/superbwarfare/entity/vehicle/TurretWreckEntity;m_6075_()V"
     },
     "org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin": {
+      "handleAcceptTeleportPacket": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7376_(Lnet/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket;)V",
       "handleMovePlayer": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7185_(Lnet/minecraft/network/protocol/game/ServerboundMovePlayerPacket;)V"
     },
     "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {
@@ -19,6 +20,7 @@
         "baseTick": "Lcom/atsuishio/superbwarfare/entity/vehicle/TurretWreckEntity;m_6075_()V"
       },
       "org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin": {
+        "handleAcceptTeleportPacket": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7376_(Lnet/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket;)V",
         "handleMovePlayer": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7185_(Lnet/minecraft/network/protocol/game/ServerboundMovePlayerPacket;)V"
       },
       "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {

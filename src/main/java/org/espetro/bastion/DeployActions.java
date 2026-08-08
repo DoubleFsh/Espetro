@@ -14,6 +14,9 @@ import org.espetro.team.GameStateManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.VoteManager;
 
+import javax.annotation.Nullable;
+import java.util.List;
+
 /**
  * Alt 轮盘部署动作（服务端）。
  * 原「兵站建筑指令」鱼竿与「载具部署木棍」的功能已全部并入此处，旧物品已移除。
@@ -88,7 +91,64 @@ public final class DeployActions {
             return;
         }
 
+        // 编制配置：每个 Radio 范围内 HAB 上限
+        String limitErr = checkHabPerRadioLimit(serverPlayer, team);
+        if (limitErr != null) {
+            serverPlayer.sendSystemMessage(Component.literal(limitErr));
+            return;
+        }
+
         HabChannelManager.getInstance().start(serverPlayer, team);
+    }
+
+    /** 检查玩家脚点覆盖 Radio 的 HAB 数量是否已达编制上限。 */
+    @Nullable
+    static String checkHabPerRadioLimit(ServerPlayer player, String team) {
+        if (!(player.level() instanceof ServerLevel level)) return null;
+        List<BastionData> radios = BastionManager.getInstance()
+            .findCoveringRadios(level, player.blockPosition(), team);
+        if (radios.isEmpty()) {
+            return "§c必须在己方 Radio 作用范围内部署兵站。";
+        }
+        BastionData radio = radios.get(0);
+        int max = getMaxHabsPerRadio(player);
+        int count = countHabsCoveredBy(radio, team);
+        if (count >= max) {
+            return "§c该 Radio 范围内兵站已达上限 (" + count + "/" + max + ")。";
+        }
+        return null;
+    }
+
+    private static int getMaxHabsPerRadio(ServerPlayer player) {
+        String factionId = org.espetro.team.ClassCountManager.getInstance()
+            .getPlayerFaction(player.getUUID());
+        if (factionId == null) return 2;
+        var loader = org.espetro.team.FactionDataProvider.getOrCreateLoader();
+        var faction = loader.getFaction(factionId);
+        if (faction == null) return 2;
+        return Math.max(0, faction.maxHabsPerRadio);
+    }
+
+    private static int countHabsCoveredBy(BastionData radio, String team) {
+        if (radio == null) return 0;
+        int n = 0;
+        for (BastionData b : BastionManager.getInstance().getAllBastions()) {
+            if (!b.isActive() || !b.isHab() || !team.equals(b.getTeam())) continue;
+            if (BastionManager.getInstance().isCoveredByFriendlyRadio(b)
+                && isWithinRadioBuildRadius(radio, b.getPosition())) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static boolean isWithinRadioBuildRadius(BastionData radio, BlockPos pos) {
+        if (radio == null || pos == null) return false;
+        double r = LogisticsConfig.get().radioBuildRadius;
+        double dx = radio.getPosition().getX() - pos.getX();
+        double dy = radio.getPosition().getY() - pos.getY();
+        double dz = radio.getPosition().getZ() - pos.getZ();
+        return dx * dx + dy * dy + dz * dz <= r * r;
     }
 
     /** 轮盘「载具部署」：打开载具部署面板（原木棍右键功能，仅指挥官）。 */

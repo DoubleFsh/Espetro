@@ -136,7 +136,10 @@ public class ClassSelectPacket {
             if (source == Source.RADIO) {
                 allowed = RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos);
             } else if (source == Source.VEHICLE) {
-                allowed = vehicleId != null && isNearVehicle(player, vehicleId);
+                // 同队 + 五格视线 + 补给载具类型（最终提交时再次权威校验）
+                allowed = vehicleId != null
+                    && org.espetro.vehicle.VehicleManager.getInstance()
+                        .canPlayerChangeClassAtVehicle(player, vehicleId);
             } else {
                 allowed = BastionManager.getInstance().isWaitingForBastion(player.getUUID())
                     || ClassEquipmentZones.isPlayerNearOriginalSpawn(player);
@@ -144,6 +147,17 @@ public class ClassSelectPacket {
             if (!allowed) {
                 denyOutOfRange(player);
                 return;
+            }
+
+            // 载具换职：必须在改名额之前确认弹药足够，避免扣弹失败时职业已变
+            int vehicleClassCost = 0;
+            if (source == Source.VEHICLE && vehicleId != null) {
+                vehicleClassCost = getVehicleClassChangeCost();
+                var vsm = org.espetro.vehicle.VehicleManager.getInstance();
+                if (!vsm.canVehicleAffordAmmo(vehicleId, vehicleClassCost)) {
+                    player.displayClientMessage(Component.literal("§c载具弹药不足，无法更换职业。"), true);
+                    return;
+                }
             }
 
             ClassCountManager.SelectionResult selection =
@@ -163,19 +177,29 @@ public class ClassSelectPacket {
             String actualFactionId = countManager.getPlayerFaction(player.getUUID());
             String selectedVariantId = countManager.getPlayerVariant(player.getUUID());
 
-            // 载具换职业：从载具消耗弹药
+            // 载具换职业：名额成功后再扣弹药（余额已在 select 前校验）
             if (source == Source.VEHICLE && vehicleId != null) {
                 var vsm = org.espetro.vehicle.VehicleManager.getInstance();
-                if (!vsm.consumeVehicleAmmo(vehicleId, getVehicleClassChangeCost())) {
+                if (!vsm.consumeVehicleAmmo(vehicleId, vehicleClassCost)) {
+                    // 极端竞态：并发扣弹导致失败。职业名额已改，仍拒绝发装并提示。
                     player.displayClientMessage(Component.literal("§c载具弹药不足，无法更换职业。"), true);
                     return;
                 }
                 var supply = vsm.getVehicleSupply(vehicleId);
                 if (supply != null) {
+                    String vehicleFaction = vsm.getVehicleFactionId(vehicleId);
+                    String vehicleType = vsm.getVehicleType(vehicleId);
+                    var vehicleConfig = vehicleFaction == null || vehicleType == null ? null
+                        : org.espetro.vehicle.VehicleConfig.getVehicleConfig(vehicleFaction, vehicleType);
                     NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
-                        new VehicleSupplySyncPacket(vehicleId,
+                        VehicleSupplySyncPacket.state(vehicleId,
                             supply.getAmmo(), supply.getConstruction(),
-                            supply.getMaxCapacity(), supply.canCarryConstruction()));
+                            supply.getMaxCapacity(),
+                            vehicleConfig != null && vehicleConfig.supplyVeh,
+                            vehicleConfig != null && vehicleConfig.fightVeh,
+                            false, false,
+                            org.espetro.bastion.FortificationConfig.vehicleService()
+                                .transferIntervalTicks));
                 }
             }
 
@@ -217,11 +241,5 @@ public class ClassSelectPacket {
     /** 载具换职业弹药消耗 */
     private static int getVehicleClassChangeCost() {
         return LogisticsConfig.get().defaultResupplyAmmoCost;
-    }
-
-    /** 检测玩家是否在载具附近（20格） */
-    private static boolean isNearVehicle(ServerPlayer player, java.util.UUID vehicleId) {
-        BlockPos pos = org.espetro.vehicle.VehicleManager.getInstance().getVehicleLastPosition(vehicleId);
-        return pos != null && player.blockPosition().distSqr(pos) <= 400; // 20格
     }
 }

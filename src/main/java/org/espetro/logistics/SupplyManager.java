@@ -18,8 +18,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.espetro.Espetro;
-import org.espetro.bastion.BastionData;
-import org.espetro.bastion.BastionManager;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -99,72 +97,8 @@ public final class SupplyManager {
         player.inventoryMenu.broadcastChanges();
         player.sendSystemMessage(Component.literal(
             "§a已领取补给 §7| §6建材 " + construction + " §7| §b弹药 " + ammunition
-                + " §7（右击己方 Radio 存入 FOB）"));
+                + " §7（使用补给载具运送至 Radio）"));
         return true;
-    }
-
-    /**
-     * 只把玩家背包中的 Espetro 补给存入 FOB。
-     * 不扫描附近实体或容器，也不会直接读取载具库存。
-     */
-    public DepositResult depositAll(ServerPlayer player, BastionData bastion) {
-        if (bastion == null || !bastion.isRadio()) {
-            return DepositResult.failure("§c只能向己方 Radio 存入补给。");
-        }
-        if (!Objects.equals(Espetro.getPlayerTeam(player), bastion.getTeam())) {
-            return DepositResult.failure("§c不能向敌方 Radio 存入补给。");
-        }
-        if (player.distanceToSqr(
-            bastion.getPosition().getX() + 0.5,
-            bastion.getPosition().getY() + 0.5,
-            bastion.getPosition().getZ() + 0.5
-        ) > square(LogisticsConfig.get().depositRadius)) {
-            return DepositResult.failure("§c距离 Radio 太远。");
-        }
-
-        int constructionCapacity = Math.max(0,
-            LogisticsConfig.get().maxConstruction - bastion.getConstructionSupplies());
-        int ammunitionCapacity = Math.max(0,
-            LogisticsConfig.get().maxAmmunition - bastion.getAmmunitionSupplies());
-        int construction = 0;
-        int ammunition = 0;
-
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            SupplyType type = getSupplyType(stack);
-            if (type == null || stack.isEmpty()) {
-                continue;
-            }
-            int pointsPerItem = Math.max(1, getPointsPerItem(stack));
-            int capacity = type == SupplyType.CONSTRUCTION ? constructionCapacity : ammunitionCapacity;
-            if (capacity <= 0) {
-                continue;
-            }
-            int consume = Math.min(stack.getCount(), capacity / pointsPerItem);
-            if (consume <= 0) {
-                continue;
-            }
-            int points = consume * pointsPerItem;
-            stack.shrink(consume);
-            if (type == SupplyType.CONSTRUCTION) {
-                construction += points;
-                constructionCapacity -= points;
-            } else {
-                ammunition += points;
-                ammunitionCapacity -= points;
-            }
-        }
-
-        if (construction + ammunition <= 0) {
-            return DepositResult.failure("§e背包中没有可存入的 Espetro 补给，或 FOB 库存已满。");
-        }
-
-        bastion.addConstructionSupplies(construction, LogisticsConfig.get().maxConstruction);
-        bastion.addAmmunitionSupplies(ammunition, LogisticsConfig.get().maxAmmunition);
-        BastionManager.getInstance().advanceFobConstruction(bastion);
-        player.getInventory().setChanged();
-        player.inventoryMenu.broadcastChanges();
-        return new DepositResult(true, construction, ammunition, null);
     }
 
     @Nullable
@@ -371,10 +305,4 @@ public final class SupplyManager {
         return value * value;
     }
 
-    public record DepositResult(boolean success, int construction, int ammunition,
-                                @Nullable String error) {
-        public static DepositResult failure(String error) {
-            return new DepositResult(false, 0, 0, error);
-        }
-    }
 }

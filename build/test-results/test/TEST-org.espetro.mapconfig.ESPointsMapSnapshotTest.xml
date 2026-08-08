@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.mapconfig.ESPointsMapSnapshotTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-08T01:41:57" hostname="DESKTOP-1GK3H0A" time="0.038">
+<testsuite name="org.espetro.mapconfig.ESPointsMapSnapshotTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-08T20:35:20" hostname="cachyos-x8664" time="0.016">
   <properties/>
-  <testcase name="rejectsPathologicalSingleDimensionBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.01"/>
-  <testcase name="rejectsMalformedCapturePlan(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.004"/>
-  <testcase name="rejectsUnsafeOrForgedBackgrounds(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.006"/>
-  <testcase name="loadsValidFrozenSnapshotAndDefensivelyCopiesBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.005"/>
-  <testcase name="rejectsPngPixelBombBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.007"/>
-  <testcase name="supportsMapWithoutBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.003"/>
+  <testcase name="rejectsPathologicalSingleDimensionBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.004"/>
+  <testcase name="rejectsMalformedCapturePlan(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="rejectsUnsafeOrForgedBackgrounds(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="loadsValidFrozenSnapshotAndDefensivelyCopiesBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="rejectsPngPixelBombBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.003"/>
+  <testcase name="supportsMapWithoutBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

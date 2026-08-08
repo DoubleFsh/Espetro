@@ -39,7 +39,7 @@ public abstract class ServerGamePacketListenerWaitingLockMixin {
      * 在接受传送包之前补设 awaitingPositionFromClient，防止因跨维
      * 传送后没有及时收到移动包而被踢。
      */
-    @Inject(method = "handleAcceptTeleportation",
+    @Inject(method = "handleAcceptTeleportPacket",
             at = @At("HEAD"))
     private void espetro$ensureAwaitingBeforeAccept(
             ServerboundAcceptTeleportationPacket packet, CallbackInfo ci) {

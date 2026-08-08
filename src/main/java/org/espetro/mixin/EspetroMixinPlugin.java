@@ -16,6 +16,10 @@ import java.util.Set;
 public final class EspetroMixinPlugin implements IMixinConfigPlugin {
 
     private static final String SBW_MOD_ID = "superbwarfare";
+    private static final String OPTIONAL_SEAT_MIXIN =
+        "org.espetro.mixin.sbw.VehicleEntitySeatAccessMixin";
+    private static final String OPTIONAL_SEAT_PACKET_MIXIN =
+        "org.espetro.mixin.sbw.ChangeVehicleSeatMessageMixin";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -28,6 +32,13 @@ public final class EspetroMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        // These two mixins use @Pseudo and string targets. Always registering them
+        // avoids an early Forge mod-list timing window; they safely disappear when
+        // SBW is absent and must inject when the target is present.
+        if (OPTIONAL_SEAT_MIXIN.equals(mixinClassName)
+            || OPTIONAL_SEAT_PACKET_MIXIN.equals(mixinClassName)) {
+            return true;
+        }
         if (mixinClassName != null && mixinClassName.contains(".sbw.")) {
             return isModPresent(SBW_MOD_ID);
         }

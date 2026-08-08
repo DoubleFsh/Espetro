@@ -18,9 +18,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.energy.IEnergyStorage;
 import org.espetro.Espetro;
@@ -73,11 +76,14 @@ public class VehicleManager {
     // ESPoints 使用的轻量索引；区块卸载时保留，实体被明确销毁或回合结束时移除。
     private final Map<UUID, SupplyStationSnapshot> mappedSupplyStations = new HashMap<>();
 
-    // factionId -> (vehicleType -> spawnTimeMillis) 刷新冷却
+    // factionId -> (vehicleType -> cooldownUntilMillis) 冷却截止时刻
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
 
     private final InitialVehicleDeploymentLedger initialDeploymentLedger =
         new InitialVehicleDeploymentLedger();
+    /** 首发载具按到期时间排序；到期前不申请区块 ticket，也不加载出生区块。 */
+    private final PriorityQueue<PendingInitialVehicle> delayedInitialVehicles =
+        new PriorityQueue<>(Comparator.comparingLong(PendingInitialVehicle::readyAtEpochMs));
     private final Map<ChunkPos, List<PendingInitialVehicle>> initialVehiclesByChunk =
         new LinkedHashMap<>();
     private final ArrayDeque<ChunkPos> pendingInitialChunks = new ArrayDeque<>();
@@ -147,13 +153,22 @@ public class VehicleManager {
             return removed;
         }
 
-        public boolean canAffordAmmo(int amount) { return ammo >= amount; }
+        public boolean canAffordAmmo(int amount) { return ammo >= Math.max(0, amount); }
 
-        public void fillAmmo() { ammo = maxCapacity; }
+        /** 战斗/普通载具：弹药装满，建材清零。 */
+        public void fillAmmo() {
+            ammo = maxCapacity;
+            construction = 0;
+        }
+
+        /** 补给载具：弹药与建材各占一半容量。 */
         public void fillHalf() {
             ammo = maxCapacity / 2;
-            if (canCarryConstruction) construction = maxCapacity / 2;
-            else construction = 0;
+            if (canCarryConstruction) {
+                construction = maxCapacity / 2;
+            } else {
+                construction = 0;
+            }
         }
     }
 
@@ -166,7 +181,8 @@ public class VehicleManager {
         VehicleConfig.VehicleTypeConfig config,
         @Nullable VehicleConfig.VehicleSlotConfig slot,
         VehicleConfig.DeploymentPointConfig deployment,
-        BlockPos spawnPosition
+        BlockPos spawnPosition,
+        long readyAtEpochMs
     ) {
     }
 
@@ -195,6 +211,19 @@ public class VehicleManager {
         return vehicles == null ? 0 : vehicles.size();
     }
 
+    /** Team-scoped count; both sides may select the same formation. */
+    public int getActiveCount(String team, String factionId, String vehicleType) {
+        int count = 0;
+        for (ActiveVehicleData data : activeVehicleData.values()) {
+            if (factionId.equals(data.factionId())
+                && vehicleType.equals(data.vehicleType())
+                && team.equalsIgnoreCase(data.team())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /**
      * 获取指定编制某类型载具列表
      */
@@ -214,16 +243,61 @@ public class VehicleManager {
      * 获取冷却剩余毫秒数，0表示无冷却
      */
     public long getCooldownRemaining(String factionId, String vehicleType) {
-        Map<String, Long> factionCooldowns = cooldowns.get(factionId);
-        Long lastSpawn = factionCooldowns != null ? factionCooldowns.get(vehicleType) : null;
-        if (lastSpawn == null) return 0;
+        return getCooldownRemaining(
+            GameStateManager.getTeamFromFactionStatic(factionId), factionId, vehicleType);
+    }
 
+    public long getCooldownRemaining(@Nullable String team, String factionId, String vehicleType) {
+        Map<String, Long> factionCooldowns = cooldowns.get(cooldownOwner(team, factionId));
+        Long until = factionCooldowns != null ? factionCooldowns.get(vehicleType) : null;
+        if (until == null) return 0;
+        return Math.max(0, until - System.currentTimeMillis());
+    }
+
+    /**
+     * 部署阶段开始时为双方编制各车型写入首次部署冷却。
+     * 不生成实体；指挥官随后通过部署面板按冷却召唤。
+     */
+    public void armInitialDeployCooldowns(@Nullable String attackFaction, String attackTeam,
+                                          @Nullable String defendFaction, String defendTeam) {
+        armFactionInitialCooldowns(attackFaction, attackTeam);
+        armFactionInitialCooldowns(defendFaction, defendTeam);
+    }
+
+    private void armFactionInitialCooldowns(@Nullable String factionId, @Nullable String team) {
+        if (factionId == null || factionId.isBlank() || team == null) return;
+        Map<String, VehicleConfig.VehicleTypeConfig> types = VehicleConfig.getFactionVehicles(factionId);
+        if (types == null || types.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        Map<String, Long> map = cooldowns.computeIfAbsent(
+            cooldownOwner(team, factionId), k -> new HashMap<>());
+        for (Map.Entry<String, VehicleConfig.VehicleTypeConfig> e : types.entrySet()) {
+            int delaySec = e.getValue().initialDeployDelaySeconds(team);
+            if (delaySec > 0) {
+                map.put(e.getKey(), now + delaySec * 1000L);
+            } else {
+                map.remove(e.getKey());
+            }
+        }
+        Espetro.LOGGER.info("编制 {} 作为 {} 的首次载具冷却已写入 ({} 种)", factionId, team, types.size());
+    }
+
+    /** 部署成功后启动 respawn 冷却。 */
+    private void startRespawnCooldown(String team, String factionId, String vehicleType) {
         VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
-        if (cfg == null) return 0;
+        long ms = cfg != null ? cfg.respawnMillis() : 0L;
+        if (ms <= 0) {
+            Map<String, Long> map = cooldowns.get(cooldownOwner(team, factionId));
+            if (map != null) map.remove(vehicleType);
+            return;
+        }
+        cooldowns.computeIfAbsent(cooldownOwner(team, factionId), k -> new HashMap<>())
+            .put(vehicleType, System.currentTimeMillis() + ms);
+    }
 
-        long elapsed = System.currentTimeMillis() - lastSpawn;
-        long remaining = cfg.respawnMillis() - elapsed;
-        return Math.max(0, remaining);
+    private static String cooldownOwner(@Nullable String team, String factionId) {
+        String normalized = team == null ? "UNKNOWN" : team.trim().toUpperCase(Locale.ROOT);
+        return normalized + "|" + factionId;
     }
 
     /**
@@ -262,20 +336,26 @@ public class VehicleManager {
             return "§c当前编制不支持部署此载具类型！";
         }
 
+        // 首发延迟到期后仍可能正在异步加载出生区块。此时禁止手动插队，避免
+        // 自动首发与指挥官部署在同一个槽位重复生成。
+        if (hasPendingInitialVehicle(team, factionId, vehicleType)) {
+            return "§e该类型首批载具正在自动部署，请稍候！";
+        }
+
         // 检查部署上限
-        int current = getActiveCount(factionId, vehicleType);
+        int current = getActiveCount(team, factionId, vehicleType);
         if (current >= cfg.max) {
             return "§c" + getDisplayName(factionId, vehicleType) + " 已达到部署上限！(" + current + "/" + cfg.max + ")";
         }
 
         // 检查冷却
-        long cooldownRemaining = getCooldownRemaining(factionId, vehicleType);
+        long cooldownRemaining = getCooldownRemaining(team, factionId, vehicleType);
         if (cooldownRemaining > 0) {
             long seconds = cooldownRemaining / 1000;
             return "§c" + getDisplayName(factionId, vehicleType) + " 刷新冷却中！剩余 " + seconds + " 秒。";
         }
 
-        int slotIndex = findAvailableSlot(factionId, vehicleType, cfg);
+        int slotIndex = findAvailableSlot(team, factionId, vehicleType, cfg);
         if (slotIndex < 0) {
             return "§c" + getDisplayName(factionId, vehicleType) + " 的每个载具槽位均已达到上限！";
         }
@@ -306,8 +386,8 @@ public class VehicleManager {
         // 记录
         trackVehicle(vehicleEntity, factionId, vehicleType, slotIndex, team, false);
 
-        // 设置冷却
-        cooldowns.computeIfAbsent(factionId, k -> new HashMap<>()).put(vehicleType, System.currentTimeMillis());
+        // 部署成功后启动刷新冷却
+        startRespawnCooldown(team, factionId, vehicleType);
 
         commander.sendSystemMessage(Component.literal(
             "§a已部署 " + getDisplayName(factionId, vehicleType) + " §a！(" + (current + 1) + "/" + cfg.max + ") §7位置: " +
@@ -316,17 +396,24 @@ public class VehicleManager {
         Espetro.LOGGER.info("指挥官 {} 部署载具: {} (队伍: {}, 编制: {}, 位置: {})",
             commander.getName().getString(), vehicleType, team, factionId, spawnPos);
 
+        // 事件驱动刷新载具面板（冷却/在场数），不强制客户端关屏
+        org.espetro.network.NetworkManager.syncVehicleDeployScreen(commander, factionId);
         return null;
     }
 
     /**
-     * 在编制揭示阶段准备本局首批载具。每个 {@code entity} 配置槽位安排一辆，
-     * 同一回合重复调用不会重复安排。出生区块通过有界异步任务预热，主线程不做
-     * 同步区块读取；实体直到 {@link #activateInitialVehicleDeployment()} 才会生成。
+     * 为本局安排首批载具。每个 {@code entity} 配置槽位安排一辆，同一回合重复
+     * 调用不会重复安排。载具达到类型配置的首次部署时间后，才会进入有界异步
+     * 区块加载队列，避免为较长延迟长期强加载出生区块。
      *
      * @return 本次新安排的槽位数量
      */
     public int prepareInitialVehicles(String factionId, String team, ServerLevel level) {
+        return prepareInitialVehicles(factionId, team, level, System.currentTimeMillis());
+    }
+
+    public int prepareInitialVehicles(String factionId, String team, ServerLevel level,
+                                      long deploymentStartedAtEpochMs) {
         if (level == null || factionId == null || factionId.isBlank()) {
             return 0;
         }
@@ -352,6 +439,8 @@ public class VehicleManager {
         for (Map.Entry<String, VehicleConfig.VehicleTypeConfig> entry : configs.entrySet()) {
             String vehicleType = entry.getKey();
             VehicleConfig.VehicleTypeConfig cfg = entry.getValue();
+            long readyAtEpochMs = computeInitialReadyAt(
+                deploymentStartedAtEpochMs, cfg.initialDeployDelaySeconds(normalizedTeam));
 
             int slotCount = cfg.slots.isEmpty() ? 1 : cfg.slots.size();
             for (int slotIndex = 0; slotIndex < slotCount; slotIndex++) {
@@ -379,15 +468,8 @@ public class VehicleManager {
                 }
 
                 PendingInitialVehicle pending = new PendingInitialVehicle(
-                    key, cfg, slot, deployment, spawnPos.immutable());
-                ChunkPos chunk = new ChunkPos(spawnPos);
-                List<PendingInitialVehicle> chunkVehicles = initialVehiclesByChunk.get(chunk);
-                if (chunkVehicles == null) {
-                    chunkVehicles = new ArrayList<>();
-                    initialVehiclesByChunk.put(chunk, chunkVehicles);
-                    pendingInitialChunks.add(chunk);
-                }
-                chunkVehicles.add(pending);
+                    key, cfg, slot, deployment, spawnPos.immutable(), readyAtEpochMs);
+                delayedInitialVehicles.add(pending);
             }
         }
 
@@ -396,8 +478,8 @@ public class VehicleManager {
     }
 
     /**
-     * 布防阶段入口：生成所有已预热完毕的首批载具；仍在加载的槽位会在对应
-     * 区块 future 完成后落地。该操作幂等。
+     * 布防阶段入口：启用自动首发计时。零延迟载具立即进入异步区块加载队列，
+     * 其余载具在各自到期后再加载并生成。该操作幂等。
      *
      * @return 本次调用中立即生成的载具数量
      */
@@ -428,6 +510,14 @@ public class VehicleManager {
         ServerLevel level = initialDeploymentLevel;
         if (level == null) {
             return;
+        }
+
+        if (initialDeploymentActive) {
+            long now = System.currentTimeMillis();
+            while (!delayedInitialVehicles.isEmpty()
+                && delayedInitialVehicles.peek().readyAtEpochMs() <= now) {
+                stageDueInitialVehicle(delayedInitialVehicles.poll());
+            }
         }
 
         int started = 0;
@@ -479,15 +569,15 @@ public class VehicleManager {
     }
 
     public InitialDeploymentStatus getInitialDeploymentStatus() {
-        int pending = initialVehiclesByChunk.values().stream()
-            .mapToInt(List::size)
-            .sum();
+        int pending = delayedInitialVehicles.size() + initialVehiclesByChunk.values().stream()
+            .mapToInt(List::size).sum();
         return new InitialDeploymentStatus(
             initialVehiclesPlanned, initialVehiclesSpawned, initialVehiclesFailed, pending);
     }
 
     public boolean isInitialVehicleDeploymentSettled() {
         return initialDeploymentActive
+            && delayedInitialVehicles.isEmpty()
             && pendingInitialChunks.isEmpty()
             && initialChunksInFlight == 0
             && initialVehiclesByChunk.isEmpty();
@@ -505,6 +595,7 @@ public class VehicleManager {
             return;
         }
 
+        Map<String, ActiveVehicleData> panelSyncs = new LinkedHashMap<>();
         for (PendingInitialVehicle pending : vehicles) {
             InitialVehicleDeploymentLedger.SlotKey key = pending.key();
             Entity vehicleEntity = createVehicleEntity(
@@ -537,9 +628,56 @@ public class VehicleManager {
                 key.slotIndex(),
                 key.team(),
                 true);
+            // 首发生成后开始该类型的再次部署冷却；首发自身不携带任何补给。
+            startRespawnCooldown(key.team(), key.factionId(), key.vehicleType());
+            ActiveVehicleData tracked = activeVehicleData.get(vehicleEntity.getUUID());
+            if (tracked != null) {
+                panelSyncs.put(tracked.team() + '|' + tracked.factionId(), tracked);
+            }
             initialVehiclesSpawned++;
         }
+        // 同一出生区块可能包含多辆车；每个阵营只推一次增量面板状态。
+        panelSyncs.values().forEach(VehicleManager::syncCommanderVehiclePanel);
         releaseInitialChunkTicket(level, chunk);
+    }
+
+    private boolean hasPendingInitialVehicle(String team, String factionId, String vehicleType) {
+        String normalizedTeam = team == null ? "" : team.trim().toUpperCase(Locale.ROOT);
+        for (PendingInitialVehicle pending : delayedInitialVehicles) {
+            if (matchesInitialType(pending, normalizedTeam, factionId, vehicleType)) return true;
+        }
+        for (List<PendingInitialVehicle> pendingInChunk : initialVehiclesByChunk.values()) {
+            for (PendingInitialVehicle pending : pendingInChunk) {
+                if (matchesInitialType(pending, normalizedTeam, factionId, vehicleType)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesInitialType(PendingInitialVehicle pending, String team,
+                                              String factionId, String vehicleType) {
+        InitialVehicleDeploymentLedger.SlotKey key = pending.key();
+        return key.team().equals(team)
+            && key.factionId().equals(factionId)
+            && key.vehicleType().equals(vehicleType);
+    }
+
+    private void stageDueInitialVehicle(PendingInitialVehicle pending) {
+        ChunkPos chunk = new ChunkPos(pending.spawnPosition());
+        List<PendingInitialVehicle> chunkVehicles = initialVehiclesByChunk.get(chunk);
+        if (chunkVehicles == null) {
+            chunkVehicles = new ArrayList<>();
+            initialVehiclesByChunk.put(chunk, chunkVehicles);
+            pendingInitialChunks.add(chunk);
+        }
+        chunkVehicles.add(pending);
+    }
+
+    static long computeInitialReadyAt(long deploymentStartedAtEpochMs, int delaySeconds) {
+        long safeStart = Math.max(0L, deploymentStartedAtEpochMs);
+        long delayMillis = Math.max(0L, (long) delaySeconds) * 1000L;
+        return delayMillis > Long.MAX_VALUE - safeStart
+            ? Long.MAX_VALUE : safeStart + delayMillis;
     }
 
     private void releaseInitialChunkTicket(ServerLevel level, ChunkPos chunk) {
@@ -568,6 +706,7 @@ public class VehicleManager {
         ActiveVehicleData data = removeTrackedVehicle(entityId);
         if (data != null) {
             applyVehicleTroopPenalty(data);
+            syncCommanderVehiclePanel(data);
         }
     }
 
@@ -575,7 +714,22 @@ public class VehicleManager {
      * 移除未按死亡处理的载具追踪，例如卸载或重置。
      */
     public void onVehicleRemoved(UUID entityId) {
-        removeTrackedVehicle(entityId);
+        ActiveVehicleData data = removeTrackedVehicle(entityId);
+        if (data != null) syncCommanderVehiclePanel(data);
+    }
+
+    private static void syncCommanderVehiclePanel(ActiveVehicleData data) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || data == null) return;
+        UUID commanderId = "ATTACK".equals(data.team())
+            ? org.espetro.team.VoteManager.getInstance().getAttackCommander()
+            : org.espetro.team.VoteManager.getInstance().getDefendCommander();
+        ServerPlayer commander = commanderId == null ? null
+            : server.getPlayerList().getPlayer(commanderId);
+        if (commander != null) {
+            org.espetro.network.NetworkManager
+                .syncVehicleDeployScreen(commander, data.factionId());
+        }
     }
 
     @Nullable
@@ -612,20 +766,23 @@ public class VehicleManager {
             vehicle.addTag("espetro_team_" + normalizedTeam);
             vehicle.getPersistentData().putString(VEHICLE_TEAM_KEY, normalizedTeam);
         }
+        VehicleConfig.VehicleTypeConfig vcfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
+        // 客户端 F 轮盘在 sync 前据此显示建材槽
+        if (vcfg != null && vcfg.supplyVeh) {
+            vehicle.addTag("espetro_supply_veh");
+        }
+        if (vcfg != null && vcfg.fightVeh) {
+            vehicle.addTag("espetro_fight_veh");
+        }
         getList(factionId, vehicleType).add(vehicleId);
         activeVehicleIds.add(vehicleId);
         activeVehicleData.put(vehicleId, new ActiveVehicleData(
             factionId, vehicleType, slotIndex, normalizedTeam, initial,
             vehicle.level().dimension(), vehicle.blockPosition().immutable()));
         // 初始化载具补给库存
-        VehicleConfig.VehicleTypeConfig vcfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
         if (vcfg != null && vcfg.supplyCapacity > 0) {
             VehicleSupplyState supply = new VehicleSupplyState(vcfg.supplyCapacity, vcfg.canCarryConstruction());
-            if (initial && vcfg.supplyVeh) {
-                supply.fillHalf(); // 补给载具平分弹药和建材
-            } else if (initial) {
-                supply.fillAmmo(); // 战斗载具/普通载具装满弹药
-            }
+            // 初始为空；战斗与补给载具都必须由玩家主动装载。
             vehicleSupplies.put(vehicleId, supply);
         }
     }
@@ -641,11 +798,6 @@ public class VehicleManager {
 
     private void applyVehicleTroopPenalty(ActiveVehicleData data) {
         if (GameStateManager.getInstance().getCurrentPhase() != GamePhase.BATTLE) {
-            return;
-        }
-
-        if (data.initial()) {
-            Espetro.LOGGER.debug("初始载具 {} 被摧毁，跳过兵力惩罚（已在开战时扣除）", data.vehicleType());
             return;
         }
 
@@ -794,6 +946,62 @@ public class VehicleManager {
         return data != null ? data.lastKnownPosition() : null;
     }
 
+    /** 载具补给交互距离（格）。 */
+    public static final double SUPPLY_INTERACT_RANGE = 5.0;
+
+    /**
+     * 玩家必须正对指定的、当前已加载的己方载具；绝不使用旧坐标回退。
+     */
+    public boolean canPlayerInteractWithVehicle(ServerPlayer player, UUID vehicleId) {
+        if (player == null || vehicleId == null) {
+            return false;
+        }
+        ActiveVehicleData data = activeVehicleData.get(vehicleId);
+        if (data == null) {
+            return false;
+        }
+        String playerTeam = Espetro.getPlayerTeam(player);
+        if (playerTeam == null || data.team() == null
+            || !playerTeam.equalsIgnoreCase(data.team())) {
+            return false;
+        }
+        Entity target = player.serverLevel().getEntity(vehicleId);
+        if (target == null || target.isRemoved()) return false;
+        double range = SUPPLY_INTERACT_RANGE;
+        Vec3 eye = player.getEyePosition(1.0F);
+        Vec3 look = player.getLookAngle();
+        Vec3 end = eye.add(look.scale(range));
+        EntityHitResult hit = ProjectileUtil.getEntityHitResult(
+            player, eye, end,
+            player.getBoundingBox().expandTowards(look.scale(range)).inflate(1.0D),
+            candidate -> candidate.isPickable()
+                && (vehicleId.equals(candidate.getUUID())
+                    || vehicleId.equals(candidate.getRootVehicle().getUUID())),
+            range * range);
+        return hit != null && (vehicleId.equals(hit.getEntity().getUUID())
+            || vehicleId.equals(hit.getEntity().getRootVehicle().getUUID()));
+    }
+
+    /**
+     * 最终提交换装时使用的权威校验。除阵营、加载状态、五格视线外，目标还必须
+     * 仍是当前编制声明的补给载具，防止客户端伪造或使用过期轮盘状态。
+     */
+    public boolean canPlayerChangeClassAtVehicle(ServerPlayer player, UUID vehicleId) {
+        if (!canPlayerInteractWithVehicle(player, vehicleId)) return false;
+        ActiveVehicleData data = activeVehicleData.get(vehicleId);
+        if (data == null) return false;
+        VehicleConfig.VehicleTypeConfig config =
+            VehicleConfig.getVehicleConfig(data.factionId(), data.vehicleType());
+        return config != null && config.canChangeClass();
+    }
+
+    @Nullable
+    public Entity getLoadedVehicle(ServerPlayer player, UUID vehicleId) {
+        if (player == null || vehicleId == null) return null;
+        Entity entity = player.serverLevel().getEntity(vehicleId);
+        return entity != null && !entity.isRemoved() ? entity : null;
+    }
+
     /**
      * 重置所有载具
      */
@@ -857,6 +1065,7 @@ public class VehicleManager {
             }
         }
         initialDeploymentLedger.clear();
+        delayedInitialVehicles.clear();
         initialVehiclesByChunk.clear();
         pendingInitialChunks.clear();
         readyInitialChunks.clear();
@@ -892,6 +1101,19 @@ public class VehicleManager {
             pos.getX(),
             pos.getY(),
             pos.getZ()));
+    }
+
+    /** Register a block-backed or entity-backed station without scanning the world. */
+    public void registerMappedSupplyStation(UUID id, String name, String team,
+                                            String dimension, BlockPos pos) {
+        if (id == null || team == null || team.isBlank() || dimension == null || pos == null) {
+            return;
+        }
+        mappedSupplyStations.put(id, new SupplyStationSnapshot(
+            id,
+            name == null || name.isBlank() ? SUPPLY_STATION_DISPLAY_NAME : name,
+            team.trim().toUpperCase(Locale.ROOT), dimension,
+            pos.getX(), pos.getY(), pos.getZ()));
     }
 
     public void unregisterMappedSupplyStation(UUID entityId) {
@@ -962,7 +1184,7 @@ public class VehicleManager {
         return org.espetro.mapconfig.BattlefieldContext.requireBattlefield(commander.server);
     }
 
-    private int findAvailableSlot(String factionId, String vehicleType,
+    private int findAvailableSlot(String team, String factionId, String vehicleType,
                                   VehicleConfig.VehicleTypeConfig cfg) {
         int slotCount = cfg.slots.isEmpty() ? 1 : cfg.slots.size();
         for (int i = 0; i < slotCount; i++) {
@@ -970,6 +1192,7 @@ public class VehicleManager {
             for (ActiveVehicleData data : activeVehicleData.values()) {
                 if (factionId.equals(data.factionId())
                     && vehicleType.equals(data.vehicleType())
+                    && team.equalsIgnoreCase(data.team())
                     && data.slotIndex() == i) {
                     count++;
                 }

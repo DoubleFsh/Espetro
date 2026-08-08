@@ -7,7 +7,9 @@
   "plugin": "org.espetro.mixin.EspetroMixinPlugin",
   "mixins": [
     "ServerGamePacketListenerWaitingLockMixin",
+    "sbw.ChangeVehicleSeatMessageMixin",
     "sbw.VehicleEntityMainBaseProtectionMixin",
+    "sbw.VehicleEntitySeatAccessMixin",
     "sbw.VehicleEntityWreckMixin",
     "sbw.TurretWreckEntityMixin"
   ],

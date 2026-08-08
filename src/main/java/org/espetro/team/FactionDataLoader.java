@@ -519,6 +519,9 @@ public class FactionDataLoader {
         /** 胜利结算时展示的阵营名称（未配置则回退到 name）。 */
         @SerializedName(value = "show_name", alternate = {"showName"})
         public String showName;
+        /** 单个 Radio 作用范围内最多可放置的 HAB 兵站数（默认 2）。 */
+        @SerializedName(value = "max_habs_per_radio", alternate = {"maxHabsPerRadio"})
+        public int maxHabsPerRadio = 2;
     }
 
     /**
@@ -533,6 +536,12 @@ public class FactionDataLoader {
         public String role;
         /** 职业选择界面使用的图标资源短名（assets/espetro/textures/gui/roles）。 */
         public String icon;
+        /**
+         * 是否属于载具组员职业。null 表示旧配置，回退到 icon=crewman；
+         * 显式 false 可覆盖该兼容规则。
+         */
+        @SerializedName(value = "vehicle_crew", alternate = {"vehicleCrew"})
+        public Boolean vehicleCrew;
         /**
          * 完整文件系统路径的职业图标（优先于 {@link #icon}）。
          * 例：{@code /home/shu/图片/Icon/rifleman.png}，不是 jar 内 ResourceLocation。
@@ -640,6 +649,11 @@ public class FactionDataLoader {
         public int healthBonus = 0;
         public float speedBonus = 0f;
         public int troopValue = 1;
+
+        public boolean isVehicleCrew() {
+            return org.espetro.vehicle.VehicleSeatAccessPolicy.resolvesVehicleCrew(
+                vehicleCrew, icon);
+        }
 
         public ClassVariantData getVariant(String variantId) {
             if (variants == null || variants.isEmpty()) return null;
@@ -764,6 +778,20 @@ public class FactionDataLoader {
         public Boolean fightVeh;
         /** 载具补给总容量（覆盖默认值） */
         public Integer capacity;
+        /**
+         * 该车型首次可部署前的等待秒数（开战时钟起算），攻防分开。
+         * 例: "initial_deploy_delay_seconds": { "attack": 180, "defend": 60 }
+         */
+        @SerializedName(value = "initial_deploy_delay_seconds",
+            alternate = {"initialDeployDelaySeconds"})
+        public InitialDeployDelayData initialDeployDelay;
+    }
+
+    public static class InitialDeployDelayData {
+        @SerializedName(value = "attack", alternate = {"ATTACK"})
+        public int attack;
+        @SerializedName(value = "defend", alternate = {"DEFEND"})
+        public int defend;
     }
 
     /**

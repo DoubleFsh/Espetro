@@ -1,0 +1,33 @@
+{
+  "vehicle_service": {
+    "main_base_radius": 40.0,
+    "station_radius": 20.0,
+    "transfer_amount": 100,
+    "transfer_interval_ticks": 20
+  },
+  "fortifications": [
+    {
+      "id": "ammo_crate",
+      "display_name": "弹药箱",
+      "icon": "espetro:textures/gui/squad/ammo_crate.png",
+      "place_type": "block",
+      "block_id": "minecraft:shulker_box",
+      "construction_cost": 100,
+      "ammunition_cost": 0,
+      "require_radio_range": true,
+      "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+    },
+    {
+      "id": "vehicle_supply_station",
+      "display_name": "载具补给站",
+      "icon": "espetro:textures/gui/commander_skills/vehicle_supply_station.png",
+      "place_type": "entity",
+      "entity_id": "dragonrise_reforge:ammo_supply_station",
+      "fallback_block_id": "minecraft:barrel",
+      "construction_cost": 200,
+      "ammunition_cost": 0,
+      "require_radio_range": true,
+      "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+    }
+  ]
+}

@@ -39,4 +39,16 @@ class InitialVehicleDeploymentLedgerTest {
         assertEquals(0, ledger.size());
         assertTrue(ledger.claim(slot));
     }
+
+    @Test
+    void initialDelayUsesDeployPhaseStartAndZeroIsImmediatelyDue() {
+        assertEquals(10_000L, VehicleManager.computeInitialReadyAt(10_000L, 0));
+        assertEquals(25_000L, VehicleManager.computeInitialReadyAt(10_000L, 15));
+    }
+
+    @Test
+    void initialDelayCalculationCannotOverflowEpochMillis() {
+        assertEquals(Long.MAX_VALUE,
+            VehicleManager.computeInitialReadyAt(Long.MAX_VALUE - 500L, 1));
+    }
 }

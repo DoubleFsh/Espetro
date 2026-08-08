@@ -25,10 +25,8 @@ public final class EspetroKubeJSDefaultScripts {
 
     public static void ensureDefaultScripts() {
         install("startup_scripts/00_espetro_drone_detection.js");
-        install("startup_scripts/00_espetro_vehicle_supply_station.js");
         install("startup_scripts/00_espetro_artillery_155.js");
         install("server_scripts/00_espetro_drone_detection.js");
-        install("server_scripts/00_espetro_vehicle_supply_station.js");
         install("server_scripts/00_espetro_artillery_155.js");
     }
 

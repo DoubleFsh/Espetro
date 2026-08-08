@@ -18,17 +18,28 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Forced global map-vote screen with up to six candidates. */
+/** Forced global map-vote screen with up to six candidates in a 2×3 grid. */
 public final class MapVoteScreen extends MutilScreen {
-    /** 16:9 横向预览图显示尺寸。 */
-    private static final int IMG_W = 192;
-    private static final int IMG_H = 108;
+    private static final int COLUMNS = 3;
+    private static final int MAX_ROWS = 2;
+    private static final int MAX_CANDIDATES = COLUMNS * MAX_ROWS;
+    /** 与编制选择 ClassSelectScreen 同级的卡片间距。 */
+    private static final int GAP = 6;
+    private static final int CARD_PAD = 6;
+    private static final int FOOTER_H = 36;
+    private static final int SIDE_PAD = 12;
+    private static final int BOTTOM_PAD = 12;
+    private static final int MIN_CARD_W = 120;
+    private static final int MIN_CARD_H = 90;
 
     private static MapVoteStatePacket latest = new MapVoteStatePacket(
         false, 0, 0L, List.of(), java.util.Map.of(), null, null, null);
 
-    /** 缓存已从网络包解码的地图预览纹理：mapFolder → ResourceLocation。 */
-    private static final Map<String, ResourceLocation> previewTextureCache = new LinkedHashMap<>();
+    /** 缓存已从网络包解码的地图预览纹理：mapFolder → 纹理与源尺寸。 */
+    private static final Map<String, PreviewTexture> previewTextureCache = new LinkedHashMap<>();
+
+    private record PreviewTexture(ResourceLocation location, int texW, int texH) {
+    }
 
     private final List<MapCardButton> mapButtons = new ArrayList<>();
     private long receivedAtMs;
@@ -56,11 +67,13 @@ public final class MapVoteScreen extends MutilScreen {
 
             try (InputStream in = new ByteArrayInputStream(c.previewBytes)) {
                 NativeImage image = NativeImage.read(in);
+                int texW = image.getWidth();
+                int texH = image.getHeight();
                 DynamicTexture texture = new DynamicTexture(image);
                 ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(
                     "espetro", "map_preview/" + key);
                 mc.getTextureManager().register(rl, texture);
-                previewTextureCache.put(key, rl);
+                previewTextureCache.put(key, new PreviewTexture(rl, texW, texH));
             } catch (IOException e) {
                 // 解码失败视为无预览图
             }
@@ -85,6 +98,48 @@ public final class MapVoteScreen extends MutilScreen {
         EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
+    /**
+     * 与编制选择一致：3 列 × 2 行铺满标题下方整块可用区域。
+     * 候选不足 6 个时仍用满格卡片尺寸，从左上起填格（不把单卡拉成整行）。
+     */
+    private LayoutMetrics computeLayout() {
+        int headerH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
+        int startY = headerH + 8;
+        // 几乎占满屏：左右/底边少量边距，卡片均分剩余宽高
+        int contentW = Math.max(MIN_CARD_W * COLUMNS, this.width - SIDE_PAD * 2);
+        int contentH = Math.max(MIN_CARD_H * MAX_ROWS,
+            this.height - startY - BOTTOM_PAD);
+
+        int cardW = Math.max(MIN_CARD_W, (contentW - (COLUMNS - 1) * GAP) / COLUMNS);
+        int cardH = Math.max(MIN_CARD_H, (contentH - (MAX_ROWS - 1) * GAP) / MAX_ROWS);
+
+        // 预览区：在卡片内尽量铺满，优先 16:9，不足时用剩余高度
+        int imgW = Math.max(1, cardW - CARD_PAD * 2);
+        int maxImgH = Math.max(1, cardH - FOOTER_H - 4);
+        int imgH16 = Math.max(1, imgW * 9 / 16);
+        int imgH = Math.min(maxImgH, imgH16);
+        // 高度富余时用满卡片预览区（仍居中绘制）
+        if (imgH16 < maxImgH) {
+            imgH = maxImgH;
+            // 保持预览不超出卡片宽：若按高度反推 16:9 宽度过大则封顶
+            int imgW16 = imgH * 16 / 9;
+            if (imgW16 < imgW) {
+                imgW = Math.max(1, imgW16);
+            }
+        }
+
+        int panelW = COLUMNS * cardW + (COLUMNS - 1) * GAP;
+        int panelH = MAX_ROWS * cardH + (MAX_ROWS - 1) * GAP;
+        int startX = (this.width - panelW) / 2;
+        // 垂直：紧贴标题下，若仍有余量则略微居中
+        int gridStartY = startY + Math.max(0, (contentH - panelH) / 2);
+        return new LayoutMetrics(cardW, cardH, imgW, imgH, startX, gridStartY);
+    }
+
+    private record LayoutMetrics(int cardW, int cardH, int imgW, int imgH,
+                                 int startX, int startY) {
+    }
+
     @Override
     protected void buildMutilRoot(GuiElement root) {
         mapButtons.clear();
@@ -93,24 +148,19 @@ public final class MapVoteScreen extends MutilScreen {
             "§7全服统一计票，票数最高的地图胜出",
             EspetroMutilWidgets.GOLD);
 
-        int columns = this.width < 500 ? 1 : this.width < 750 ? 2 : 3;
-        int gap = 6;
-        int cardW = IMG_W + 8;
-        // 图片下方：名称行 + 票数行
-        int cardH = IMG_H + 36;
-        int rows = (latest.candidates.size() + columns - 1) / columns;
-        int panelW = Math.min(width - 16, 24 + columns * cardW + (columns - 1) * gap);
-        int panelH = Math.min(this.height - 72, rows * cardH + (rows - 1) * gap + 8);
-        int startX = (width - panelW) / 2 + 12;
-        int startY = 52;
+        int count = Math.min(latest.candidates.size(), MAX_CANDIDATES);
+        LayoutMetrics layout = computeLayout();
 
-        for (int i = 0; i < latest.candidates.size(); i++) {
+        for (int i = 0; i < count; i++) {
             MapVoteStatePacket.Candidate candidate = latest.candidates.get(i);
-            int col = i % columns;
-            int row = i / columns;
+            int col = i % COLUMNS;
+            int row = i / COLUMNS;
             var button = new MapCardButton(
-                startX + col * (cardW + gap), startY + row * (cardH + gap),
-                cardW, cardH, candidate,
+                layout.startX + col * (layout.cardW + GAP),
+                layout.startY + row * (layout.cardH + GAP),
+                layout.cardW, layout.cardH,
+                layout.imgW, layout.imgH,
+                candidate,
                 () -> {
                     if (tutorialPreviewMode) {
                         return;
@@ -172,17 +222,22 @@ public final class MapVoteScreen extends MutilScreen {
         return false;
     }
 
-    /** 16:9 预览图卡片，显示地图截图或占位文本。 */
+    /** 16:9 预览图卡片，显示地图截图或占位文本；尺寸由外层布局计算。 */
     private static final class MapCardButton extends GuiElement {
         private MapVoteStatePacket.Candidate candidate;
         private int votes;
         private boolean selected;
         private boolean enabled;
+        private final int imgW;
+        private final int imgH;
         private final Runnable action;
 
         private MapCardButton(int x, int y, int width, int height,
+                              int imgW, int imgH,
                               MapVoteStatePacket.Candidate candidate, Runnable action) {
             super(x, y, width, height);
+            this.imgW = Math.max(1, imgW);
+            this.imgH = Math.max(1, imgH);
             this.candidate = candidate;
             this.action = action;
         }
@@ -227,18 +282,18 @@ public final class MapVoteScreen extends MutilScreen {
             }
             graphics.renderOutline(bx, by, bw, bh, border);
 
-            // 上方预览图片区域（16:9）
-            int imgAreaW = IMG_W;
-            int imgAreaH = IMG_H;
+            // 预览区：贴卡片顶部水平居中，下方留给名称/票数
+            int imgAreaW = Math.min(imgW, bw - CARD_PAD * 2);
+            int imgAreaH = Math.min(imgH, bh - FOOTER_H - 4);
             int imgX = bx + (bw - imgAreaW) / 2;
-            int imgY = by + 3;
+            int imgY = by + 4;
 
-            ResourceLocation previewTex = previewTextureCache.get(candidate.mapFolder);
-            if (previewTex != null) {
-                graphics.blit(previewTex, imgX, imgY, imgAreaW, imgAreaH,
-                    0f, 0f, imgAreaW, imgAreaH, imgAreaW, imgAreaH);
+            PreviewTexture preview = previewTextureCache.get(candidate.mapFolder);
+            if (preview != null) {
+                graphics.blit(preview.location(), imgX, imgY, imgAreaW, imgAreaH,
+                    0f, 0f, preview.texW(), preview.texH(),
+                    preview.texW(), preview.texH());
             } else {
-                // 暂无预览图：灰色背景 + 占位文字
                 graphics.fill(imgX, imgY, imgX + imgAreaW, imgY + imgAreaH, 0x40303030);
                 graphics.renderOutline(imgX, imgY, imgAreaW, imgAreaH, 0x605B6260);
                 String placeholder = "§8暂未添加图片";
@@ -248,17 +303,16 @@ public final class MapVoteScreen extends MutilScreen {
                     EspetroMutilWidgets.DIM);
             }
 
-            // 地图名称
+            int footerTop = by + bh - FOOTER_H + 4;
             String mapName = EspetroMutilWidgets.trimToWidth(
                 (selected ? "§a✔ " : "§f") + candidate.displayName, Math.max(20, bw - 10));
             graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(mapName), bx + bw / 2, by + IMG_H + 8,
+                Component.literal(mapName), bx + bw / 2, footerTop,
                 EspetroMutilWidgets.TEXT);
 
-            // 票数
             String footer = "§7票数 §e" + votes;
             graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(footer), bx + bw / 2, by + IMG_H + 22,
+                Component.literal(footer), bx + bw / 2, footerTop + 14,
                 enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);

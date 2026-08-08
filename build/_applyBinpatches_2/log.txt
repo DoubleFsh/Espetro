@@ -1,18 +1,18 @@
-Java Launcher: C:\Program Files\Java\jdk-17\bin\java.exe
-Arguments: '--clean, C:\Users\Administrator\.gradle\caches\forge_gradle\mcp_repo\net\minecraft\joined\1.20.1-20230612.114412\joined-1.20.1-20230612.114412-srg.jar, --output, D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.20\forge-1.20.1-47.4.20-binpatched.jar, --apply, D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.20\forge-1.20.1-47.4.20-binpatches.lzma'
+Java Launcher: /home/shu/.jdks/ms-17.0.19/bin/java
+Arguments: '--clean, /home/shu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/joined/1.20.1-20230612.114412/joined-1.20.1-20230612.114412-srg.jar, --output, /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-binpatched.jar, --apply, /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-binpatches.lzma'
 Classpath:
- - C:\Users\Administrator\.gradle\caches\forge_gradle\maven_downloader\net\minecraftforge\binarypatcher\1.1.1\binarypatcher-1.1.1-fatjar.jar
-Working directory: D:\minecraft\modp\Espetro\build\_applyBinpatches_2
+ - /home/shu/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/binarypatcher/1.1.1/binarypatcher-1.1.1-fatjar.jar
+Working directory: /home/shu/Java/Projects/Espetro/build/_applyBinpatches_2
 Main class: net.minecraftforge.binarypatcher.ConsoleTool
 ====================================
 Applying: 
-  Clean:     C:\Users\Administrator\.gradle\caches\forge_gradle\mcp_repo\net\minecraft\joined\1.20.1-20230612.114412\joined-1.20.1-20230612.114412-srg.jar
-  Output:    D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.20\forge-1.20.1-47.4.20-binpatched.jar
+  Clean:     /home/shu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/joined/1.20.1-20230612.114412/joined-1.20.1-20230612.114412-srg.jar
+  Output:    /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-binpatched.jar
   KeepData:  false
   Unpatched: false
   Pack200:   false
   Legacy:    false
-Loading patches file: D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.20\forge-1.20.1-47.4.20-binpatches.lzma
+Loading patches file: /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-binpatches.lzma
   Reading patch com.mojang.blaze3d.pipeline.RenderTarget.binpatch
     Checksum: 151eb55a Exists: true
   Reading patch com.mojang.blaze3d.platform.GlStateManager$BlendState.binpatch
@@ -2897,7 +2897,7 @@ Loading patches file: D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforg
     Checksum: 5054d5d6 Exists: true
   Reading patch net.minecraft.world.level.storage.loot.providers.nbt.ContextNbtProvider.binpatch
     Checksum: 33daf11e Exists: true
-Processing: C:\Users\Administrator\.gradle\caches\forge_gradle\mcp_repo\net\minecraft\joined\1.20.1-20230612.114412\joined-1.20.1-20230612.114412-srg.jar
+Processing: /home/shu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/joined/1.20.1-20230612.114412/joined-1.20.1-20230612.114412-srg.jar
   Patching com/mojang/blaze3d/pipeline/RenderTarget 1/1
   Patching com/mojang/blaze3d/platform/GlStateManager$BlendState 1/1
   Patching com/mojang/blaze3d/platform/GlStateManager$BooleanState 1/1

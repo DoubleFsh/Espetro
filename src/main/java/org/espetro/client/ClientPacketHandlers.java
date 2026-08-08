@@ -200,7 +200,10 @@ public class ClientPacketHandlers {
 
     public static void handleVehicleDeployScreen(VehicleDeployScreenPacket packet) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.player != null) {
+        if (mc.player == null) return;
+        if (mc.screen instanceof org.espetro.client.gui.VehicleDeployScreen screen) {
+            screen.updateFromPacket(packet.getVehicles());
+        } else if (packet.shouldOpenScreen()) {
             mc.setScreen(new org.espetro.client.gui.VehicleDeployScreen(packet.getVehicles()));
         }
     }
@@ -224,6 +227,11 @@ public class ClientPacketHandlers {
         // 记录当前阵营/编制ID
         org.espetro.client.gui.ClientGameState.setPlayerFactionId(packet.getFactionId());
         org.espetro.client.gui.ClientGameState.setPlayerTeam(packet.getTeam());
+        if (org.espetro.client.gui.ClientGameState.getCurrentPhase() == GamePhase.BATTLE
+            && packet.getDeployTimeRemaining() >= 0) {
+            org.espetro.client.gui.ClientGameState.setBattleTimeRemaining(
+                packet.getDeployTimeRemaining());
+        }
         org.espetro.client.gui.ClientTacticalState.updateSquads(
             packet.getSquads(), packet.getMySquadId(),
             packet.getCommanderNames(), packet.getTeammateNameTagDistance());
@@ -450,5 +458,16 @@ public class ClientPacketHandlers {
 
     public static void handleVehicleSupplySync(VehicleSupplySyncPacket packet) {
         org.espetro.client.gui.VehicleWheelController.updateSupply(packet);
+    }
+
+    // ==================== FobSupplySyncPacket ====================
+
+    public static void handleFobSupplySync(FobSupplySyncPacket packet) {
+        org.espetro.client.gui.FobSupplyHud.update(packet);
+    }
+
+    public static void handleFortificationCatalog(FortificationCatalogPacket packet) {
+        org.espetro.client.gui.AuraTipRadialController
+            .updateFortifications(packet.entries());
     }
 }

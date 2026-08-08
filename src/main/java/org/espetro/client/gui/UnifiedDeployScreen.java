@@ -144,6 +144,8 @@ public class UnifiedDeployScreen extends MutilScreen {
     private PlainText classTitleText;
     private PlainText statusText;
     private PlainText statusTimerText;
+    /** 右上角倒计时正下方的兵力行（事件驱动 setText，不 rebuild）。 */
+    private PlainText troopCountText;
     private PlainText phaseTitleText;
     private PlainText governanceTimerText;
     private String pendingDeployPosition;
@@ -830,6 +832,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         this.classTitleText = null;
         this.statusText = null;
         this.statusTimerText = null;
+        this.troopCountText = null;
         this.phaseTitleText = null;
         this.governanceTimerText = null;
         this.governanceVoteButtons.clear();
@@ -1021,7 +1024,26 @@ public class UnifiedDeployScreen extends MutilScreen {
 
         statusTimerText = new PlainText(this.width - 6, 4, "", 0xFFFFD27A);
         root.addChild(statusTimerText);
+        troopCountText = new PlainText(this.width - 6, 16, "", 0xFFFFFFFF);
+        root.addChild(troopCountText);
         refreshTitleTimer();
+        updateTroopLabel(TroopCountOverlay.getDisplayLine());
+    }
+
+    /**
+     * 兵力包 / 阵营变更驱动：只改右上角兵力文案，不 rebuild 整页。
+     */
+    public void updateTroopLabel(String line) {
+        if (troopCountText == null) return;
+        String text = line == null ? "" : line;
+        troopCountText.setText(text);
+        if (text.isEmpty()) {
+            troopCountText.setX(this.width - 6);
+            return;
+        }
+        int w = Math.round(Minecraft.getInstance().font.width(text) * UI_TEXT_SCALE);
+        troopCountText.setX(this.width - w - 6);
+        troopCountText.setY(16);
     }
 
     private int teamAccentColor() {
@@ -1644,12 +1666,13 @@ public class UnifiedDeployScreen extends MutilScreen {
     public void tick() {
         super.tick();
         flushDirtySections();
-        // 本地推进部署倒计时（服务端全量包不保证每秒到达）。
-        tickLocalDeployTimer();
         // 动态文案（Rally 冷却 / 重新部署 / 治理倒计时）按整秒节流，避免每 tick 改 label。
         if (!onceEverySecond()) {
             return;
         }
+        // 本地推进阶段倒计时（服务端全量包不保证每秒到达）。每秒闸只
+        // 消费一次，避免旧实现的第二次 onceEverySecond() 永远提前返回。
+        tickLocalDeployTimer();
         if (outpostRedeployButton != null) {
             outpostRedeployButton.setLabel(buildRedeployLabel());
             outpostRedeployButton.setEnabled(
@@ -1679,8 +1702,9 @@ public class UnifiedDeployScreen extends MutilScreen {
                 changed = true;
             }
         }
-        // 战斗阶段或阶段切换时也需要刷新标题（阶段名、战斗倒计时）
-        if (changed || onceEverySecond()) {
+        // 此方法只在每秒节流闸之后调用；战斗计时使用 ClientGameState 的
+        // 本地锚点，因此即使部署锚未变化也必须刷新标题。
+        if (changed || ClientGameState.getCurrentPhase() == GamePhase.BATTLE) {
             refreshTitleTimer();
         }
     }
@@ -1857,6 +1881,10 @@ public class UnifiedDeployScreen extends MutilScreen {
         int timerWidth = Math.round(
             Minecraft.getInstance().font.width(timer) * UI_TEXT_SCALE);
         statusTimerText.setX(this.width - timerWidth - 6);
+        // 兵力贴在时间正下方
+        if (troopCountText != null) {
+            updateTroopLabel(TroopCountOverlay.getDisplayLine());
+        }
     }
 
     private String buildStatusText() {

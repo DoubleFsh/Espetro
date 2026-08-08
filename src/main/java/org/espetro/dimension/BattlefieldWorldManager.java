@@ -384,7 +384,7 @@ public final class BattlefieldWorldManager {
             return;
         }
         ChunkPos center = new ChunkPos(BlockPos.containing(point.x(), point.y(), point.z()));
-        // Radius one covers player view bootstrap and the side-offset supply block.
+        // Radius one covers player view bootstrap without forcing broad synchronous generation.
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 output.add(new ChunkPos(center.x + dx, center.z + dz));
@@ -400,7 +400,6 @@ public final class BattlefieldWorldManager {
             return;
         }
         output.add(new ChunkPos(BlockPos.containing(pose.x(), pose.y(), pose.z())));
-        output.add(new ChunkPos(VehicleManager.getSupplyStationPosition(pose)));
     }
 
     private void finishActivationPreparationIfReady() {
@@ -423,16 +422,7 @@ public final class BattlefieldWorldManager {
 
         BattlefieldContext.activate(map);
         lastLoaded = map;
-        // Pre-place Dragonrise ammo supply stations beside every VehSpawn pit
-        // (attack + defend). Runs after GameConfigBridge.apply / VehicleConfig.
-        try {
-            if (map.vehSpawn != null) {
-                int stations = VehicleManager.getInstance().spawnPadSupplyStations(level, map.vehSpawn);
-                Espetro.LOGGER.info("战场载具坑补给站: {} 个", stations);
-            }
-        } catch (Exception e) {
-            Espetro.LOGGER.error("预放载具坑补给站失败", e);
-        }
+        // 载具补给站只允许通过「建造工事」放置；载具坑不再自动生成。
         // 原部署点旁预放 espetro:supply_source +「补给站」标题（spawn 已由 GameConfigBridge 写入）
         try {
             int deployStations = org.espetro.logistics.DeploySupplyStationPlacer.placeAtSpawnPoints(level);

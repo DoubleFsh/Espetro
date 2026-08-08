@@ -8,10 +8,10 @@ import se.mickelus.mutil.gui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * 载具部署界面。
- * 指挥官右键部署棍时打开，列出可用载具及状态。
+ * 载具部署界面：结构不变时原地刷新冷却/在场数，避免整页 rebuild 闪烁。
  */
 public class VehicleDeployScreen extends MutilScreen {
 
@@ -30,15 +30,55 @@ public class VehicleDeployScreen extends MutilScreen {
     private static final int ROW_BLOCKED = 0x7040444A;
     private static final int ROW_BORDER = 0x704E5360;
 
-    private final List<VehicleDeployScreenPacket.VehicleInfo> vehicles;
+    private List<VehicleDeployScreenPacket.VehicleInfo> vehicles;
+    private final List<RowBinding> rowBindings = new ArrayList<>();
+    private Object structureSignature;
+
+    private static final class RowBinding {
+        private final EspetroMutilWidgets.ActionButton button;
+        private VehicleDeployScreenPacket.VehicleInfo info;
+
+        private RowBinding(EspetroMutilWidgets.ActionButton button,
+                           VehicleDeployScreenPacket.VehicleInfo info) {
+            this.button = button;
+            this.info = info;
+        }
+    }
 
     public VehicleDeployScreen(List<VehicleDeployScreenPacket.VehicleInfo> vehicles) {
         super(Component.literal("载具部署"));
-        this.vehicles = vehicles != null ? vehicles : new ArrayList<>();
+        this.vehicles = vehicles != null ? new ArrayList<>(vehicles) : new ArrayList<>();
+        this.structureSignature = signatureOf(this.vehicles);
+    }
+
+    /** 服务端推送刷新：类型列表变则 rebuild，否则原地改文案。 */
+    public void updateFromPacket(List<VehicleDeployScreenPacket.VehicleInfo> next) {
+        List<VehicleDeployScreenPacket.VehicleInfo> list =
+            next != null ? new ArrayList<>(next) : new ArrayList<>();
+        Object sig = signatureOf(list);
+        this.vehicles = list;
+        if (!Objects.equals(structureSignature, sig)) {
+            structureSignature = sig;
+            rebuildMutilRoot();
+        } else {
+            for (int i = 0; i < rowBindings.size() && i < list.size(); i++) {
+                rowBindings.get(i).info = list.get(i);
+            }
+            refreshRows();
+        }
+    }
+
+    private static Object signatureOf(List<VehicleDeployScreenPacket.VehicleInfo> list) {
+        StringBuilder sb = new StringBuilder();
+        for (VehicleDeployScreenPacket.VehicleInfo v : list) {
+            sb.append(v.type).append('|');
+        }
+        return sb.toString();
     }
 
     @Override
     protected void buildMutilRoot(GuiElement root) {
+        rowBindings.clear();
         int panelW = Math.min(PANEL_WIDTH, Math.max(PANEL_MIN_WIDTH, this.width - PANEL_MARGIN * 2));
         int listContentH = vehicles.isEmpty()
             ? ROW_H
@@ -53,7 +93,7 @@ public class VehicleDeployScreen extends MutilScreen {
         root.addChild(EspetroMutilWidgets.centeredText(
             panelX, panelY + 12, panelW, "\u00a76\u00a7l载具部署面板", EspetroMutilWidgets.GOLD));
         root.addChild(EspetroMutilWidgets.centeredText(
-            panelX, panelY + 29, panelW, "\u00a77载具将在预设位置出现", EspetroMutilWidgets.MUTED));
+            panelX, panelY + 29, panelW, "\u00a77冷却与在场数量实时更新", EspetroMutilWidgets.MUTED));
         root.addChild(EspetroMutilWidgets.rect(
             panelX + PANEL_PADDING, panelY + HEADER_H - 3, panelW - PANEL_PADDING * 2, 1, 0x35FFFFFF));
 
@@ -72,20 +112,32 @@ public class VehicleDeployScreen extends MutilScreen {
 
         int y = 0;
         for (VehicleDeployScreenPacket.VehicleInfo vehicle : vehicles) {
-            boolean enabled = vehicle.cooldownRemaining <= 0 && vehicle.current < vehicle.max;
-            String label = buildVehicleLabel(vehicle, enabled);
-            list.addChild(vehicleButton(0, y, listW, label, enabled, () -> deployVehicle(vehicle.type)));
+            int remaining = computeRemainingSeconds(vehicle);
+            boolean enabled = remaining <= 0 && vehicle.current < vehicle.max;
+            String label = buildVehicleLabel(vehicle, remaining, enabled);
+            var btn = vehicleButton(0, y, listW, label, enabled, () -> deployVehicle(vehicle.type));
+            list.addChild(btn);
+            rowBindings.add(new RowBinding(btn, vehicle));
             y += ROW_H + ROW_GAP;
         }
     }
 
+    private void refreshRows() {
+        for (RowBinding row : rowBindings) {
+            int remaining = computeRemainingSeconds(row.info);
+            boolean enabled = remaining <= 0 && row.info.current < row.info.max;
+            row.button.setLabel(buildVehicleLabel(row.info, remaining, enabled));
+            row.button.setEnabled(enabled);
+        }
+    }
+
+    private int computeRemainingSeconds(VehicleDeployScreenPacket.VehicleInfo vehicle) {
+        long remaining = Math.max(0L, vehicle.readyAtEpochMs - System.currentTimeMillis());
+        return (int) Math.min(Integer.MAX_VALUE, (remaining + 999L) / 1000L);
+    }
+
     private EspetroMutilWidgets.ActionButton vehicleButton(
-        int x,
-        int y,
-        int width,
-        String label,
-        boolean enabled,
-        Runnable action
+        int x, int y, int width, String label, boolean enabled, Runnable action
     ) {
         return EspetroMutilWidgets.button(x, y, width - SCROLLBAR_RESERVED_W, ROW_H, label, action)
             .setEnabled(enabled)
@@ -95,16 +147,16 @@ public class VehicleDeployScreen extends MutilScreen {
             .setTextColor(enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM);
     }
 
-    private static String buildVehicleLabel(VehicleDeployScreenPacket.VehicleInfo vehicle, boolean enabled) {
+    private static String buildVehicleLabel(VehicleDeployScreenPacket.VehicleInfo vehicle,
+                                            int remaining, boolean enabled) {
         String status;
-        if (vehicle.cooldownRemaining > 0) {
-            status = "\u00a7c冷却 " + vehicle.cooldownRemaining + "秒";
+        if (remaining > 0) {
+            status = "\u00a7c冷却 " + remaining + "秒";
         } else if (vehicle.current >= vehicle.max) {
             status = "\u00a76已满 " + vehicle.current + "/" + vehicle.max;
         } else {
             status = "\u00a7a就绪 " + vehicle.current + "/" + vehicle.max;
         }
-
         String nameColor = enabled ? "\u00a7e" : "\u00a78";
         return nameColor + vehicle.displayName + "  " + status
             + "  \u00a77(" + vehicle.respawnMinutes + "分钟刷新)";
@@ -119,6 +171,14 @@ public class VehicleDeployScreen extends MutilScreen {
 
     private static String quoteCommandString(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (onceEverySecond()) {
+            refreshRows();
+        }
     }
 
     @Override

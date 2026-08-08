@@ -5,7 +5,8 @@
     "icon": "🟡",
     "team": "ATTACK",
     "color": "AAAA55",
-    "faction_id": "RUSSIA"
+    "faction_id": "RUSSIA",
+    "max_habs_per_radio": 2
   },
   "vehicles": {
     "logistics_truck": {
@@ -16,6 +17,9 @@
         "minecraft:chest_minecart"
       ],
       "per_max_count": 2,
+      "supplyveh": true,
+      "capacity": 3000,
+      "initial_deploy_delay_seconds": { "attack": 0, "defend": 0 },
       "entity_tags": []
     },
     "escort_vehicle": {
@@ -26,6 +30,7 @@
         "minecraft:boat"
       ],
       "per_max_count": 2,
+      "initial_deploy_delay_seconds": { "attack": 0, "defend": 0 },
       "entity_tags": []
     },
     "crew_transport": {
@@ -36,6 +41,7 @@
         "minecraft:horse"
       ],
       "per_max_count": 3,
+      "initial_deploy_delay_seconds": { "attack": 0, "defend": 0 },
       "entity_tags": []
     }
   },
@@ -44,6 +50,7 @@
       "strict_count": true,
       "name": "载具组员",
       "icon": "crewman",
+      "vehicle_crew": true,
       "description": "运输载具驾驶员与操作员",
       "role": "载具操作",
       "maxPlayers": 6,

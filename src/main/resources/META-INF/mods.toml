@@ -91,6 +91,13 @@ versionRange = "[${auratip_version},)"
 ordering = "AFTER"
 side = "BOTH"
 
+[[dependencies."${mod_id}"]]
+modId = "pingwheel"
+mandatory = true
+versionRange = "[${pingwheel_version}]"
+ordering = "AFTER"
+side = "BOTH"
+
 
 [[dependencies."${mod_id}"]]
 modId = "rhino"
@@ -123,6 +130,14 @@ side = "BOTH"
 # 残骸加速消失 mixin 目标；未安装时由 EspetroMixinPlugin 跳过 .sbw. mixin。
 [[dependencies."${mod_id}"]]
 modId = "superbwarfare"
+mandatory = false
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+# DragonRise 继承 SBW VehicleEntity；只声明加载顺序，不把它变成硬前置。
+[[dependencies."${mod_id}"]]
+modId = "dragonrise_reforge"
 mandatory = false
 versionRange = "[0,)"
 ordering = "AFTER"

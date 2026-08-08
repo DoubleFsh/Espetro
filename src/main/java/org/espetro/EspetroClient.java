@@ -19,6 +19,8 @@ public class EspetroClient {
         // FMLJavaModLoadingContext.get() 在 Forge 1.20+ 已过时，但 1.20.1 仍可用
         net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
             .addListener(EspetroClient::registerKeyBindings);
+        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
+            .addListener(EspetroClient::registerReloadListeners);
 
         // 注册 FORGE 事件总线（Tick + HUD 渲染 + 隐藏玩家名字）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
@@ -38,6 +40,7 @@ public class EspetroClient {
         org.espetro.client.gui.RadioRadialController.initialize();
         org.espetro.client.gui.VehicleWheelController.initialize();
         org.espetro.client.gui.VehicleSupplyHud.register();
+        org.espetro.client.gui.FobSupplyHud.register();
         org.espetro.client.gui.SeatSwitchHandler.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(org.espetro.client.EquipZoneRenderer::onRenderLevel);
@@ -65,6 +68,12 @@ public class EspetroClient {
         Espetro.KEY_TEAM = keyTeam;
         Espetro.KEY_CLASS = keyClass;
         Espetro.KEY_RADIAL = keyRadial;
+    }
+
+    private static void registerReloadListeners(
+            net.minecraftforge.client.event.RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)
+            resourceManager -> org.espetro.client.gui.FobSupplyHud.onResourceReload());
     }
 
     private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {

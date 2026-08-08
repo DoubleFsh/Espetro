@@ -79,7 +79,7 @@
 | 类 | 职责 |
 | --- | --- |
 | `VehicleConfig` | 将编制 `vehicles` JSON 转换为运行时配置 |
-| `VehicleManager` | 首批载具异步预热与幂等部署、指挥官部署、数量、冷却、实体追踪和清理 |
+| `VehicleManager` | 指挥官手动部署、首次/重生冷却、阵营数量、载具补给库存、实体追踪和清理 |
 | `VehicleItems` | 载具部署物品注册 |
 | `VehicleEventHandler` | 使用部署物品和载具实体事件 |
 | `VehicleCommand` | `/vehicle` 命令 |

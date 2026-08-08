@@ -44,14 +44,25 @@ public class VehicleConfig {
         public String nbt;
         /** 补给载具：可装载弹药和建材 */
         public boolean supplyVeh;
-        /** 步兵战斗载具：仅弹药，可用于更换职业 */
+        /** 步兵战斗载具：仅携带弹药，不携带建材 */
         public boolean fightVeh;
         /** 载具补给总容量 */
         public int supplyCapacity;
+        /** 作为攻方时首次可部署前等待秒数（开战起算） */
+        public int initialDeployDelayAttackSeconds;
+        /** 作为守方时首次可部署前等待秒数（开战起算） */
+        public int initialDeployDelayDefendSeconds;
         /** 是否可装载建材 */
         public boolean canCarryConstruction() { return supplyVeh; }
-        /** 是否可用于更换职业 */
-        public boolean canChangeClass() { return fightVeh; }
+        /** 补给载具可作为移动换装点，换装消耗其携带的弹药。 */
+        public boolean canChangeClass() { return supplyVeh; }
+
+        public int initialDeployDelaySeconds(String team) {
+            if ("DEFEND".equalsIgnoreCase(team)) {
+                return Math.max(0, initialDeployDelayDefendSeconds);
+            }
+            return Math.max(0, initialDeployDelayAttackSeconds);
+        }
 
         public VehicleTypeConfig(int max, int respawnMinutes) {
             this.max = max;
@@ -186,6 +197,10 @@ public class VehicleConfig {
                 } else {
                     cfg.supplyCapacity = 300;
                 }
+                if (data.initialDeployDelay != null) {
+                    cfg.initialDeployDelayAttackSeconds = Math.max(0, data.initialDeployDelay.attack);
+                    cfg.initialDeployDelayDefendSeconds = Math.max(0, data.initialDeployDelay.defend);
+                }
                 if (data.entityTags != null) {
                     for (String tag : data.entityTags) {
                         if (tag != null && !tag.isBlank()) cfg.entityTags.add(tag);
@@ -244,6 +259,10 @@ public class VehicleConfig {
             cfg.supplyCapacity = 500;
         } else {
             cfg.supplyCapacity = 300;
+        }
+        if (vd.initialDeployDelay != null) {
+            cfg.initialDeployDelayAttackSeconds = Math.max(0, vd.initialDeployDelay.attack);
+            cfg.initialDeployDelayDefendSeconds = Math.max(0, vd.initialDeployDelay.defend);
         }
         if (vd.entityTags != null) {
             for (String tag : vd.entityTags) {

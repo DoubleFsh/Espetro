@@ -242,6 +242,8 @@ public class TroopCountManager {
         scoreboard.removeObjective(objective);
 
         Espetro.LOGGER.info("兵力统计已重置");
+        // 清局后同步客户端隐藏/清零兵力 HUD，避免结算残留
+        org.espetro.network.NetworkManager.broadcastTroopCounts(0, 0);
     }
 
     /**

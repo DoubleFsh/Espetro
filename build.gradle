@@ -217,7 +217,8 @@ tasks.named('processResources', ProcessResources).configure {
                              espoints_version    : espoints_version, rhino_version: rhino_version,
                              architectury_version: architectury_version, kubejs_version: kubejs_version,
                              oelib_version       : oelib_version,
-                             auratip_version     : auratip_version,]
+                             auratip_version     : auratip_version,
+                             pingwheel_version   : pingwheel_version,]
 
     inputs.properties replaceProperties
 
