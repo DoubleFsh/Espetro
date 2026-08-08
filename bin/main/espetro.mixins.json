@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.espetro.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "espetro.refmap.json",
+  "plugin": "org.espetro.mixin.EspetroMixinPlugin",
+  "mixins": [
+    "ServerGamePacketListenerWaitingLockMixin",
+    "sbw.VehicleEntityMainBaseProtectionMixin",
+    "sbw.VehicleEntityWreckMixin",
+    "sbw.TurretWreckEntityMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

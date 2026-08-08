@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "files": [
+    "EsDimensions.json",
+    "EsFactions/example_attack.json",
+    "EsFactions/example_defend.json",
+    "EsFactions/middle_east_militia.json",
+    "EsFactions/pla_heavy_brigade.json",
+    "EsFactions/pla_medium_brigade.json",
+    "EsFactions/russia_army.json",
+    "EsFactions/russia_logistics.json",
+    "EsFactions/ukraine_irregular.json",
+    "EsFactions/us_airborne.json",
+    "EsFactions/us_cavalry.json",
+    "EsWorld/test_flat/level.dat",
+    "EsWorld/test_flat/region/r.-1.-1.mca",
+    "EsWorld/test_flat/region/r.-1.0.mca",
+    "EsWorld/test_flat/region/r.0.-1.mca",
+    "EsWorld/test_flat/region/r.0.0.mca",
+    "EsWorld/test_flat/EsConfig/SquadTypes.json",
+    "EsWorld/test_flat/EsConfig/TacticalMap.json",
+    "EsWorld/test_flat/EsConfig/CapturePoints.json",
+    "EsWorld/test_flat/EsConfig/VehSpawn.json",
+    "EsWorld/test_flat/EsConfig/bastion.json",
+    "EsWorld/test_flat/EsConfig/game.json",
+    "EsWorld/test_flat/EsConfig/logistics.json",
+    "EsWorld/test_flat/EsConfig/outposts.json",
+    "EsWorld/test_flat/EsConfig/spawn_points.json",
+    "EsWorld/test_flat/EsConfig/team_pack.json"
+  ]
+}

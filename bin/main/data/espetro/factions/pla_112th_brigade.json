@@ -1,0 +1,1132 @@
+{
+  "faction": {
+    "name": "第112中型合成旅",
+    "description": "摩托化部队",
+    "icon": "🔴",
+    "selection_image": "espetro:textures/gui/factions/pla_112.png",
+    "team": "ATTACK",
+    "color": "AA5555",
+    "faction_id": "PLA"
+  },
+  "VehTypes": [
+    "mbt",
+    "mgs",
+    "ifv",
+    "acv",
+    "apc",
+    "car",
+    "truck",
+    "transport_helicopter"
+  ],
+  "vehicles": {
+    "mbt": {
+      "display_name": "ZTZ-99A 主战坦克",
+      "entity": [
+        "dragonrise_reforge:ztz99a"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100
+    },
+    "mgs": {
+      "display_name": "ZLT-11 轮式坦克歼击车",
+      "entity": [
+        "dragonrise_reforge:zlt11"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100
+    },
+    "apc": {
+      "display_name": "ZBL-08 轮式步兵战车",
+      "entity": [
+        "dragonrise_reforge:zbl08",
+        "dragonrise_reforge:zbl08",
+        "dragonrise_reforge:zbl08"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5
+    },
+    "acv": {
+      "display_name": "ZBL-08 轮式步兵战车",
+      "entity": [
+        "dragonrise_reforge:zsl10",
+        "dragonrise_reforge:zsl10"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5
+    },
+    "transport_helicopter": {
+      "display_name": "Z20 通用直升机",
+      "entity": [
+        "dragonrise_reforge:z20"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100
+    }
+  },
+  "classes": {
+    "PLA_112_COMMANDER": {
+      "strict_count": false,
+      "name": "队长",
+      "icon": "leader",
+      "description": "指挥全队作战",
+      "role": "指挥",
+      "maxPlayers": 1,
+      "team_count": true,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "QBZ-191 + 红点 + 握把",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 3",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 7",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 3
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 210,
+                "max": 210
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "倍镜队长",
+          "description": "QBZ-191 + 3倍镜 + 握把(少1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk171\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 3",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 3
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "机瞄": {
+          "name": "机瞄队长",
+          "description": "QBZ-191 + 握把(机瞄)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 3",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 7",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 3
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 210,
+                "max": 210
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/leader.png"
+    },
+    "PLA_112_CREW": {
+      "strict_count": true,
+      "name": "载具组员",
+      "icon": "crewman",
+      "description": "装甲载具驾驶员与炮手",
+      "role": "载具操作",
+      "maxPlayers": 8,
+      "team_count": false,
+      "max_per_squad": 2,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "装甲载具驾驶员与炮手",
+          "maxPlayers": 8,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 3
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/crewman.png"
+    },
+    "PLA_112_ASSAULT": {
+      "strict_count": true,
+      "name": "自动步枪",
+      "icon": "rifleman",
+      "description": "标准突击步兵",
+      "role": "突击",
+      "maxPlayers": 6,
+      "team_count": false,
+      "max_per_squad": 4,
+      "troopValue": 1,
+      "variants": {
+        "机瞄": {
+          "name": "步枪兵(机瞄)",
+          "description": "QBZ-191 机瞄 (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "红点": {
+          "name": "步枪兵(红点)",
+          "description": "QBZ-191 + Holo Sight (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "步枪兵(倍镜)",
+          "description": "QBZ-191 + QMK-171A (6 mags, 1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk171\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 150,
+                "max": 150
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "短管": {
+          "name": "步枪兵(QBZ-192)",
+          "description": "QBZ-192 + 握把 (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "短管红点": {
+          "name": "步枪兵(QBZ-192红点)",
+          "description": "QBZ-192 + 握把 + Holo Sight (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "短管倍镜": {
+          "name": "步枪兵(QBZ-192倍镜)",
+          "description": "QBZ-192 + 握把 + QMK-171A (6 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk171\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
+          ],
+          "resupply": {
+            "ammo_cost": 30,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 150,
+                "max": 150
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/rifleman.png"
+    },
+    "PLA_112_SQUADMG": {
+      "strict_count": true,
+      "name": "班组机枪",
+      "icon": "machine_gunner",
+      "description": "班组压制火力",
+      "role": "火力压制",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "机枪手(机瞄)",
+          "description": "QJB-201 机瞄 (6 drums)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"tacz:extended_mag_3\"}},GunCurrentAmmoCount:150,GunFireMode:\"AUTO\",GunId:\"cib:qjb201\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150} 5",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
+          ],
+          "resupply": {
+            "ammo_cost": 60,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 750,
+                "max": 750
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        },
+        "光瞄": {
+          "name": "机枪手(光瞄)",
+          "description": "QJB-201 + QMK-204 (6 drums, 1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"tacz:extended_mag_3\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk204\"}},GunCurrentAmmoCount:150,GunFireMode:\"AUTO\",GunId:\"cib:qjb201\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150} 5",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
+          ],
+          "resupply": {
+            "ammo_cost": 60,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 750,
+                "max": 750
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/automatic_rifleman.png"
+    },
+    "PLA_112_GRENADIER": {
+      "strict_count": true,
+      "name": "榴弹兵",
+      "icon": "grenadier",
+      "description": "榴弹远程压制",
+      "role": "榴弹支援",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 0,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "榴弹兵(红点)",
+          "description": "QBZ-191 + 握把 + Holo Sight + QLU-11 (18发35mm)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:grip_191\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},Extras:{Gun_UUID:\"717a858f-1a1d-4bf7-bd76-12e7ad192a01\"},GunCurrentAmmoCount:2,GunFireMode:\"SEMI\",GunId:\"cib:qlu11\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:2,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3}}}",
+            "taczmagazines:magazine{AmmoCount:3,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3} 6",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"suffuse:35x32mm\"}",
+                "count": 6,
+                "max": 18
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "榴弹兵(倍镜)",
+          "description": "QBZ-191 + QMK-171A + QLU-11 (18发35mm, 6 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk171\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},Extras:{Gun_UUID:\"717a858f-1a1d-4bf7-bd76-12e7ad192a01\"},GunCurrentAmmoCount:2,GunFireMode:\"SEMI\",GunId:\"cib:qlu11\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:2,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3}}}",
+            "taczmagazines:magazine{AmmoCount:3,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3} 6",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 150,
+                "max": 150
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"suffuse:35x32mm\"}",
+                "count": 6,
+                "max": 18
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/grenadier.png"
+    },
+    "PLA_112_MARKSMAN": {
+      "strict_count": true,
+      "name": "精确射手",
+      "icon": "marksman",
+      "description": "远程精确打击",
+      "role": "精确射击",
+      "maxPlayers": 1,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "精确射手",
+          "description": "QBU-191 + QMK-191 (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"tacz:extended_mag_3\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk191\"}},GunCurrentAmmoCount:30,GunFireMode:\"SEMI\",GunId:\"cib:qbu191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30_ext3\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"minecraft:air\"},GunCurrentAmmoCount:20,GunFireMode:\"SEMI\",GunId:\"cib:qsz92\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:19,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30_ext3\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
+          ],
+          "resupply": {
+            "ammo_cost": 40,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/marksman.png"
+    },
+    "PLA_112_ANTITANK": {
+      "strict_count": false,
+      "name": "轻型反坦克兵",
+      "icon": "light_at",
+      "description": "反装甲作战",
+      "role": "反装甲",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "variants": {
+        "default": {
+          "name": "轻筒(机瞄)",
+          "description": "QBZ-191 机瞄 + DZJ-08 (7 mags, 2雷)",
+          "maxPlayers": 2,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 100,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "count": 1,
+                "max": 1
+              }
+            ]
+          }
+        },
+        "红点": {
+          "name": "轻筒(红点)",
+          "description": "QBZ-191 + Holo Sight + DZJ-08 (7 mags, 1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "ammo_cost": 100,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "count": 1,
+                "max": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "轻筒(倍镜)",
+          "description": "QBZ-191 + QMK-171A + DZJ-08 (6 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:qmk171\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz191\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
+          ],
+          "resupply": {
+            "ammo_cost": 100,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 150,
+                "max": 150
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "count": 1,
+                "max": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/lightAT.png"
+    },
+    "PLA_112_HEAVYANTITANK": {
+      "strict_count": true,
+      "name": "重筒",
+      "icon": "heavy_at",
+      "description": "重型火力支援",
+      "role": "重型火力",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "variants": {
+        "default": {
+          "name": "重筒(机瞄)",
+          "description": "QBZ-192 机瞄 + PF98 (4发火箭弹)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"suffuse:pf98a\",HasBulletInBarrel:1b}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6",
+            "tacz:ammo{AmmoId:\"suffuse:120mm\"} 4"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"suffuse:120mm\"}",
+                "count": 2,
+                "max": 4
+              }
+            ]
+          }
+        },
+        "光瞄": {
+          "name": "重筒(光瞄)",
+          "description": "QBZ-192 + Holo Sight + PF98 (2发火箭弹)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"cib:csol2\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"cib:qbz192\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"suffuse:pf98a\",HasBulletInBarrel:1b}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "dragonrise_reforge:med21_chest",
+            "dragonrise_reforge:pants21",
+            "dragonrise_reforge:t21_helmet",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6",
+            "tacz:ammo{AmmoId:\"suffuse:120mm\"} 2"
+          ],
+          "resupply": {
+            "ammo_cost": 80,
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
+                "count": 180,
+                "max": 180
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2
+              },
+              {
+                "id": "tacz:ammo{AmmoId:\"suffuse:120mm\"}",
+                "count": 1,
+                "max": 2
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/HeavyAT.png"
+    }
+  }
+}

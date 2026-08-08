@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "espetro:block/radio" },
+    "facing=south": { "model": "espetro:block/radio", "y": 180 },
+    "facing=west":  { "model": "espetro:block/radio", "y": 270 },
+    "facing=east":  { "model": "espetro:block/radio", "y": 90 }
+  }
+}
