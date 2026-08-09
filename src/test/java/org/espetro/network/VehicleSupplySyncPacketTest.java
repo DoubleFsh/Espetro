@@ -19,11 +19,23 @@ class VehicleSupplySyncPacketTest {
     }
 
     @Test
-    void combatVehicleWithoutTransferAccessHasNoWheelAction() {
+    void combatVehicleOutsideTransferZoneStillHasInfantryResupply() {
         VehicleSupplySyncPacket packet = VehicleSupplySyncPacket.state(
             UUID.randomUUID(), 0, 0, 500,
             false, true, false, false, 20);
 
-        assertFalse(packet.hasAnyAction());
+        assertTrue(packet.hasAnyAction());
+        assertTrue(packet.canResupplyInfantry());
+    }
+
+    @Test
+    void ordinaryVehicleStillHasInfantryResupply() {
+        VehicleSupplySyncPacket packet = VehicleSupplySyncPacket.state(
+            UUID.randomUUID(), 100, 0, 300,
+            false, false, false, false, 20);
+
+        assertTrue(packet.hasAnyAction());
+        assertTrue(packet.canResupplyInfantry());
+        assertFalse(packet.canTransferAmmo());
     }
 }

@@ -42,6 +42,8 @@ public final class VehicleWheelController {
         id("textures/gui/squad/vehicle_supply_load.png");
     private static final ResourceLocation ICON_CONSTRUCTION_RED =
         id("textures/gui/squad/vehicle_supply_unload.png");
+    private static final ResourceLocation ICON_RESUPPLY =
+        id("textures/gui/squad/ammo_crate.png");
     private static final String COLOR_LOAD = "#FFFFFFFF";
     private static final String COLOR_UNLOAD = "#FFFF4A4A";
 
@@ -159,7 +161,12 @@ public final class VehicleWheelController {
                     Actions.script(ACTION_ID, Map.of("action", "UNLOAD_CONSTRUCTION")),
                     Component.literal("卸下建材"), COLOR_UNLOAD);
         }
-        if (cachedSupply.isSupplyVehicle()) {
+        if (cachedSupply.canResupplyInfantry()) {
+            builder = builder.slot("espetro.veh.resupply_infantry", ICON_RESUPPLY,
+                Actions.script(ACTION_ID, Map.of("action", "RESUPPLY_INFANTRY")),
+                Component.literal("补给步兵"), COLOR_LOAD);
+        }
+        if (cachedSupply.isSupplyVehicle() || cachedSupply.isFightVehicle()) {
             builder = builder.slot("espetro.veh.change_class", ICON_AMMO_WHITE,
                 Actions.script(ACTION_ID, Map.of("action", "CHANGE_CLASS")),
                 Component.literal("更换职业"), COLOR_LOAD);
@@ -187,6 +194,7 @@ public final class VehicleWheelController {
         if (packet == null) return "";
         return (packet.canTransferAmmo() ? "A" : "-")
             + (packet.canTransferConstruction() ? "C" : "-")
+            + (packet.canResupplyInfantry() ? "R" : "-")
             + (packet.isSupplyVehicle() ? "S" : "-");
     }
 
@@ -260,7 +268,13 @@ public final class VehicleWheelController {
             actions.add("LOAD_CONSTRUCTION");
             actions.add("UNLOAD_CONSTRUCTION");
         }
-        if (cachedSupply != null && cachedSupply.isSupplyVehicle()) actions.add("CHANGE_CLASS");
+        if (cachedSupply != null && cachedSupply.canResupplyInfantry()) {
+            actions.add("RESUPPLY_INFANTRY");
+        }
+        if (cachedSupply != null
+            && (cachedSupply.isSupplyVehicle() || cachedSupply.isFightVehicle())) {
+            actions.add("CHANGE_CLASS");
+        }
         return actions;
     }
 

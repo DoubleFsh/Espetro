@@ -48,14 +48,16 @@ public class VehicleConfig {
         public boolean fightVeh;
         /** 载具补给总容量 */
         public int supplyCapacity;
+        /** 旧编制未声明载具补给类型时，是否按战斗载具兼容。 */
+        boolean legacyDefaultedToFightVehicle;
         /** 作为攻方时首次可部署前等待秒数（开战起算） */
         public int initialDeployDelayAttackSeconds;
         /** 作为守方时首次可部署前等待秒数（开战起算） */
         public int initialDeployDelayDefendSeconds;
         /** 是否可装载建材 */
         public boolean canCarryConstruction() { return supplyVeh; }
-        /** 补给载具可作为移动换装点，换装消耗其携带的弹药。 */
-        public boolean canChangeClass() { return supplyVeh; }
+        /** 战斗/补给载具可作为移动换装点，换装消耗其携带的弹药。 */
+        public boolean canChangeClass() { return supplyVeh || fightVeh; }
 
         public int initialDeployDelaySeconds(String team) {
             if ("DEFEND".equalsIgnoreCase(team)) {
@@ -134,6 +136,7 @@ public class VehicleConfig {
      */
     public static void loadConfig(MinecraftServer server) {
         VEHICLE_CONFIGS.clear();
+        int legacyVehicleTypes = 0;
 
         // 确保编制数据已加载（含 vehicles 节）
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
@@ -150,6 +153,7 @@ public class VehicleConfig {
                 FactionDataLoader.VehicleData vd = vEntry.getValue();
 
                 VehicleTypeConfig vtc = buildVehicleConfig(vehicleType, vd);
+                if (vtc.legacyDefaultedToFightVehicle) legacyVehicleTypes++;
 
                 typeMap.put(vehicleType, vtc);
             }
@@ -158,6 +162,7 @@ public class VehicleConfig {
         }
 
         Espetro.LOGGER.info("载具配置已加载: {} 个编制自定义了载具", VEHICLE_CONFIGS.size());
+        warnLegacyVehicleTypes(legacyVehicleTypes);
     }
 
     /**
@@ -167,6 +172,7 @@ public class VehicleConfig {
     public static void applyActiveMap(ActiveMapConfig map) {
         VEHICLE_CONFIGS.clear();
         if (map == null || !map.usable) return;
+        int legacyVehicleTypes = 0;
         FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
         for (Map.Entry<String, Map<String, FactionDataLoader.VehicleData>> formation
             : loader.getAllFactionVehicles().entrySet()) {
@@ -186,17 +192,8 @@ public class VehicleConfig {
                 cfg.displayName = firstNonBlank(data.displayName, type);
                 cfg.troopValue = Math.max(0, data.troopValue);
                 cfg.nbt = firstNonBlank(data.nbt, null);
-                cfg.supplyVeh = data.supplyVeh != null && data.supplyVeh;
-                cfg.fightVeh = data.fightVeh != null && data.fightVeh;
-                if (data.capacity != null && data.capacity > 0) {
-                    cfg.supplyCapacity = data.capacity;
-                } else if (cfg.supplyVeh) {
-                    cfg.supplyCapacity = 3000;
-                } else if (cfg.fightVeh) {
-                    cfg.supplyCapacity = 500;
-                } else {
-                    cfg.supplyCapacity = 300;
-                }
+                applySupplyProfile(cfg, data.supplyVeh, data.fightVeh, data.capacity);
+                if (cfg.legacyDefaultedToFightVehicle) legacyVehicleTypes++;
                 if (data.initialDeployDelay != null) {
                     cfg.initialDeployDelayAttackSeconds = Math.max(0, data.initialDeployDelay.attack);
                     cfg.initialDeployDelayDefendSeconds = Math.max(0, data.initialDeployDelay.defend);
@@ -225,6 +222,7 @@ public class VehicleConfig {
             VEHICLE_CONFIGS.put(formation.getKey(), typeMap);
         }
         Espetro.LOGGER.info("活动地图载具配置已建立: {} 个兼容编制", VEHICLE_CONFIGS.size());
+        warnLegacyVehicleTypes(legacyVehicleTypes);
     }
 
     private static DeploymentPointConfig fromPose(VehSpawnSnapshot.Pose pose) {
@@ -249,17 +247,7 @@ public class VehicleConfig {
         cfg.troopValue = Math.max(0, vd.troopValue);
         cfg.nbt = firstNonBlank(vd.nbt, null);
         // 载具补给类型和容量
-        cfg.supplyVeh = vd.supplyVeh != null && vd.supplyVeh;
-        cfg.fightVeh = vd.fightVeh != null && vd.fightVeh;
-        if (vd.capacity != null && vd.capacity > 0) {
-            cfg.supplyCapacity = vd.capacity;
-        } else if (cfg.supplyVeh) {
-            cfg.supplyCapacity = 3000;
-        } else if (cfg.fightVeh) {
-            cfg.supplyCapacity = 500;
-        } else {
-            cfg.supplyCapacity = 300;
-        }
+        applySupplyProfile(cfg, vd.supplyVeh, vd.fightVeh, vd.capacity);
         if (vd.initialDeployDelay != null) {
             cfg.initialDeployDelayAttackSeconds = Math.max(0, vd.initialDeployDelay.attack);
             cfg.initialDeployDelayDefendSeconds = Math.max(0, vd.initialDeployDelay.defend);
@@ -279,6 +267,35 @@ public class VehicleConfig {
             Espetro.LOGGER.warn("载具 {} 未配置 entity_type；请在对应编制 JSON 的 vehicles 节中配置", vehicleType);
         }
         return cfg;
+    }
+
+    /**
+     * 兼容新增 fightveh/supplyveh 字段之前的编制：两项都缺失时按战斗载具处理。
+     * 任一字段被显式声明后不再启用兼容回退，因此两个 false 仍可明确关闭载具轮盘。
+     */
+    static void applySupplyProfile(VehicleTypeConfig cfg, @Nullable Boolean supplyVeh,
+                                   @Nullable Boolean fightVeh, @Nullable Integer capacity) {
+        boolean legacy = supplyVeh == null && fightVeh == null;
+        cfg.supplyVeh = Boolean.TRUE.equals(supplyVeh);
+        cfg.fightVeh = Boolean.TRUE.equals(fightVeh) || legacy;
+        cfg.legacyDefaultedToFightVehicle = legacy;
+
+        if (capacity != null && capacity > 0) {
+            cfg.supplyCapacity = capacity;
+        } else if (cfg.supplyVeh) {
+            cfg.supplyCapacity = 3000;
+        } else if (cfg.fightVeh) {
+            cfg.supplyCapacity = 500;
+        } else {
+            cfg.supplyCapacity = 300;
+        }
+    }
+
+    private static void warnLegacyVehicleTypes(int count) {
+        if (count <= 0) return;
+        Espetro.LOGGER.warn(
+            "检测到 {} 个未声明 fightveh/supplyveh 的旧载具类型，已按 fightveh=true 兼容；"
+                + "补给载具请显式配置 supplyveh=true", count);
     }
 
     private static DeploymentConfig buildDeploymentConfig(String vehicleType, FactionDataLoader.VehicleData vd) {

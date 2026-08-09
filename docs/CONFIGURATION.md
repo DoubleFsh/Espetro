@@ -321,8 +321,8 @@ kubejs/server_scripts/00_espetro_artillery_155.js
 
 放置阶段/权限/排斥半径/队友人数等见 [LOGISTICS_CONFIG.md](LOGISTICS_CONFIG.md) 的 `logistics.radio`。
 
-弹药补给冷却固定为 5 分钟，不在此 JSON 中配置。补给只有在玩家确有弹药缺口且
-Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库存不足不会扣费、发物品或进入冷却。
+弹药补给无冷却，不在此 JSON 中配置。补给只有在玩家确有弹药缺口且
+Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库存不足不会扣费或发物品。
 
 ## `team_pack.json`
 
@@ -611,7 +611,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `count` | 16 | 单次补给数量 |
 | `max` | 64 | 背包上限 |
 
-只有实际存在弹药缺口且补入至少一种物品时才进入补给冷却并扣除 `ammo_cost`。
+只有实际存在弹药缺口且补入至少一种物品时才扣除 `ammo_cost`；补给无冷却。
 覆盖弹药箱的 Radio 必须能够完整支付费用；不足时整次取消，不发物品也不部分扣款。
 
 ### `VehTypes` 与 `vehicles.<vehicle_type>`
@@ -625,8 +625,8 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `respawn_minutes` | 5 | 单辆刷新冷却 |
 | `troop_value` | 0 | 载具死亡/被摧毁时扣除的所属队伍兵力 |
 | `entity_tags` | `[]` | 生成后附加到实体的 tag 数组 |
-| `fightveh` | false | 战斗载具；可在本方基地或载具补给站装卸弹药，不可运输建材 |
-| `supplyveh` | false | 补给载具；可在基地或 Radio 附近装卸弹药和建材 |
+| `fightveh` | 兼容旧配置时为 true | 战斗载具；可在本方基地或载具补给站装卸弹药，不可运输建材，可用于更换职业 |
+| `supplyveh` | false | 补给载具；可在基地或 Radio 附近装卸弹药和建材，可用于更换职业 |
 | `capacity` | 按类型 | 弹药与建材共享总容量；战斗载具默认 500、补给载具默认 3000、其它载具默认 300 |
 | `initial_deploy_delay_seconds.attack` | 0 | 此编制作为进攻方时，从布防阶段开始到系统自动生成首批载具的等待秒数 |
 | `initial_deploy_delay_seconds.defend` | 0 | 此编制作为防守方时，从布防阶段开始到系统自动生成首批载具的等待秒数 |
@@ -636,6 +636,11 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 `VehSpawn.json` 点位的顺序自动生成每个槽位的一辆首发载具。延迟未到前不会强加载出生区块。
 首发之后，指挥官可从左 Alt 根轮盘的“载具部署”入口补充部署。部署界面按事件增量更新
 在场数和绝对完成时间，不逐帧重建界面。
+
+为兼容新增载具补给字段之前的 `EsFactions`，当 `fightveh` 与 `supplyveh` **同时缺失**时，
+该类型按 `fightveh: true` 加载，F 轮盘可在本方基地或载具补给站范围内使用。新配置应显式
+声明其中一种类型；若不需要装卸与更换职业交互，可将两项都显式设为 `false`。任何载具仍会
+保留 F 轮盘「补给步兵」功能，消耗载具弹药按职业缺口补给。
 
 ## 随 JAR 导出的示例编制
 

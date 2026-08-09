@@ -24,11 +24,12 @@ public final class MapVoteScreen extends MutilScreen {
     private static final int MAX_ROWS = 2;
     private static final int MAX_CANDIDATES = COLUMNS * MAX_ROWS;
     /** 与编制选择 ClassSelectScreen 同级的卡片间距。 */
-    private static final int GAP = 6;
-    private static final int CARD_PAD = 6;
-    private static final int FOOTER_H = 36;
-    private static final int SIDE_PAD = 12;
-    private static final int BOTTOM_PAD = 12;
+    private static final int GAP = 4;
+    private static final int CARD_PAD = 4;
+    /** 最底部仅保留名称/票数一行。 */
+    private static final int FOOTER_H = 14;
+    private static final int SIDE_PAD = 8;
+    private static final int BOTTOM_PAD = 8;
     private static final int MIN_CARD_W = 120;
     private static final int MIN_CARD_H = 90;
 
@@ -113,19 +114,13 @@ public final class MapVoteScreen extends MutilScreen {
         int cardW = Math.max(MIN_CARD_W, (contentW - (COLUMNS - 1) * GAP) / COLUMNS);
         int cardH = Math.max(MIN_CARD_H, (contentH - (MAX_ROWS - 1) * GAP) / MAX_ROWS);
 
-        // 预览区：在卡片内尽量铺满，优先 16:9，不足时用剩余高度
+        // 预览区：固定 16:9 横向画框，宽度优先；高度不足时按高度反推宽度
         int imgW = Math.max(1, cardW - CARD_PAD * 2);
         int maxImgH = Math.max(1, cardH - FOOTER_H - 4);
-        int imgH16 = Math.max(1, imgW * 9 / 16);
-        int imgH = Math.min(maxImgH, imgH16);
-        // 高度富余时用满卡片预览区（仍居中绘制）
-        if (imgH16 < maxImgH) {
-            imgH = maxImgH;
-            // 保持预览不超出卡片宽：若按高度反推 16:9 宽度过大则封顶
-            int imgW16 = imgH * 16 / 9;
-            if (imgW16 < imgW) {
-                imgW = Math.max(1, imgW16);
-            }
+        int imgH = Math.max(1, imgW * 9 / 16);
+        if (imgH > maxImgH) {
+            imgH = Math.max(1, maxImgH);
+            imgW = Math.max(1, imgH * 16 / 9);
         }
 
         int panelW = COLUMNS * cardW + (COLUMNS - 1) * GAP;
@@ -282,9 +277,15 @@ public final class MapVoteScreen extends MutilScreen {
             }
             graphics.renderOutline(bx, by, bw, bh, border);
 
-            // 预览区：贴卡片顶部水平居中，下方留给名称/票数
-            int imgAreaW = Math.min(imgW, bw - CARD_PAD * 2);
-            int imgAreaH = Math.min(imgH, bh - FOOTER_H - 4);
+            // 预览区：贴卡片顶部水平居中，固定 16:9 横向，尽量放大
+            int maxImgW = Math.max(1, bw - CARD_PAD * 2);
+            int maxImgH = Math.max(1, bh - FOOTER_H - 4);
+            int imgAreaW = Math.max(1, Math.min(imgW, maxImgW));
+            int imgAreaH = Math.max(1, imgAreaW * 9 / 16);
+            if (imgAreaH > maxImgH) {
+                imgAreaH = maxImgH;
+                imgAreaW = Math.max(1, imgAreaH * 16 / 9);
+            }
             int imgX = bx + (bw - imgAreaW) / 2;
             int imgY = by + 4;
 
@@ -303,17 +304,24 @@ public final class MapVoteScreen extends MutilScreen {
                     EspetroMutilWidgets.DIM);
             }
 
-            int footerTop = by + bh - FOOTER_H + 4;
-            String mapName = EspetroMutilWidgets.trimToWidth(
-                (selected ? "§a✔ " : "§f") + candidate.displayName, Math.max(20, bw - 10));
-            graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(mapName), bx + bw / 2, footerTop,
-                EspetroMutilWidgets.TEXT);
+            // 票数：外框右下角，只显示数字
+            String voteText = String.valueOf(votes);
+            int voteW = Minecraft.getInstance().font.width(voteText);
+            int voteX = bx + bw - 4 - voteW;
+            int voteY = by + bh - 10;
+            graphics.drawString(Minecraft.getInstance().font,
+                Component.literal(voteText), voteX, voteY,
+                enabled ? 0xFFE8B85C : EspetroMutilWidgets.DIM, false);
 
-            String footer = "§7票数 §e" + votes;
-            graphics.drawCenteredString(Minecraft.getInstance().font,
-                Component.literal(footer), bx + bw / 2, footerTop + 14,
-                enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM);
+            // 名称：固定放在外框最底下一行，与右下角票数同一行
+            int nameMaxW = Math.max(8, bw - 8 - voteW);
+            String mapName = EspetroMutilWidgets.trimToWidth(
+                (selected ? "§a✔ " : "§f") + candidate.displayName, nameMaxW);
+            int nameX = bx + 4;
+            int nameY = by + bh - 10;
+            graphics.drawString(Minecraft.getInstance().font,
+                Component.literal(mapName), nameX, nameY,
+                EspetroMutilWidgets.TEXT, false);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }

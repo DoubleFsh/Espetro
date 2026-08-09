@@ -430,6 +430,14 @@ public final class BattlefieldWorldManager {
         } catch (Exception e) {
             Espetro.LOGGER.error("预放原部署点补给站失败", e);
         }
+        // 开局时在双方主重生点旁生成 Dragonrise 弹药补给站实体
+        try {
+            int mainBaseStations = org.espetro.vehicle.VehicleManager.getInstance()
+                .spawnMainBaseSupplyStations(level);
+            Espetro.LOGGER.info("主重生点弹药补给站: {} 个", mainBaseStations);
+        } catch (Exception e) {
+            Espetro.LOGGER.error("生成主重生点弹药补给站失败", e);
+        }
         state = ImportState.READY;
         busy.set(false);
         Espetro.LOGGER.info("战场地图已从只读模板副本就绪: {}（预载{}个关键区块）",

@@ -718,7 +718,7 @@ public class BastionEventHandler {
     }
 
     /**
-     * 玩家右击弹药箱（工事放置的潜影盒）— 职业弹药补给（含冷却）。
+     * 玩家右击弹药箱（工事放置的潜影盒）— 职业弹药补给（无冷却）。
      */
     @SubscribeEvent
     public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
@@ -866,7 +866,7 @@ public class BastionEventHandler {
             ? "消耗 §b" + ammoCost + " Radio 弹药"
             : "本职业补给无需消耗 Radio 弹药";
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 冷却5分钟"));
+            "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 无冷却"));
     }
 
     /**
@@ -875,6 +875,12 @@ public class BastionEventHandler {
     public static void performVehicleResupply(ServerPlayer player,
                                                org.espetro.vehicle.VehicleManager.VehicleSupplyState supply,
                                                int ammoCost) {
+        if (supply == null) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c该载具没有可用的弹药库存。"));
+            return;
+        }
+
         // 获取玩家职业配置
         String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
         String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
@@ -897,10 +903,12 @@ public class BastionEventHandler {
         int cost = resupply.ammoCost != null ? Math.max(0, resupply.ammoCost) : ammoCost;
 
         java.util.List<PlannedResupply> planned = new java.util.ArrayList<>();
+        int validConfiguredItems = 0;
         for (FactionDataLoader.ResupplyItem ri : resupply.items) {
             if (ri.id == null || ri.id.isBlank()) continue;
             ItemStack template = createResupplyStack(ri);
             if (template.isEmpty()) continue;
+            validConfiguredItems++;
             Item item = template.getItem();
             if (item == net.minecraft.world.item.Items.AIR) continue;
             int maxCap = ri.max > 0 ? ri.max : 64;
@@ -914,6 +922,11 @@ public class BastionEventHandler {
             if (canGive > 0) planned.add(new PlannedResupply(template, canGive));
         }
 
+        if (validConfiguredItems == 0) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c该职业弹药补给配置中没有有效物品。"));
+            return;
+        }
         if (planned.isEmpty()) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
             return;
@@ -946,7 +959,7 @@ public class BastionEventHandler {
 
         BastionManager.getInstance().recordResupply(player.getUUID());
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§a▸ 已补充: §f" + detail + "  §7| 消耗 §b" + cost + " 载具弹药 §7| 冷却5分钟"));
+            "§a▸ 已补充: §f" + detail + "  §7| 消耗 §b" + cost + " 载具弹药 §7| 无冷却"));
     }
 
     private record PlannedResupply(ItemStack template, int count) {

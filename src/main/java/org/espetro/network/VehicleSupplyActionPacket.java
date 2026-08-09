@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.espetro.Espetro;
+import org.espetro.bastion.BastionEventHandler;
 import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
 import org.espetro.bastion.FobSupplyTracker;
@@ -33,7 +34,7 @@ public final class VehicleSupplyActionPacket {
         UNLOAD_AMMO,
         LOAD_CONSTRUCTION,
         UNLOAD_CONSTRUCTION,
-        /** Reserved for wire compatibility; infantry resupply is ammo-crate only. */
+        /** 任何载具轮盘的“补给步兵”，消耗载具弹药。 */
         RESUPPLY_INFANTRY,
         CHANGE_CLASS
     }
@@ -72,7 +73,8 @@ public final class VehicleSupplyActionPacket {
         }
 
         if (action == Action.RESUPPLY_INFANTRY) {
-            player.displayClientMessage(Component.literal("§c步兵只能使用己方弹药箱补给。"), true);
+            BastionEventHandler.performVehicleResupply(player, interaction.supply(),
+                LogisticsConfig.get().defaultResupplyAmmoCost);
             sendSync(player, interaction);
             return;
         }
@@ -242,8 +244,7 @@ public final class VehicleSupplyActionPacket {
         VehicleConfig.VehicleTypeConfig config =
             VehicleConfig.getVehicleConfig(factionId, vehicleType);
         String team = Espetro.getPlayerTeam(player);
-        if (entity == null || config == null || team == null
-            || (!config.supplyVeh && !config.fightVeh)) return null;
+        if (entity == null || config == null || team == null) return null;
 
         VehicleManager.VehicleSupplyState supply =
             vehicles.getOrCreateVehicleSupply(vehicleId, factionId, vehicleType);
@@ -263,7 +264,8 @@ public final class VehicleSupplyActionPacket {
                     .findVehicleServiceRadio(level, vehiclePos, team);
             }
         }
-        boolean canTransferAmmo = mainBase || radio != null;
+        boolean supplyLike = config.supplyVeh || config.fightVeh;
+        boolean canTransferAmmo = supplyLike && (mainBase || radio != null);
         boolean canTransferConstruction = config.supplyVeh && canTransferAmmo;
         return new Interaction(vehicleId, factionId, config, supply, mainBase, radio,
             canTransferAmmo, canTransferConstruction);

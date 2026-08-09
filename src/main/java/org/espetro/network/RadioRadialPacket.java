@@ -322,7 +322,7 @@ public class RadioRadialPacket {
     }
 
     private void handleResupply(ServerPlayer player) {
-        // 电台补给必须在己方 Radio 旁；统一复用库存、缺口与冷却结算，
+        // 电台补给必须在己方 Radio 旁；统一复用库存与缺口结算（无冷却），
         // 不能用 equipPlayer 整套清包重发绕过 Radio 弹药库存。
         BastionData radio = findFriendlyRadioNearby(player, pos);
         if (radio == null) {

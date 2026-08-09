@@ -31,6 +31,7 @@ import org.espetro.mapconfig.VehSpawnSnapshot;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TroopCountManager;
 
 import javax.annotation.Nullable;
@@ -63,6 +64,10 @@ public class VehicleManager {
         new ResourceLocation("dragonrise_reforge", "ammo_supply_station");
     /** Lateral offset from pit pose, perpendicular to yaw (blocks). */
     private static final double SUPPLY_SIDE_OFFSET = 6.0;
+    /** 主重生点补给站相对重生点的侧向偏移（格）。 */
+    private static final double MAIN_BASE_SUPPLY_SIDE_OFFSET = 3.0;
+    /** 主重生点补给站识别 tag。 */
+    private static final String MAIN_BASE_SUPPLY_TAG = "espetro_main_base_supply_station";
     /** Bound first-wave chunk work so deployment never creates an I/O spike. */
     private static final int INITIAL_CHUNKS_STARTED_PER_TICK = 2;
     private static final int INITIAL_CHUNKS_MAX_IN_FLIGHT = 4;
@@ -628,7 +633,7 @@ public class VehicleManager {
                 key.slotIndex(),
                 key.team(),
                 true);
-            // 首发生成后开始该类型的再次部署冷却；首发自身不携带任何补给。
+            // 首发生成后开始该类型的再次部署冷却；首发同样按类型自动装填。
             startRespawnCooldown(key.team(), key.factionId(), key.vehicleType());
             ActiveVehicleData tracked = activeVehicleData.get(vehicleEntity.getUUID());
             if (tracked != null) {
@@ -779,10 +784,14 @@ public class VehicleManager {
         activeVehicleData.put(vehicleId, new ActiveVehicleData(
             factionId, vehicleType, slotIndex, normalizedTeam, initial,
             vehicle.level().dimension(), vehicle.blockPosition().immutable()));
-        // 初始化载具补给库存
+        // 初始化载具补给库存；所有新生成的载具都按类型自动装填
         if (vcfg != null && vcfg.supplyCapacity > 0) {
             VehicleSupplyState supply = new VehicleSupplyState(vcfg.supplyCapacity, vcfg.canCarryConstruction());
-            // 初始为空；战斗与补给载具都必须由玩家主动装载。
+            if (vcfg.supplyVeh) {
+                supply.fillHalf();
+            } else {
+                supply.fillAmmo();
+            }
             vehicleSupplies.put(vehicleId, supply);
         }
     }
@@ -871,6 +880,11 @@ public class VehicleManager {
         VehicleConfig.VehicleTypeConfig vcfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
         if (vcfg == null || vcfg.supplyCapacity <= 0) return null;
         VehicleSupplyState supply = new VehicleSupplyState(vcfg.supplyCapacity, vcfg.canCarryConstruction());
+        if (vcfg.supplyVeh) {
+            supply.fillHalf();
+        } else {
+            supply.fillAmmo();
+        }
         vehicleSupplies.put(entityId, supply);
         return supply;
     }
@@ -984,7 +998,7 @@ public class VehicleManager {
 
     /**
      * 最终提交换装时使用的权威校验。除阵营、加载状态、五格视线外，目标还必须
-     * 仍是当前编制声明的补给载具，防止客户端伪造或使用过期轮盘状态。
+     * 仍是当前编制声明的战斗/补给载具，防止客户端伪造或使用过期轮盘状态。
      */
     public boolean canPlayerChangeClassAtVehicle(ServerPlayer player, UUID vehicleId) {
         if (!canPlayerInteractWithVehicle(player, vehicleId)) return false;
@@ -1367,6 +1381,108 @@ public class VehicleManager {
             mappedSupplyStations.remove(snapshot.id());
         }
         return removed;
+    }
+
+    /**
+     * 开局时在双方主重生点旁各生成一个 Dragonrise 弹药补给站实体。
+     * 幂等：先生成前清除本维度旧的主重生点补给站。
+     */
+    public int spawnMainBaseSupplyStations(ServerLevel level) {
+        if (level == null) return 0;
+        clearMainBaseSupplyStations(level);
+
+        EntityType<?> stationType = BuiltInRegistries.ENTITY_TYPE.getOptional(SUPPLY_STATION_ID).orElse(null);
+        if (stationType == null) {
+            Espetro.LOGGER.warn("未注册实体 {}，跳过主重生点补给站生成", SUPPLY_STATION_ID);
+            return 0;
+        }
+
+        int spawned = 0;
+        for (String team : new String[]{"ATTACK", "DEFEND"}) {
+            SpawnPointConfig.SpawnPoint spawn = SpawnPointConfig.getSpawnPoint(team);
+            if (spawn == null) continue;
+            if (spawnOneMainBaseSupply(level, stationType, spawn, team)) {
+                spawned++;
+            }
+        }
+        Espetro.LOGGER.info("主重生点弹药补给站生成完成: {} 个 (维度 {})",
+            spawned, level.dimension().location());
+        return spawned;
+    }
+
+    /**
+     * 移除本维度由本类生成的主重生点补给站实体。
+     */
+    public int clearMainBaseSupplyStations(@Nullable ServerLevel level) {
+        if (level == null) return 0;
+        String dimension = level.dimension().location().toString();
+        int removed = 0;
+        for (SupplyStationSnapshot snapshot
+                : new ArrayList<>(mappedSupplyStations.values())) {
+            if (!dimension.equals(snapshot.dimension())) {
+                continue;
+            }
+            Entity entity = level.getEntity(snapshot.id());
+            if (entity != null && !entity.isRemoved()
+                && entity.getTags().contains(MAIN_BASE_SUPPLY_TAG)) {
+                entity.discard();
+                removed++;
+                mappedSupplyStations.remove(snapshot.id());
+            }
+        }
+        return removed;
+    }
+
+    private boolean spawnOneMainBaseSupply(ServerLevel level, EntityType<?> stationType,
+                                           SpawnPointConfig.SpawnPoint spawn, String team) {
+        BlockPos stationPos = getMainBaseSupplyPosition(spawn);
+        if (!level.hasChunkAt(stationPos)) {
+            Espetro.LOGGER.warn("主重生点补给站区块尚未预载，跳过 {} ({})",
+                stationPos, team);
+            return false;
+        }
+
+        Entity entity = stationType.create(level);
+        if (entity == null) {
+            Espetro.LOGGER.warn("无法创建主重生点补给站实体 at {} ({})", stationPos, team);
+            return false;
+        }
+
+        double x = stationPos.getX() + 0.5;
+        double y = stationPos.getY();
+        double z = stationPos.getZ() + 0.5;
+        entity.setPos(x, y, z);
+        entity.setYRot(spawn.yaw);
+        entity.setYHeadRot(spawn.yaw);
+        entity.setCustomName(Component.literal(SUPPLY_STATION_DISPLAY_NAME));
+        entity.setCustomNameVisible(false);
+        entity.addTag(MAIN_BASE_SUPPLY_TAG);
+        entity.addTag(MAIN_BASE_SUPPLY_TAG + "_team_" + team);
+        applySupplyStationMapTags(entity, team, "main_base_" + team);
+
+        // Full FE if the station exposes energy — never Entity#load partial NBT.
+        fillVehicleEnergy(entity, Integer.MAX_VALUE);
+
+        if (!level.addFreshEntity(entity)) {
+            entity.discard();
+            Espetro.LOGGER.warn("主重生点补给站未能加入世界 at {} ({})", stationPos, team);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 主重生点朝向右侧 3 格，Y 与重生点同高。
+     */
+    public static BlockPos getMainBaseSupplyPosition(SpawnPointConfig.SpawnPoint spawn) {
+        float yawRad = spawn.yaw * ((float) Math.PI / 180f);
+        // Minecraft yaw: 0 = +Z，90 = -X。右侧 = (-cos, -sin)
+        double rightX = -Mth.cos(yawRad);
+        double rightZ = -Mth.sin(yawRad);
+        int x = Mth.floor(spawn.x + rightX * MAIN_BASE_SUPPLY_SIDE_OFFSET);
+        int y = Mth.floor(spawn.y);
+        int z = Mth.floor(spawn.z + rightZ * MAIN_BASE_SUPPLY_SIDE_OFFSET);
+        return new BlockPos(x, y, z);
     }
 
     private boolean spawnOnePadSupply(ServerLevel level, EntityType<?> stationType,

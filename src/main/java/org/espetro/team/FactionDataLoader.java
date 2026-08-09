@@ -771,10 +771,10 @@ public class FactionDataLoader {
         /** 单类载具的固定部署坐标配置。 */
         public VehicleDeploymentData deployment;
         /** 补给载具：可装载弹药和建材，默认容量 3000 */
-        @SerializedName("supplyveh")
+        @SerializedName(value = "supplyveh", alternate = {"supply_veh", "supplyVeh"})
         public Boolean supplyVeh;
         /** 步兵战斗载具：仅弹药，默认容量 500，可用于更换职业 */
-        @SerializedName("fightveh")
+        @SerializedName(value = "fightveh", alternate = {"fight_veh", "fightVeh"})
         public Boolean fightVeh;
         /** 载具补给总容量（覆盖默认值） */
         public Integer capacity;

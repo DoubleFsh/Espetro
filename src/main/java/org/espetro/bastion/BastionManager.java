@@ -78,9 +78,9 @@ public class BastionManager {
     private final Map<UUID, net.minecraft.world.phys.Vec3> playerLockPositions = new HashMap<>();
 
     // 弹药补给追踪（仅冷却，无次数限制）
-    private final Map<UUID, Long> resupplyCooldowns = new HashMap<>(); // playerUUID -> 最后补给时间戳
+    private final Map<UUID, Long> resupplyCooldowns = new HashMap<>(); // 已取消冷却，仅保留兼容
 
-    /** 弹药补给冷却时间（毫秒） */
+    /** 弹药补给冷却时间（毫秒）；已取消，保留常量仅为兼容。 */
     public static final long RESUPPLY_COOLDOWN_MS = 5 * 60 * 1000;
 
     // 从 JSON 配置读取的值
@@ -1466,41 +1466,29 @@ public class BastionManager {
         return null;
     }
 
-    // ==================== 弹药补给（仅冷却，无次数限制）====================
+    // ==================== 弹药补给（无冷却，无次数限制）====================
 
     /**
-     * 尝试补给弹药（仅检查冷却）
+     * 尝试补给弹药（已取消冷却，始终放行）
      * @return null表示成功，String表示失败原因
      */
     @Nullable
     public String tryResupply(UUID playerId) {
-        Long lastResupply = resupplyCooldowns.get(playerId);
-        if (lastResupply != null) {
-            long remaining = RESUPPLY_COOLDOWN_MS - (System.currentTimeMillis() - lastResupply);
-            if (remaining > 0) {
-                int sec = (int) (remaining / 1000);
-                int min = sec / 60;
-                sec %= 60;
-                return "§c弹药补给冷却中！剩余 " + min + "分" + sec + "秒";
-            }
-        }
         return null;
     }
 
     /**
-     * 记录补给成功（更新冷却时间）
+     * 记录补给成功（已取消冷却，不再记录时间）
      */
     public void recordResupply(UUID playerId) {
-        resupplyCooldowns.put(playerId, System.currentTimeMillis());
+        // 无冷却：保留空实现以兼容旧调用。
     }
 
     /**
-     * 获取玩家补给冷却剩余秒数
+     * 获取玩家补给冷却剩余秒数（已取消，恒为 0）
      */
     public int getResupplyCooldownRemaining(UUID playerId) {
-        Long last = resupplyCooldowns.get(playerId);
-        if (last == null) return 0;
-        return (int) Math.max(0, (RESUPPLY_COOLDOWN_MS - (System.currentTimeMillis() - last)) / 1000);
+        return 0;
     }
 
     /**

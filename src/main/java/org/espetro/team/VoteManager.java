@@ -10,7 +10,7 @@ import java.util.*;
 
 /**
  * 指挥官投票管理器
- * 支持分阶段投票：先守方(20s)，后攻方(20s)
+ * 支持分阶段投票：先攻方(20s)，后守方(20s)
  */
 public class VoteManager {
 

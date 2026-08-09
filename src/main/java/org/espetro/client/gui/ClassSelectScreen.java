@@ -25,11 +25,10 @@ import java.util.Objects;
  */
 public class ClassSelectScreen extends MutilScreen {
 
-    /** 图片下方：名称行 + 票数行，避免与图片重叠。 */
-    private static final int CARD_FOOTER_PAD = 4;
+    /** 最底部一行同时放名称与票数，图片区尽量放大。 */
+    private static final int CARD_FOOTER_PAD = 2;
     private static final int CARD_NAME_LINE = 11;
-    private static final int CARD_VOTE_LINE = 10;
-    private static final int CARD_FOOTER_H = CARD_FOOTER_PAD + CARD_NAME_LINE + CARD_VOTE_LINE;
+    private static final int CARD_FOOTER_H = CARD_FOOTER_PAD + CARD_NAME_LINE;
     /** 约 12 逻辑像素观感的小字（相对默认字号缩小）。 */
     private static final float CARD_NAME_SCALE = 0.85f;
 
@@ -72,14 +71,22 @@ public class ClassSelectScreen extends MutilScreen {
         int visibleRows = 2;
         int cardGap = 6;
         int panelW = Math.min(this.width - 16,
-            24 + columns * 240 + (columns - 1) * cardGap);
+            24 + columns * 360 + (columns - 1) * cardGap);
         int cardW = (panelW - 24 - (columns - 1) * cardGap) / columns;
         int startY = EspetroMutilWidgets.PHASE_HEADER_HEIGHT + 8;
         int availableH = Math.max(2 * 67 + cardGap, this.height - startY - 18);
         int maxCardH = Math.max(67, (availableH - cardGap) / visibleRows);
-        int imageH = Math.max(36, Math.min(
-            Math.min(140, Math.round(cardW * 270.0f / 512.0f)), maxCardH - CARD_FOOTER_H));
-        int cardH = imageH + CARD_FOOTER_H;
+        // 图片画框固定 16:9 横向：先按卡片宽计算高度，放不下时再按高度反推宽度
+        int imageW = Math.max(1, cardW - 6);
+        int imageH = Math.max(1, imageW * 9 / 16);
+        int maxImageSlotH = Math.max(36, maxCardH - CARD_FOOTER_H);
+        int imageSlotH = imageH + 6;
+        if (imageSlotH > maxImageSlotH) {
+            imageSlotH = maxImageSlotH;
+            imageH = Math.max(1, imageSlotH - 6);
+            imageW = Math.max(1, imageH * 16 / 9);
+        }
+        int cardH = imageSlotH + CARD_FOOTER_H;
         int panelX = (this.width - panelW) / 2;
 
         boolean selectingOpen = timeRemaining > 0;
@@ -114,7 +121,7 @@ public class ClassSelectScreen extends MutilScreen {
             int y = startY + row * (cardH + cardGap);
 
             boolean selected = faction.id != null && faction.id.equals(lastSelectedFaction);
-            FactionCardButton card = new FactionCardButton(x, y, cardW, cardH, imageH, faction,
+            FactionCardButton card = new FactionCardButton(x, y, cardW, cardH, imageSlotH, faction,
                 selectingOpen, selected, () -> selectFaction(faction.id));
             root.addChild(card);
             factionCards.put(faction.id, card);
@@ -184,10 +191,15 @@ public class ClassSelectScreen extends MutilScreen {
             }
             graphics.renderOutline(bx, by, bw, bh, border);
 
-            int imageX = bx + 3;
             int imageY = by + 3;
             int imageW = Math.max(1, bw - 6);
-            int imageH = Math.max(1, imageHeight - 6);
+            int imageH = Math.max(1, imageW * 9 / 16);
+            int imageSlotH = Math.max(1, imageHeight - 6);
+            if (imageH > imageSlotH) {
+                imageH = imageSlotH;
+                imageW = Math.max(1, imageH * 16 / 9);
+            }
+            int imageX = bx + Math.max(0, (bw - imageW) / 2);
 
             if (texture != null) {
                 graphics.setColor(1f, 1f, 1f, enabled ? 1f : 0.55f);
@@ -205,25 +217,25 @@ public class ClassSelectScreen extends MutilScreen {
                     EspetroMutilWidgets.DIM, false);
             }
 
-            // 图片下方：编制名一行小字；其下为选中/票数，避免与名称重叠。
-            int nameY = by + imageHeight + 2;
-            String nameOnly = faction.name == null ? "" : faction.name;
-            String drawnName = EspetroMutilWidgets.trimToWidth(nameOnly, Math.max(8,
-                (int) ((bw - 8) / CARD_NAME_SCALE)));
-            int nameColor = enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM;
-            int nameW = Math.round(Minecraft.getInstance().font.width(
-                EspetroMutilWidgets.stripFormatting(drawnName)) * CARD_NAME_SCALE);
-            EspetroMutilWidgets.drawScaledString(graphics, drawnName,
-                bx + Math.max(0, (bw - nameW) / 2), nameY, nameColor, CARD_NAME_SCALE);
+            // 票数：外框右下角，只显示数字
+            String voteText = String.valueOf(faction.voteCount);
+            int voteW = Minecraft.getInstance().font.width(voteText);
+            int voteX = bx + bw - 4 - voteW;
+            int voteY = by + bh - 10;
+            graphics.drawString(Minecraft.getInstance().font, Component.literal(voteText),
+                voteX, voteY, enabled ? 0xFFE8B85C : EspetroMutilWidgets.DIM, false);
 
-            int voteY = nameY + CARD_NAME_LINE;
-            String vote = (selected ? "§a✓ " : "") + "§e票 " + faction.voteCount;
-            String drawnVote = EspetroMutilWidgets.trimToWidth(vote, Math.max(8, bw - 8));
-            int voteW = Minecraft.getInstance().font.width(
-                EspetroMutilWidgets.stripFormatting(drawnVote));
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(drawnVote),
-                bx + Math.max(4, (bw - voteW) / 2), voteY,
-                enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM, false);
+            // 名称：固定放在外框最底下一行，与右下角票数同一行
+            String nameOnly = faction.name == null ? "" : faction.name;
+            int nameMaxW = Math.max(8,
+                (int) ((bw - 8 - voteW) / CARD_NAME_SCALE));
+            String drawnName = EspetroMutilWidgets.trimToWidth(
+                (selected ? "§a✔ " : "") + nameOnly, nameMaxW);
+            int nameColor = enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM;
+            int nameX = bx + 4;
+            int nameY = by + bh - 10;
+            EspetroMutilWidgets.drawScaledString(graphics, drawnName,
+                nameX, nameY, nameColor, CARD_NAME_SCALE);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }

@@ -11,7 +11,7 @@ import java.util.*;
 /**
  * 编制选择管理器
  * 队伍全员投票选择编制
- * 支持分阶段：先守方(30s)，后攻方(30s)
+ * 支持分阶段：先攻方(30s)，后守方(30s)
  */
 public class ClassSelectManager {
 

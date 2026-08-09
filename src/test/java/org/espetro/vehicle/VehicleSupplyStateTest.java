@@ -102,4 +102,40 @@ class VehicleSupplyStateTest {
         combatVehicle.fightVeh = true;
         assertFalse(combatVehicle.canChangeClass());
     }
+
+    @Test
+    void legacyVehicleWithoutSupplyFlagsDefaultsToCombatVehicle() {
+        var legacyVehicle = new VehicleConfig.VehicleTypeConfig(1, 10);
+
+        VehicleConfig.applySupplyProfile(legacyVehicle, null, null, null);
+
+        assertTrue(legacyVehicle.fightVeh);
+        assertFalse(legacyVehicle.supplyVeh);
+        assertEquals(500, legacyVehicle.supplyCapacity);
+        assertTrue(legacyVehicle.legacyDefaultedToFightVehicle);
+    }
+
+    @Test
+    void explicitFalseSupplyFlagsDisableLegacyFallback() {
+        var disabledVehicle = new VehicleConfig.VehicleTypeConfig(1, 10);
+
+        VehicleConfig.applySupplyProfile(disabledVehicle, false, false, null);
+
+        assertFalse(disabledVehicle.fightVeh);
+        assertFalse(disabledVehicle.supplyVeh);
+        assertEquals(300, disabledVehicle.supplyCapacity);
+        assertFalse(disabledVehicle.legacyDefaultedToFightVehicle);
+    }
+
+    @Test
+    void explicitSupplyVehicleKeepsSupplyCapacityDefault() {
+        var supplyVehicle = new VehicleConfig.VehicleTypeConfig(1, 10);
+
+        VehicleConfig.applySupplyProfile(supplyVehicle, true, null, null);
+
+        assertTrue(supplyVehicle.supplyVeh);
+        assertFalse(supplyVehicle.fightVeh);
+        assertEquals(3000, supplyVehicle.supplyCapacity);
+        assertFalse(supplyVehicle.legacyDefaultedToFightVehicle);
+    }
 }

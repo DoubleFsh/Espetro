@@ -38,8 +38,8 @@ import java.util.function.Consumer;
  * 管理游戏各阶段流程
  *
  * 阶段流转（按流程图）：
- * WAITING → DEFEND_COMMANDER_VOTE(20s) → ATTACK_COMMANDER_VOTE(20s)
- * → DEFEND_FACTION_SELECT(30s) → ATTACK_FACTION_SELECT(30s) → FACTION_REVEAL(5s)
+ * WAITING → ATTACK_COMMANDER_VOTE(20s) → DEFEND_COMMANDER_VOTE(20s)
+ * → ATTACK_FACTION_SELECT(30s) → DEFEND_FACTION_SELECT(30s) → FACTION_REVEAL(5s)
  * → DEPLOYING(240s, 守方部署防线/攻方屏障内等待) → BATTLE
  */
 public class GameStateManager {
@@ -348,7 +348,7 @@ public class GameStateManager {
         broadcastTeamSelectState(false);
         Espetro.LOGGER.info("自动分配队伍完成: 进攻{}人 防守{}人",
             countPlayersOnTeam("ATTACK"), countPlayersOnTeam("DEFEND"));
-        startDefendCommanderVote();
+        startAttackCommanderVote();
     }
 
     /** 将一个玩家的队伍分配应用到所有相关系统。 */
@@ -422,7 +422,7 @@ public class GameStateManager {
             finishTeamSelect();
             return;
         }
-        startDefendCommanderVote();
+        startAttackCommanderVote();
     }
 
     private void finishTeamSelect() {
@@ -435,7 +435,7 @@ public class GameStateManager {
         midGameJoiners.addAll(waitingForTeam);
         waitingForTeam.clear();
         broadcastTeamSelectState(false);
-        startDefendCommanderVote();
+        startAttackCommanderVote();
     }
 
     private void broadcastTeamSelectState() {
@@ -518,6 +518,7 @@ public class GameStateManager {
      */
     private void startAttackCommanderVote() {
         setPhase(GamePhase.ATTACK_COMMANDER_VOTE);
+        VoteManager.getInstance().initPlayers();
         VoteManager.getInstance().startAttackVote();
     }
 
@@ -526,7 +527,6 @@ public class GameStateManager {
      */
     private void startDefendFactionSelect() {
         setPhase(GamePhase.DEFEND_FACTION_SELECT);
-        ClassSelectManager.getInstance().initFactionPool();
         ClassSelectManager.getInstance().startDefendSelecting();
     }
 
@@ -535,6 +535,7 @@ public class GameStateManager {
      */
     private void startAttackFactionSelect() {
         setPhase(GamePhase.ATTACK_FACTION_SELECT);
+        ClassSelectManager.getInstance().initFactionPool();
         ClassSelectManager.getInstance().startAttackSelecting();
     }
 
@@ -1031,28 +1032,28 @@ public class GameStateManager {
                 VoteManager.getInstance().onServerTick();
                 if (VoteManager.getInstance().isCurrentVoteTimedOut()) {
                     VoteManager.getInstance().finishCurrentVote();
-                    startAttackCommanderVote();
+                    startAttackFactionSelect();
                 }
                 break;
             case ATTACK_COMMANDER_VOTE:
                 VoteManager.getInstance().onServerTick();
                 if (VoteManager.getInstance().isCurrentVoteTimedOut()) {
                     VoteManager.getInstance().finishCurrentVote();
-                    startDefendFactionSelect();
+                    startDefendCommanderVote();
                 }
                 break;
             case DEFEND_FACTION_SELECT:
                 ClassSelectManager.getInstance().onServerTick();
                 if (ClassSelectManager.getInstance().isCurrentSelectTimedOut()) {
                     ClassSelectManager.getInstance().finishCurrentSelecting();
-                    startAttackFactionSelect();
+                    startFactionReveal();
                 }
                 break;
             case ATTACK_FACTION_SELECT:
                 ClassSelectManager.getInstance().onServerTick();
                 if (ClassSelectManager.getInstance().isCurrentSelectTimedOut()) {
                     ClassSelectManager.getInstance().finishCurrentSelecting();
-                    startFactionReveal();
+                    startDefendFactionSelect();
                 }
                 break;
             case FACTION_REVEAL:

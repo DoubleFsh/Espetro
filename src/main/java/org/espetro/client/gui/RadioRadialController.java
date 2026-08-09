@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * 右键己方 Radio → AuraTip：
- * 变更职业（二层职业列表，含 icon，无预览）。步兵补给只在弹药箱进行。
+ * 变更职业（二层职业列表，含 icon，无预览）。步兵补给在弹药箱或载具轮盘进行。
  */
 public final class RadioRadialController {
 

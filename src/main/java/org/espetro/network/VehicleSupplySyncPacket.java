@@ -61,11 +61,13 @@ public final class VehicleSupplySyncPacket {
     public boolean isFightVehicle() { return fightVehicle; }
     public boolean canTransferAmmo() { return transferAmmo; }
     public boolean canTransferConstruction() { return transferConstruction; }
+    /** 任何载具均可从自身弹药向步兵补给。 */
+    public boolean canResupplyInfantry() { return !request; }
     public int getTransferIntervalTicks() { return transferIntervalTicks; }
     public boolean canCarryConstruction() { return supplyVehicle; }
     public boolean isRequest() { return request; }
     public boolean hasAnyAction() {
-        return transferAmmo || transferConstruction || supplyVehicle;
+        return transferAmmo || transferConstruction || canResupplyInfantry();
     }
 
     public static VehicleSupplySyncPacket read(FriendlyByteBuf buf) {
