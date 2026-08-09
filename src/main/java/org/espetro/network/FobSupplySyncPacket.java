@@ -16,18 +16,23 @@ public class FobSupplySyncPacket {
     private final int maxConstruction;
     private final int maxAmmunition;
     private final boolean inRange;
+    private final int radioHealth;
+    private final int radioMaxHealth;
 
     public FobSupplySyncPacket(boolean inRange, int construction, int ammunition,
-                               int maxConstruction, int maxAmmunition) {
+                               int maxConstruction, int maxAmmunition,
+                               int radioHealth, int radioMaxHealth) {
         this.inRange = inRange;
         this.construction = construction;
         this.ammunition = ammunition;
         this.maxConstruction = maxConstruction;
         this.maxAmmunition = maxAmmunition;
+        this.radioHealth = Math.max(0, radioHealth);
+        this.radioMaxHealth = Math.max(1, radioMaxHealth);
     }
 
     public static FobSupplySyncPacket outOfRange() {
-        return new FobSupplySyncPacket(false, 0, 0, 0, 0);
+        return new FobSupplySyncPacket(false, 0, 0, 0, 0, 0, 1);
     }
 
     public static FobSupplySyncPacket read(FriendlyByteBuf buf) {
@@ -36,7 +41,7 @@ public class FobSupplySyncPacket {
             return outOfRange();
         }
         return new FobSupplySyncPacket(true, buf.readVarInt(), buf.readVarInt(),
-            buf.readVarInt(), buf.readVarInt());
+            buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -46,6 +51,8 @@ public class FobSupplySyncPacket {
             buf.writeVarInt(ammunition);
             buf.writeVarInt(maxConstruction);
             buf.writeVarInt(maxAmmunition);
+            buf.writeVarInt(radioHealth);
+            buf.writeVarInt(radioMaxHealth);
         }
     }
 
@@ -54,6 +61,8 @@ public class FobSupplySyncPacket {
     public int getAmmunition() { return ammunition; }
     public int getMaxConstruction() { return maxConstruction; }
     public int getMaxAmmunition() { return maxAmmunition; }
+    public int getRadioHealth() { return radioHealth; }
+    public int getRadioMaxHealth() { return radioMaxHealth; }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {

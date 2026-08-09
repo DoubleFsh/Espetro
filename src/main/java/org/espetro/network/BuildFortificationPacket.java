@@ -34,7 +34,7 @@ public class BuildFortificationPacket {
                 player.sendSystemMessage(Component.literal(err));
             } else {
                 player.sendSystemMessage(Component.literal(
-                    "§e已进入工事预览：铁铲左键确认，右键取消。"));
+                    "§e已进入工事预览：左键确认，右键取消。"));
             }
         });
         ctx.get().setPacketHandled(true);

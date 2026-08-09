@@ -106,10 +106,6 @@ public final class FortificationPlacementController {
             if (!event.isAttack()) return;
             event.setCanceled(true);
             event.setSwingHand(false);
-            if (mc.player.getMainHandItem().getItem() != Items.IRON_SHOVEL) {
-                mc.player.displayClientMessage(Component.literal("§e需要手持工兵铲（铁铲）确认施工范围。"), true);
-                return;
-            }
             if (!valid || anchor == null) {
                 mc.player.displayClientMessage(Component.literal("§c红色范围无法放置工事。"), true);
                 return;

@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** Vehicle deployment snapshot; background updates never force-open a screen. */
+/** Vehicle info snapshot (status/cooldown); background updates never force-open a screen. */
 public final class VehicleDeployScreenPacket {
 
     private final boolean openScreen;

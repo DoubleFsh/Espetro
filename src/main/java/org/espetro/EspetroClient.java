@@ -140,7 +140,7 @@ public class EspetroClient {
         }
     }
 
-    /** 右键己方 Radio：打开电台 AuraTip 轮盘。 */
+    /** 右键己方 Radio：更换职业已移至弹药箱，此处不再打开轮盘。 */
     private static void onRightClickBlock(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
         if (!event.getLevel().isClientSide()) {
             return;
@@ -154,10 +154,6 @@ public class EspetroClient {
                 == net.minecraft.world.item.Items.IRON_SHOVEL) {
             return;
         }
-        // 客户端先请求服务端校验并推送职业列表；成功后再开轮盘
-        org.espetro.client.gui.RadioRadialController.requestOpen(event.getPos());
-        event.setCanceled(true);
-        event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
     }
 
     private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {

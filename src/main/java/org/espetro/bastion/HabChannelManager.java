@@ -59,7 +59,7 @@ public final class HabChannelManager {
         String error = FortificationManager.getInstance()
             .beginPreview(player, FortificationManager.BUILTIN_HAB);
         player.sendSystemMessage(Component.literal(error == null
-            ? "§e铁铲左键确认兵站施工范围，右键取消。" : error));
+            ? "§e左键确认兵站施工范围，右键取消。" : error));
     }
 
     public void cancel(UUID playerId, @Nullable String reason) {

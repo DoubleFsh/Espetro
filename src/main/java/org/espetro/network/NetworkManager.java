@@ -225,6 +225,15 @@ public class NetworkManager {
             VehicleDeployScreenPacket::handle
         );
 
+        // 载具信息请求包（C→S）
+        NET.registerMessage(
+            nextId(),
+            RequestVehicleInfoPacket.class,
+            RequestVehicleInfoPacket::write,
+            RequestVehicleInfoPacket::read,
+            RequestVehicleInfoPacket::handle
+        );
+
         // 复活点选择界面包（S→C）
         NET.registerMessage(
             nextId(),
@@ -339,6 +348,8 @@ public class NetworkManager {
             VehicleSupplySyncPacket::write, VehicleSupplySyncPacket::read, VehicleSupplySyncPacket::handle);
         NET.registerMessage(nextId(), FobSupplySyncPacket.class,
             FobSupplySyncPacket::write, FobSupplySyncPacket::read, FobSupplySyncPacket::handle);
+        NET.registerMessage(nextId(), OutpostSupplySyncPacket.class,
+            OutpostSupplySyncPacket::write, OutpostSupplySyncPacket::read, OutpostSupplySyncPacket::handle);
         NET.registerMessage(nextId(), BuildFortificationPacket.class,
             BuildFortificationPacket::write, BuildFortificationPacket::read, BuildFortificationPacket::handle);
         NET.registerMessage(nextId(), FortificationCatalogPacket.class,
@@ -1059,10 +1070,7 @@ public class NetworkManager {
     }
 
     /**
-     * 向指挥官发送载具部署界面
-     */
-    /**
-     * 向指挥官发送载具部署界面
+     * 向玩家发送只读载具信息界面
      */
     public static void sendVehicleDeployScreen(ServerPlayer player, String factionId) {
         sendVehicleDeployScreen(player, factionId, true);
@@ -1070,6 +1078,11 @@ public class NetworkManager {
 
     public static void syncVehicleDeployScreen(ServerPlayer player, String factionId) {
         sendVehicleDeployScreen(player, factionId, false);
+    }
+
+    /** 客户端请求打开只读载具信息面板。 */
+    public static void requestVehicleInfo() {
+        NET.sendToServer(new RequestVehicleInfoPacket());
     }
 
     private static void sendVehicleDeployScreen(ServerPlayer player, String factionId,

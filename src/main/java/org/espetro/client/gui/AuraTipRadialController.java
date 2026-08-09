@@ -383,7 +383,7 @@ public final class AuraTipRadialController {
         if (cachedIsCommander) {
             builder = builder.slot("espetro.vehicle", VEHICLE,
                 action(RadialActionPacket.Action.DEPLOY_VEHICLE),
-                Component.literal("载具部署"), "#FFB0A070");
+                Component.literal("载具信息"), "#FFB0A070");
         }
         // 指挥官或同步到了可用技能（含小队长 usableBy）时显示入口
         if (cachedIsCommander || (hasSkillSnapshot && !cachedSkills.isEmpty())) {

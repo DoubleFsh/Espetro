@@ -22,7 +22,7 @@ public record RadialActionPacket(Action action) {
         FOB_STATUS,
         /** 在己方 Radio 建造半径内部署 HAB；追加在末尾以保持旧 ordinal。 */
         DEPLOY_HAB,
-        /** 打开载具部署面板（原载具部署木棍功能）。 */
+        /** 打开载具信息面板（只读状态/冷却）。 */
         DEPLOY_VEHICLE
     }
 
@@ -56,7 +56,7 @@ public record RadialActionPacket(Action action) {
     private static void beginFortification(ServerPlayer player, String id) {
         String error = FortificationManager.getInstance().beginPreview(player, id);
         if (error != null) player.sendSystemMessage(Component.literal(error));
-        else player.sendSystemMessage(Component.literal("§e铁铲左键确认施工范围，右键取消。"));
+        else player.sendSystemMessage(Component.literal("§e左键确认施工范围，右键取消。"));
     }
 
     private static void deployRally(ServerPlayer player) {

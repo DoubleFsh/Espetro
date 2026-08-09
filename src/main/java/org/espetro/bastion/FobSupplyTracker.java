@@ -108,6 +108,7 @@ public final class FobSupplyTracker {
         lastSignatures.clear();
         playerRadios.clear();
         radioSubscribers.clear();
+        OutpostSupplyTracker.clearAll();
     }
 
     private static void syncPlayer(ServerPlayer player, boolean force) {
@@ -135,13 +136,23 @@ public final class FobSupplyTracker {
         LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
         int maxConstruction = Math.max(1, config.maxConstruction);
         int maxAmmunition = Math.max(1, config.maxAmmunition);
+        BastionData healthRadio = BastionManager.getInstance()
+            .findNearestRadio(level, player.blockPosition(), team,
+                LogisticsConfig.get().radioBuildRadius);
+        int radioHealth = 0;
+        int radioMaxHealth = 1;
+        if (healthRadio != null) {
+            radioHealth = (int) Math.ceil(healthRadio.getCoreHealth());
+            radioMaxHealth = Math.max(1, BastionManager.getInstance().getArmorStandHealth());
+        }
         String signature = "1|" + construction + '|' + ammunition + '|'
-            + maxConstruction + '|' + maxAmmunition;
+            + maxConstruction + '|' + maxAmmunition + '|'
+            + radioHealth + '|' + radioMaxHealth;
         if (!force && signature.equals(lastSignatures.get(player.getUUID()))) return;
         lastSignatures.put(player.getUUID(), signature);
         NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
             new FobSupplySyncPacket(true, construction, ammunition,
-                maxConstruction, maxAmmunition));
+                maxConstruction, maxAmmunition, radioHealth, radioMaxHealth));
     }
 
     private static void updateMembership(UUID playerId, Set<UUID> next) {

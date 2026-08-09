@@ -40,6 +40,7 @@ import org.espetro.logistics.LogisticsConfig;
 import org.espetro.logistics.AmmoResupplyPolicy;
 import org.espetro.logistics.SupplyManager;
 import org.espetro.mapconfig.BattlefieldContext;
+import org.espetro.network.RadioRadialPacket;
 
 import javax.annotation.Nullable;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -357,7 +358,7 @@ public class BastionEventHandler {
         // Radio 只能通过建造轮盘进入统一施工流程；禁止物品/命令入口绕过进度与占位校验。
         event.setCanceled(true);
         player.displayClientMessage(net.minecraft.network.chat.Component.literal(
-            "§e请从建造工事轮盘选择 Radio，并用工兵铲确认位置。"), true);
+            "§e请从建造工事轮盘选择 Radio，并左键确认位置。"), true);
     }
 
     /**
@@ -604,8 +605,7 @@ public class BastionEventHandler {
     /**
      * Radio 方块交互（服务端）：
      * <ul>
-     *   <li>普通右键：由客户端 {@code RadioRadialController} 发 OPEN 包打开 AuraTip 轮盘，
-     *       此处只拦截原版/旧逻辑，避免直接补弹把轮盘盖掉。</li>
+     *   <li>普通右键：不再打开职业轮盘（已移至弹药箱），此处只拦截原版交互。</li>
      *   <li>潜行右键不再存入任何物资。</li>
      * </ul>
      */
@@ -631,7 +631,7 @@ public class BastionEventHandler {
             return; // 敌方静默
         }
 
-        // 背包→Radio 存入已取消；补给仅通过 F 键载具装卸。普通右键由客户端开轮盘。
+        // 背包→Radio 存入已取消；补给仅通过 F 键载具装卸。换职已移至弹药箱。
     }
 
     @SubscribeEvent
@@ -655,7 +655,8 @@ public class BastionEventHandler {
     }
 
     /**
-     * 玩家右击弹药箱（工事放置的潜影盒）— 职业弹药补给（无冷却）。
+     * 玩家右击弹药箱（工事放置的潜影盒）— 更换职业；
+     * 潜行右击仍保留职业弹药补给（无冷却）。
      */
     @SubscribeEvent
     public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
@@ -693,7 +694,11 @@ public class BastionEventHandler {
 
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
-        performAmmoResupply(player, radio);
+        if (player.isShiftKeyDown()) {
+            performAmmoResupply(player, radio);
+        } else {
+            RadioRadialPacket.openClassMenuAt(player, clickedPos);
+        }
     }
 
     /**

@@ -39,7 +39,7 @@ import java.util.*;
 
 /**
  * 载具管理器
- * 管理载具部署、追踪、冷却和复活
+ * 管理载具首发、自动刷新、追踪、冷却和状态查询
  */
 public class VehicleManager {
 
@@ -83,6 +83,11 @@ public class VehicleManager {
 
     // factionId -> (vehicleType -> cooldownUntilMillis) 冷却截止时刻
     private final Map<String, Map<String, Long>> cooldowns = new HashMap<>();
+    /** 被摧毁载具的自动刷新队列：key → 就绪时间戳（升序）。 */
+    private final Map<RespawnKey, PriorityQueue<Long>> autoRespawnQueue = new HashMap<>();
+
+    private record RespawnKey(String team, String factionId, String vehicleType) {
+    }
 
     private final InitialVehicleDeploymentLedger initialDeploymentLedger =
         new InitialVehicleDeploymentLedger();
@@ -298,6 +303,107 @@ public class VehicleManager {
         }
         cooldowns.computeIfAbsent(cooldownOwner(team, factionId), k -> new HashMap<>())
             .put(vehicleType, System.currentTimeMillis() + ms);
+    }
+
+    /** 服务器 tick：处理被摧毁载具的自动刷新。 */
+    public void onServerTick() {
+        processAutoRespawns();
+    }
+
+    /** 载具被摧毁后开始刷新计时。 */
+    private void scheduleAutoRespawn(String team, String factionId, String vehicleType) {
+        VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
+        long ms = cfg != null ? cfg.respawnMillis() : 0L;
+        long readyAt = System.currentTimeMillis() + Math.max(0L, ms);
+        autoRespawnQueue.computeIfAbsent(
+            new RespawnKey(team, factionId, vehicleType), ignored -> new PriorityQueue<>())
+            .add(readyAt);
+        refreshAutoRespawnCooldown(team, factionId, vehicleType);
+        broadcastVehicleInfoToTeam(team);
+    }
+
+    private void processAutoRespawns() {
+        if (autoRespawnQueue.isEmpty()) return;
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) return;
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        ServerLevel level = org.espetro.mapconfig.BattlefieldContext.requireBattlefield(server);
+        if (level == null || !org.espetro.mapconfig.BattlefieldContext.isActiveBattlefield(level)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        for (Iterator<Map.Entry<RespawnKey, PriorityQueue<Long>>> iterator =
+                 autoRespawnQueue.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<RespawnKey, PriorityQueue<Long>> entry = iterator.next();
+            RespawnKey key = entry.getKey();
+            PriorityQueue<Long> queue = entry.getValue();
+            while (!queue.isEmpty() && queue.peek() <= now) {
+                if (!tryAutoRespawn(level, key)) {
+                    break;
+                }
+                queue.poll();
+                refreshAutoRespawnCooldown(key.team(), key.factionId(), key.vehicleType());
+            }
+            if (queue.isEmpty()) {
+                iterator.remove();
+            }
+        }
+    }
+
+    private boolean tryAutoRespawn(ServerLevel level, RespawnKey key) {
+        String team = key.team();
+        String factionId = key.factionId();
+        String vehicleType = key.vehicleType();
+        VehicleConfig.VehicleTypeConfig cfg = VehicleConfig.getVehicleConfig(factionId, vehicleType);
+        if (cfg == null) return false;
+        if (getActiveCount(team, factionId, vehicleType) >= cfg.max) return false;
+
+        int slotIndex = findAvailableSlot(team, factionId, vehicleType, cfg);
+        if (slotIndex < 0) return false;
+        VehicleConfig.VehicleSlotConfig slot = cfg.slots.isEmpty() ? null : cfg.slots.get(slotIndex);
+        VehicleConfig.DeploymentPointConfig deployment =
+            slot != null ? slot.forTeam(team) : resolveDeploymentPoint(cfg, team);
+        BlockPos spawnPos = resolveSpawnPosition(deployment);
+        if (spawnPos == null || !level.hasChunkAt(spawnPos)) return false;
+
+        Entity vehicle = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg,
+            slot, deployment != null ? deployment.yaw : 0f);
+        if (vehicle == null) return false;
+        if (!level.addFreshEntity(vehicle)) {
+            vehicle.discard();
+            return false;
+        }
+        trackVehicle(vehicle, factionId, vehicleType, slotIndex, team, false);
+        broadcastVehicleInfoToTeam(team);
+        Espetro.LOGGER.info("载具自动刷新: {} / {} / {} at {}", team, factionId, vehicleType, spawnPos);
+        return true;
+    }
+
+    private void refreshAutoRespawnCooldown(String team, String factionId, String vehicleType) {
+        RespawnKey key = new RespawnKey(team, factionId, vehicleType);
+        PriorityQueue<Long> queue = autoRespawnQueue.get(key);
+        Map<String, Long> map = cooldowns.computeIfAbsent(
+            cooldownOwner(team, factionId), ignored -> new HashMap<>());
+        if (queue == null || queue.isEmpty()) {
+            map.remove(vehicleType);
+        } else {
+            map.put(vehicleType, queue.peek());
+        }
+    }
+
+    /** 向本队所有在线玩家推送载具信息快照（用于信息界面实时刷新）。 */
+    private void broadcastVehicleInfoToTeam(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || team == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!team.equals(Espetro.getPlayerTeam(player))) continue;
+            String factionId = ClassCountManager.getInstance().getPlayerFaction(player.getUUID());
+            if (factionId != null) {
+                org.espetro.network.NetworkManager.syncVehicleDeployScreen(player, factionId);
+            }
+        }
     }
 
     private static String cooldownOwner(@Nullable String team, String factionId) {
@@ -633,13 +739,18 @@ public class VehicleManager {
                 key.slotIndex(),
                 key.team(),
                 true);
-            // 首发生成后开始该类型的再次部署冷却；首发同样按类型自动装填。
-            startRespawnCooldown(key.team(), key.factionId(), key.vehicleType());
+            // 首发不进入刷新冷却；载具被摧毁后才开始自动刷新计时。
+            Map<String, Long> initialCooldown = cooldowns.get(
+                cooldownOwner(key.team(), key.factionId()));
+            if (initialCooldown != null) {
+                initialCooldown.remove(key.vehicleType());
+            }
             ActiveVehicleData tracked = activeVehicleData.get(vehicleEntity.getUUID());
             if (tracked != null) {
                 panelSyncs.put(tracked.team() + '|' + tracked.factionId(), tracked);
             }
             initialVehiclesSpawned++;
+            broadcastVehicleInfoToTeam(key.team());
         }
         // 同一出生区块可能包含多辆车；每个阵营只推一次增量面板状态。
         panelSyncs.values().forEach(VehicleManager::syncCommanderVehiclePanel);
@@ -711,7 +822,8 @@ public class VehicleManager {
         ActiveVehicleData data = removeTrackedVehicle(entityId);
         if (data != null) {
             applyVehicleTroopPenalty(data);
-            syncCommanderVehiclePanel(data);
+            scheduleAutoRespawn(data.team(), data.factionId(), data.vehicleType());
+            broadcastVehicleInfoToTeam(data.team());
         }
     }
 
@@ -720,7 +832,7 @@ public class VehicleManager {
      */
     public void onVehicleRemoved(UUID entityId) {
         ActiveVehicleData data = removeTrackedVehicle(entityId);
-        if (data != null) syncCommanderVehiclePanel(data);
+        if (data != null) broadcastVehicleInfoToTeam(data.team());
     }
 
     private static void syncCommanderVehiclePanel(ActiveVehicleData data) {
@@ -1062,6 +1174,7 @@ public class VehicleManager {
         activeVehicleData.clear();
         vehicleSupplies.clear();
         cooldowns.clear();
+        autoRespawnQueue.clear();
         mappedSupplyStations.clear();
     }
 

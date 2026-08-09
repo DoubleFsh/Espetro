@@ -39,7 +39,7 @@ public final class DeployActions {
     private static void beginConstructionPreview(ServerPlayer player, String id) {
         String error = FortificationManager.getInstance().beginPreview(player, id);
         player.sendSystemMessage(Component.literal(error == null
-            ? "§e铁铲左键确认施工范围，右键取消。" : error));
+            ? "§e左键确认施工范围，右键取消。" : error));
     }
 
     /** 检查玩家脚点覆盖 Radio 的 HAB 数量是否已达编制上限。 */
@@ -92,12 +92,8 @@ public final class DeployActions {
         return dx * dx + dy * dy + dz * dz <= r * r;
     }
 
-    /** 轮盘「载具部署」：打开载具部署面板（原木棍右键功能，仅指挥官）。 */
+    /** 轮盘「载具信息」：打开本队载具状态/冷却面板（只读）。 */
     public static void openVehicleDeploy(ServerPlayer player) {
-        if (!VoteManager.getInstance().isCommander(player.getUUID())) {
-            player.sendSystemMessage(Component.literal("§c只有指挥官可以部署载具！"));
-            return;
-        }
         String factionId = org.espetro.team.ClassCountManager.getInstance()
             .getPlayerFaction(player.getUUID());
         if (factionId == null) {

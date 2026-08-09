@@ -22,8 +22,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 右键己方 Radio → AuraTip：
- * 变更职业（二层职业列表，含 icon，无预览）。步兵补给在弹药箱或载具轮盘进行。
+ * 右击己方弹药箱 → AuraTip：
+ * 变更职业（二层职业列表，含 icon，无预览）。步兵补给在载具轮盘进行。
  */
 public final class RadioRadialController {
 
@@ -103,7 +103,7 @@ public final class RadioRadialController {
         publishMenus();
     }
 
-    /** 客户端右键 Radio 成功后调用：向服务端要职业列表。 */
+    /** 客户端右击弹药箱成功后调用：向服务端要职业列表。 */
     public static void requestOpen(BlockPos radioPos) {
         if (!initialized) {
             initialize();
@@ -113,15 +113,19 @@ public final class RadioRadialController {
         NetworkManager.sendRadioOpen(lastRadioPos);
     }
 
-    /** 收到 S2C 职业列表后打开根轮盘。 */
-    public static void onClassList(List<RadioRadialPacket.ClassEntry> classes) {
+    /** 收到 S2C 职业列表后直接打开职业选择轮盘。 */
+    public static void onClassList(net.minecraft.core.BlockPos sourcePos,
+                                   List<RadioRadialPacket.ClassEntry> classes) {
         cachedClasses = classes != null ? List.copyOf(classes) : List.of();
+        if (sourcePos != null) {
+            lastRadioPos = sourcePos.immutable();
+        }
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
         }
         pendingPublish = true;
-        pendingMenu = ROOT;
+        pendingMenu = CLASS_MENU;
         // 等关闭动画真正完成后，tick() 会发布并打开新菜单。
         if (RadialMenuOverlay.INSTANCE.isActive()) {
             RadialMenuOverlay.INSTANCE.close();
@@ -161,10 +165,6 @@ public final class RadioRadialController {
             .radii(44, 96)
             .animationSpeed(1.25f)
             .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            // 存入/补弹已取消：补给靠 F 键载具装卸，补弹在工事弹药箱上
-            .slot("espetro.radio.change_class", ICON_CLASS,
-                Actions.script(NAVIGATE, Map.of("target", "classes")),
-                Component.literal("变更职业"), "#FFD5B25C")
             .build());
         menus.add(buildClassMenuData());
         for (RadioRadialPacket.ClassEntry entry : cachedClasses) {
@@ -179,10 +179,7 @@ public final class RadioRadialController {
         var builder = new RadialMenuBuilder(CLASS_MENU)
             .radii(44, 100)
             .animationSpeed(1.25f)
-            .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            .slot("espetro.radio.back", ICON_BACK,
-                Actions.script(NAVIGATE, Map.of("target", "root")),
-                Component.literal("↩"), "#FF888888");
+            .ringColors(List.of("#E6141719", "#F02A2D2F"));
         if (cachedClasses.isEmpty()) {
             builder = builder.slot("espetro.radio.no_class", ICON_UNAVAILABLE,
                 Actions.script(NAVIGATE, Map.of("target", "root")),

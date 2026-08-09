@@ -1060,6 +1060,7 @@ public class GameStateManager {
                 onFactionRevealTick();
                 break;
             case DEPLOYING:
+                org.espetro.vehicle.VehicleManager.getInstance().onServerTick();
                 // 每隔 5 秒向中途加入但尚未选边的玩家同步最新人数和编制图片
                 if (deployTickCounter % (5 * TICKS_PER_SECOND) == 0) {
                     broadcastMidGameTeamState();
@@ -1067,6 +1068,7 @@ public class GameStateManager {
                 onDeployTick();
                 break;
             case BATTLE:
+                org.espetro.vehicle.VehicleManager.getInstance().onServerTick();
                 // 每隔 5 秒向中途加入但尚未选边的玩家同步最新人数和编制图片
                 if (battleTickCounter % (5 * TICKS_PER_SECOND) == 0) {
                     broadcastMidGameTeamState();

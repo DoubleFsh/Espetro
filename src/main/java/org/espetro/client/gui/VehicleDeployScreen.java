@@ -1,6 +1,5 @@
 package org.espetro.client.gui;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.VehicleDeployScreenPacket;
@@ -46,7 +45,7 @@ public class VehicleDeployScreen extends MutilScreen {
     }
 
     public VehicleDeployScreen(List<VehicleDeployScreenPacket.VehicleInfo> vehicles) {
-        super(Component.literal("载具部署"));
+        super(Component.literal("载具信息"));
         this.vehicles = vehicles != null ? new ArrayList<>(vehicles) : new ArrayList<>();
         this.structureSignature = signatureOf(this.vehicles);
     }
@@ -91,7 +90,7 @@ public class VehicleDeployScreen extends MutilScreen {
 
         root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, PANEL_BG, EspetroMutilWidgets.BORDER));
         root.addChild(EspetroMutilWidgets.centeredText(
-            panelX, panelY + 12, panelW, "\u00a76\u00a7l载具部署面板", EspetroMutilWidgets.GOLD));
+            panelX, panelY + 12, panelW, "\u00a76\u00a7l载具信息", EspetroMutilWidgets.GOLD));
         root.addChild(EspetroMutilWidgets.centeredText(
             panelX, panelY + 29, panelW, "\u00a77冷却与在场数量实时更新", EspetroMutilWidgets.MUTED));
         root.addChild(EspetroMutilWidgets.rect(
@@ -113,9 +112,8 @@ public class VehicleDeployScreen extends MutilScreen {
         int y = 0;
         for (VehicleDeployScreenPacket.VehicleInfo vehicle : vehicles) {
             int remaining = computeRemainingSeconds(vehicle);
-            boolean enabled = remaining <= 0 && vehicle.current < vehicle.max;
-            String label = buildVehicleLabel(vehicle, remaining, enabled);
-            var btn = vehicleButton(0, y, listW, label, enabled, () -> deployVehicle(vehicle.type));
+            String label = buildVehicleLabel(vehicle, remaining, false);
+            var btn = vehicleButton(0, y, listW, label, false, null);
             list.addChild(btn);
             rowBindings.add(new RowBinding(btn, vehicle));
             y += ROW_H + ROW_GAP;
@@ -125,9 +123,8 @@ public class VehicleDeployScreen extends MutilScreen {
     private void refreshRows() {
         for (RowBinding row : rowBindings) {
             int remaining = computeRemainingSeconds(row.info);
-            boolean enabled = remaining <= 0 && row.info.current < row.info.max;
-            row.button.setLabel(buildVehicleLabel(row.info, remaining, enabled));
-            row.button.setEnabled(enabled);
+            row.button.setLabel(buildVehicleLabel(row.info, remaining, false));
+            row.button.setEnabled(false);
         }
     }
 
@@ -157,20 +154,10 @@ public class VehicleDeployScreen extends MutilScreen {
         } else {
             status = "\u00a7a就绪 " + vehicle.current + "/" + vehicle.max;
         }
-        String nameColor = enabled ? "\u00a7e" : "\u00a78";
+        String nameColor = remaining > 0 || vehicle.current >= vehicle.max
+            ? "\u00a78" : "\u00a7e";
         return nameColor + vehicle.displayName + "  " + status
             + "  \u00a77(" + vehicle.respawnMinutes + "分钟刷新)";
-    }
-
-    private static void deployVehicle(String type) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            mc.player.connection.sendCommand("vehicle spawn " + quoteCommandString(type));
-        }
-    }
-
-    private static String quoteCommandString(String value) {
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     @Override

@@ -1734,6 +1734,11 @@ public class UnifiedDeployScreen extends MutilScreen {
                     GovernanceActionPacket.Action.START_IMPEACHMENT, null));
             impeach.setTextScale(UI_TEXT_SCALE);
             sectionRoot.addChild(impeach);
+
+            EspButton vehicleInfo = new EspButton(bx + 128, by, 64, BTN_H, "\u00a7b载具信息",
+                () -> NetworkManager.requestVehicleInfo());
+            vehicleInfo.setTextScale(UI_TEXT_SCALE);
+            sectionRoot.addChild(vehicleInfo);
             return;
         }
 

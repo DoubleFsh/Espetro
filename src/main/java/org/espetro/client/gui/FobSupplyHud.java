@@ -36,6 +36,7 @@ public final class FobSupplyHud {
     private static final int PANEL_BACKGROUND = 0xD0111111;
     private static final int PANEL_BORDER = 0xB05E646C;
     private static final int BAR_BACKGROUND = 0xFF333333;
+    private static final int BAR_HEALTH_COLOR = 0xFF4A9BFF;
     private static final int AMMO_COLOR = 0xFFCC4444;
     private static final int CONSTRUCTION_COLOR = 0xFFD6B300;
 
@@ -51,6 +52,8 @@ public final class FobSupplyHud {
     private static int ammunition;
     private static int maxConstruction = 1;
     private static int maxAmmunition = 1;
+    private static int radioHealth;
+    private static int radioMaxHealth = 1;
     private static SupplyElement activeElement;
     private static long stateRevision;
 
@@ -70,11 +73,15 @@ public final class FobSupplyHud {
         int nextAmmunition = Math.max(0, packet.getAmmunition());
         int nextMaxConstruction = Math.max(1, packet.getMaxConstruction());
         int nextMaxAmmunition = Math.max(1, packet.getMaxAmmunition());
+        int nextRadioHealth = Math.max(0, packet.getRadioHealth());
+        int nextRadioMaxHealth = Math.max(1, packet.getRadioMaxHealth());
         if (inRange
             && construction == nextConstruction
             && ammunition == nextAmmunition
             && maxConstruction == nextMaxConstruction
-            && maxAmmunition == nextMaxAmmunition) {
+            && maxAmmunition == nextMaxAmmunition
+            && radioHealth == nextRadioHealth
+            && radioMaxHealth == nextRadioMaxHealth) {
             return;
         }
         inRange = true;
@@ -82,6 +89,8 @@ public final class FobSupplyHud {
         ammunition = nextAmmunition;
         maxConstruction = nextMaxConstruction;
         maxAmmunition = nextMaxAmmunition;
+        radioHealth = nextRadioHealth;
+        radioMaxHealth = nextRadioMaxHealth;
         stateRevision++;
         applyStateToElement();
     }
@@ -128,6 +137,8 @@ public final class FobSupplyHud {
         ammunition = 0;
         maxConstruction = 1;
         maxAmmunition = 1;
+        radioHealth = 0;
+        radioMaxHealth = 1;
         stateRevision = 0;
         activeElement = null;
     }
@@ -210,15 +221,9 @@ public final class FobSupplyHud {
             fillArgb(PANEL_WIDTH - 1, 1, 1, PANEL_HEIGHT - 2, PANEL_BORDER);
 
             fillArgb(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT, BAR_BACKGROUND);
-            int ammoWidth = scaledBarWidth(ammunition, maxAmmunition, HALF_BAR_WIDTH);
-            int constructionWidth = scaledBarWidth(
-                construction, maxConstruction, HALF_BAR_WIDTH);
-            if (ammoWidth > 0) {
-                fillArgb(AMMO_BAR_X, BAR_Y, ammoWidth, BAR_HEIGHT, AMMO_COLOR);
-            }
-            if (constructionWidth > 0) {
-                fillArgb(CONSTRUCTION_BAR_X, BAR_Y,
-                    constructionWidth, BAR_HEIGHT, CONSTRUCTION_COLOR);
+            int healthWidth = scaledBarWidth(radioHealth, radioMaxHealth, BAR_WIDTH);
+            if (healthWidth > 0) {
+                fillArgb(BAR_X, BAR_Y, healthWidth, BAR_HEIGHT, BAR_HEALTH_COLOR);
             }
 
             drawIcon(ammoIcon, 8, 9, false);
@@ -374,6 +379,11 @@ public final class FobSupplyHud {
             graphics.renderOutline(x, y, PANEL_WIDTH, PANEL_HEIGHT, PANEL_BORDER);
             graphics.fill(x + BAR_X, y + BAR_Y,
                 x + BAR_X + BAR_WIDTH, y + BAR_Y + BAR_HEIGHT, BAR_BACKGROUND);
+            int healthWidth = scaledBarWidth(radioHealth, radioMaxHealth, BAR_WIDTH);
+            if (healthWidth > 0) {
+                graphics.fill(x + BAR_X, y + BAR_Y,
+                    x + BAR_X + healthWidth, y + BAR_Y + BAR_HEIGHT, BAR_HEALTH_COLOR);
+            }
             graphics.drawString(Minecraft.getInstance().font, Integer.toString(ammunition),
                 x + 19, y + 11, 0xFFFFFFFF, false);
             graphics.drawString(Minecraft.getInstance().font, Integer.toString(construction),

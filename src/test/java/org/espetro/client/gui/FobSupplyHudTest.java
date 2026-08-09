@@ -21,7 +21,7 @@ class FobSupplyHudTest {
     void redrawRevisionChangesOnlyWhenVisibleSupplyStateChanges() {
         FobSupplyHud.resetStateForTest();
         FobSupplySyncPacket initial = new FobSupplySyncPacket(
-            true, 1_000, 2_000, 20_000, 20_000);
+            true, 1_000, 2_000, 20_000, 20_000, 100, 100);
         FobSupplyHud.update(initial);
         assertEquals(1, FobSupplyHud.stateRevisionForTest());
 
@@ -29,13 +29,17 @@ class FobSupplyHudTest {
         assertEquals(1, FobSupplyHud.stateRevisionForTest());
 
         FobSupplyHud.update(new FobSupplySyncPacket(
-            true, 1_000, 2_100, 20_000, 20_000));
+            true, 1_000, 2_100, 20_000, 20_000, 100, 100));
         assertEquals(2, FobSupplyHud.stateRevisionForTest());
 
-        FobSupplyHud.clear();
+        FobSupplyHud.update(new FobSupplySyncPacket(
+            true, 1_000, 2_100, 20_000, 20_000, 50, 100));
         assertEquals(3, FobSupplyHud.stateRevisionForTest());
+
         FobSupplyHud.clear();
-        assertEquals(3, FobSupplyHud.stateRevisionForTest());
+        assertEquals(4, FobSupplyHud.stateRevisionForTest());
+        FobSupplyHud.clear();
+        assertEquals(4, FobSupplyHud.stateRevisionForTest());
     }
 
 }

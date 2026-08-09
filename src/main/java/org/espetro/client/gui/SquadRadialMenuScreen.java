@@ -43,7 +43,7 @@ public class SquadRadialMenuScreen extends MutilScreen {
         addTacticalOption("部署 Rally", RALLY, 128, RadialActionPacket.Action.DEPLOY_RALLY);
         addTacticalOption("查看 Radio 状态", AMMO, 128, RadialActionPacket.Action.FOB_STATUS);
         if (commander) {
-            addTacticalOption("载具部署", VEHICLE, 128, RadialActionPacket.Action.DEPLOY_VEHICLE);
+            addTacticalOption("载具信息", VEHICLE, 128, RadialActionPacket.Action.DEPLOY_VEHICLE);
         }
 
         if (commander && skills != null) {

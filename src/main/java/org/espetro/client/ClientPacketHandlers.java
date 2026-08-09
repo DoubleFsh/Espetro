@@ -466,6 +466,10 @@ public class ClientPacketHandlers {
         org.espetro.client.gui.FobSupplyHud.update(packet);
     }
 
+    public static void handleOutpostSupplySync(OutpostSupplySyncPacket packet) {
+        org.espetro.client.gui.OutpostSupplyHud.update(packet);
+    }
+
     public static void handleFortificationCatalog(FortificationCatalogPacket packet) {
         org.espetro.client.gui.AuraTipRadialController
             .updateFortifications(packet.entries());

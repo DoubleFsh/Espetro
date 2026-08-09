@@ -21,9 +21,9 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * 电台轮盘：
+ * 弹药箱职业轮盘：
  * <ul>
- *   <li>C→S OPEN：校验己方 Radio，回推职业列表并让客户端开轮盘</li>
+ *   <li>C→S OPEN：校验弹药箱附近己方 Radio，回推职业列表并让客户端开轮盘</li>
  *   <li>C→S RESUPPLY：附近己方 Radio/换装区重发当前职业装备</li>
  *   <li>S→C CLASS_LIST：职业图标、人数、上限、可用状态及装备变体</li>
  * </ul>
@@ -119,7 +119,17 @@ public class RadioRadialPacket {
     }
 
     public static RadioRadialPacket classList(List<ClassEntry> classes) {
-        return new RadioRadialPacket(Kind.CLASS_LIST, BlockPos.ZERO, classes);
+        return classList(BlockPos.ZERO, classes);
+    }
+
+    public static RadioRadialPacket classList(BlockPos pos, List<ClassEntry> classes) {
+        return new RadioRadialPacket(Kind.CLASS_LIST, pos != null ? pos : BlockPos.ZERO, classes);
+    }
+
+    /** 服务端直接为指定来源点（弹药箱等）打开职业选择轮盘。 */
+    public static void openClassMenuAt(ServerPlayer player, BlockPos sourcePos) {
+        new RadioRadialPacket(Kind.OPEN_REQUEST, sourcePos != null ? sourcePos : BlockPos.ZERO,
+            List.of()).handleOpen(player);
     }
 
     public static RadioRadialPacket read(FriendlyByteBuf buf) {
@@ -194,8 +204,8 @@ public class RadioRadialPacket {
                 if (kind == Kind.CLASS_LIST) {
                     try {
                         Class.forName("org.espetro.client.gui.RadioRadialController")
-                            .getMethod("onClassList", List.class)
-                            .invoke(null, classes);
+                            .getMethod("onClassList", BlockPos.class, List.class)
+                            .invoke(null, pos, classes);
                     } catch (Throwable t) {
                         Throwable cause = t instanceof java.lang.reflect.InvocationTargetException ite
                             && ite.getCause() != null ? ite.getCause() : t;
@@ -318,7 +328,7 @@ public class RadioRadialPacket {
         }
         NetworkManager.NET.send(
             PacketDistributor.PLAYER.with(() -> player),
-            classList(list));
+            classList(pos, list));
     }
 
     private void handleResupply(ServerPlayer player) {

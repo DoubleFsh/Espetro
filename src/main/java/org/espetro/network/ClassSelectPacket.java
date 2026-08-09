@@ -129,7 +129,7 @@ public class ClassSelectPacket {
             /*
              * 入口必须由服务端重新验证，客户端传入的 source 只决定校验路径：
              * - 部署界面：仍在选择部署点，或已落地但位于本方原部署点；
-             * - Radio：点击位置仍是附近己方有效 Radio。
+             * - 弹药箱：点击位置附近仍有己方有效 Radio。
              * 不再把普通 HAB、个人上次部署点或前哨当作 J 键换职区。
              */
             boolean allowed;
