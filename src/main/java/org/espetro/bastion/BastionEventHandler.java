@@ -14,6 +14,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
@@ -339,7 +340,7 @@ public class BastionEventHandler {
 
     // ==================== Radio 方块生命周期 ====================
 
-    /** Radio 方块放置校验：不合法则取消（物品退回）。 */
+    /** Radio 只能由统一工事系统完成，普通方块放置一律拒绝。 */
     @SubscribeEvent
     public static void onRadioBlockPlace(BlockEvent.EntityPlaceEvent event) {
         if (event.getLevel().isClientSide()
@@ -353,91 +354,10 @@ public class BastionEventHandler {
             return;
         }
 
-        BastionManager manager = BastionManager.getInstance();
-        LogisticsConfig.RadioPlacementSettings radio = LogisticsConfig.get().getRadio();
-        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-        String phaseName = phase != null ? phase.name() : "";
-        BlockPos pos = event.getPos();
-
-        String error = null;
-        String team = Espetro.getPlayerTeam(player);
-        if (!radio.allowsPhase(phaseName)) {
-            error = "§c当前阶段不能部署 Radio！允许阶段: " + String.join(", ", radio.allowedPhases);
-        } else if (team == null) {
-            error = "§c无法确定你的队伍！";
-        } else {
-            boolean commander = org.espetro.team.VoteManager.getInstance().isCommander(player.getUUID());
-            boolean squadLeader = SquadManager.getInstance().isSquadLeader(player.getUUID());
-            if (radio.requireCommander && !commander) {
-                error = "§c只有指挥官才能部署 Radio！";
-            } else if (!commander && !(radio.allowSquadLeader && squadLeader)) {
-                error = radio.allowSquadLeader
-                    ? "§c只有小队长或指挥官才能部署 Radio！"
-                    : "§c只有指挥官才能部署 Radio！";
-            }
-        }
-        if (error == null) {
-            int cooldownSeconds = manager.getEffectiveRadioCooldownSeconds();
-            error = manager.canBuildBastion(player.getUUID(), cooldownSeconds);
-        }
-        if (error == null && !manager.hasBastionCapacity(team)) {
-            error = "§c本方生效 Radio 数量已达到上限（" + manager.getBastionLimitPerTeam() + "个）！";
-        }
-        if (error == null && manager.wouldRadioCoverageOverlap(level, pos)) {
-            error = "§c附近已有 Radio，作用范围不能重叠；中心至少间隔 "
-                + (int) Math.ceil(manager.getMinimumRadioCenterDistance()) + " 格。";
-        }
-        if (error == null && radio.teammateCount > 0) {
-            int nearby = countNearbyTeammates(player, team, pos, radio.teammateRadius);
-            if (nearby < radio.teammateCount) {
-                error = "§c部署 Radio 需要放置点 " + (int) radio.teammateRadius
-                    + " 格内至少 " + radio.teammateCount + " 名队友！当前仅 " + nearby + " 名。";
-            }
-        }
-
-        if (error != null) {
-            event.setCanceled(true);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(error));
-            return;
-        }
-
-        String radioName = generateRadioName(team);
-        BastionData bastion = manager.createRadio(level, pos, team, radioName);
-        if (bastion == null) {
-            event.setCanceled(true);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cRadio 创建失败！"));
-            return;
-        }
-        manager.setBastionCooldown(player.getUUID());
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§aRadio §e" + radioName + " §a已部署！右键存/取补给，潜行右键鱼竿在圈内建兵站。"));
-        Espetro.broadcastToTeam(team, "§6[Radio] §a" + player.getName().getString()
-            + " §a部署了 Radio §b" + radioName);
-    }
-
-    private static String generateRadioName(String team) {
-        int number = 1;
-        for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
-            if (bastion.isActive() && team.equals(bastion.getTeam()) && bastion.isRadio()) {
-                number++;
-            }
-        }
-        return "ATTACK".equals(team) ? "进攻Radio-" + number : "防守Radio-" + number;
-    }
-
-    private static int countNearbyTeammates(ServerPlayer player, String team, BlockPos center, double radius) {
-        double radiusSquared = radius * radius;
-        int count = 0;
-        for (ServerPlayer other : player.serverLevel().players()) {
-            if (other == player || !other.isAlive() || other.isSpectator()) {
-                continue;
-            }
-            if (team.equals(Espetro.getPlayerTeam(other))
-                && other.blockPosition().distSqr(center) <= radiusSquared) {
-                count++;
-            }
-        }
-        return count;
+        // Radio 只能通过建造轮盘进入统一施工流程；禁止物品/命令入口绕过进度与占位校验。
+        event.setCanceled(true);
+        player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+            "§e请从建造工事轮盘选择 Radio，并用工兵铲确认位置。"), true);
     }
 
     /**
@@ -454,6 +374,15 @@ public class BastionEventHandler {
         }
         BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(event.getPos());
         if (bastion == null) {
+            return;
+        }
+        if (FortificationManager.getInstance().contains(level, event.getPos())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            if (player.getMainHandItem().getItem() != Items.IRON_SHOVEL) {
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                    "§e使用工兵铲右键拆除，左键修建或修复。"), true);
+            }
             return;
         }
         // Radio 不再使用原版挖掘流程，避免挖掘疲劳、工具和客户端速度差异绕过规则。
@@ -660,6 +589,10 @@ public class BastionEventHandler {
             return;
         }
         for (BlockPos pos : event.getAffectedBlocks()) {
+            if (event.getLevel() instanceof ServerLevel level
+                && FortificationManager.getInstance().contains(level, pos)) {
+                continue; // 统一工事完整度由 FortificationEventHandler 按结构比例处理。
+            }
             BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(pos);
             if (bastion != null) {
                 BastionManager.getInstance().destroyBastionWithManpower(bastion,
@@ -707,6 +640,10 @@ public class BastionEventHandler {
             || !(event.getLevel() instanceof ServerLevel level)) {
             return;
         }
+        if (player.getMainHandItem().getItem() == Items.IRON_SHOVEL
+            && FortificationManager.getInstance().contains(level, event.getPos())) {
+            return;
+        }
         try {
             if (SupplyManager.getInstance().handleSourceInteraction(player, level, event.getPos())) {
                 event.setCanceled(true);
@@ -726,6 +663,12 @@ public class BastionEventHandler {
         if (event.getLevel().isClientSide()) return;
         ServerLevel level = (ServerLevel) event.getLevel();
         BlockPos clickedPos = event.getPos();
+        if (player.getMainHandItem().getItem() == Items.IRON_SHOVEL
+            && FortificationManager.getInstance().contains(level, clickedPos)) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            return;
+        }
         BlockState state = level.getBlockState(clickedPos);
 
         // 工事弹药箱使用原版 shulker_box；兼容旧红/蓝箱

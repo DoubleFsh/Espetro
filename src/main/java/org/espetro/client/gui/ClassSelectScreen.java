@@ -136,12 +136,15 @@ public class ClassSelectScreen extends MutilScreen {
     }
 
     private static class FactionCardButton extends GuiElement {
+        private record FactionTexture(ResourceLocation location, int width, int height) {
+        }
+
         private ClassSelectScreenPacket.FactionInfo faction;
         private final int imageHeight;
         private boolean enabled;
         private boolean selected;
         private final Runnable action;
-        private ResourceLocation texture;
+        private FactionTexture texture;
 
         FactionCardButton(int x, int y, int width, int height, int imageHeight,
                           ClassSelectScreenPacket.FactionInfo faction,
@@ -191,29 +194,27 @@ public class ClassSelectScreen extends MutilScreen {
             }
             graphics.renderOutline(bx, by, bw, bh, border);
 
-            int imageY = by + 3;
-            int imageW = Math.max(1, bw - 6);
-            int imageH = Math.max(1, imageW * 9 / 16);
+            int imageBoxY = by + 3;
+            int imageBoxW = Math.max(1, bw - 6);
             int imageSlotH = Math.max(1, imageHeight - 6);
-            if (imageH > imageSlotH) {
-                imageH = imageSlotH;
-                imageW = Math.max(1, imageH * 16 / 9);
-            }
-            int imageX = bx + Math.max(0, (bw - imageW) / 2);
+            AspectFit.Size fitted = texture == null
+                ? AspectFit.within(16, 9, imageBoxW, imageSlotH)
+                : AspectFit.within(texture.width(), texture.height(), imageBoxW, imageSlotH);
+            int imageX = bx + Math.max(0, (bw - fitted.width()) / 2);
+            int imageY = imageBoxY + Math.max(0, (imageSlotH - fitted.height()) / 2);
 
             if (texture != null) {
                 graphics.setColor(1f, 1f, 1f, enabled ? 1f : 0.55f);
-                // UV 宽高与虚拟纹理宽高相同，始终完整采样整张纹理；
-                // 源文件分辨率无需预先获知，并统一拉伸/缩放到固定卡片图片区。
-                graphics.blit(texture, imageX, imageY, imageW, imageH,
-                    0f, 0f, imageW, imageH, imageW, imageH);
+                graphics.blit(texture.location(), imageX, imageY, fitted.width(), fitted.height(),
+                    0f, 0f, texture.width(), texture.height(), texture.width(), texture.height());
                 graphics.setColor(1f, 1f, 1f, 1f);
             } else {
                 String missing = "§7还没配置图片喵";
                 int missingW = Minecraft.getInstance().font.width(
                     EspetroMutilWidgets.stripFormatting(missing));
                 graphics.drawString(Minecraft.getInstance().font, Component.literal(missing),
-                    bx + Math.max(4, (bw - missingW) / 2), by + Math.max(8, imageH / 2),
+                    bx + Math.max(4, (bw - missingW) / 2),
+                    imageBoxY + Math.max(8, imageSlotH / 2),
                     EspetroMutilWidgets.DIM, false);
             }
 
@@ -240,12 +241,14 @@ public class ClassSelectScreen extends MutilScreen {
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
 
-        private static final Map<String, ResourceLocation> DISK_TEXTURE_CACHE = new HashMap<>();
+        private static final Map<String, FactionTexture> DISK_TEXTURE_CACHE = new HashMap<>();
         private static final Map<String, Boolean> DISK_TEXTURE_FAILED = new HashMap<>();
         /** 缓存服务端发来的图片字节创建的纹理，key 为 selectionImage */
-        private static final Map<String, ResourceLocation> SERVER_IMAGE_CACHE = new HashMap<>();
+        private static final Map<String, FactionTexture> SERVER_IMAGE_CACHE = new HashMap<>();
+        /** 资源包纹理的尺寸只读取一次，避免界面重建时重复解码 PNG。 */
+        private static final Map<ResourceLocation, FactionTexture> RESOURCE_TEXTURE_CACHE = new HashMap<>();
 
-        private static ResourceLocation resolveTexture(String value, byte[] imageData) {
+        private static FactionTexture resolveTexture(String value, byte[] imageData) {
             if (value == null || value.isBlank()) return null;
             // 1. 服务端发来了图片字节 → 直接动态注册
             if (imageData != null && imageData.length > 0) {
@@ -255,34 +258,54 @@ public class ClassSelectScreen extends MutilScreen {
             ResourceLocation location = ResourceLocation.tryParse(value);
             if (location != null && Minecraft.getInstance().getResourceManager()
                     .getResource(location).isPresent()) {
-                return location;
+                return resolveResourceTexture(location);
             }
             // 3. 尝试从本地 EsFactions/ 目录加载（单机/局域网备用）
             return resolveEsFactionsTexture(value);
         }
 
-        private static ResourceLocation resolveServerImage(String key, byte[] imageData) {
-            ResourceLocation cached = SERVER_IMAGE_CACHE.get(key);
+        private static FactionTexture resolveServerImage(String key, byte[] imageData) {
+            FactionTexture cached = SERVER_IMAGE_CACHE.get(key);
             if (cached != null) return cached;
             try {
                 NativeImage image = NativeImage.read(
                     new java.io.ByteArrayInputStream(imageData));
+                int width = image.getWidth();
+                int height = image.getHeight();
                 DynamicTexture texture = new DynamicTexture(image);
                 String safe = Integer.toHexString(key.hashCode());
                 ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
                     "espetro", "dynamic/srv_faction_" + safe);
                 Minecraft.getInstance().getTextureManager().register(id, texture);
-                SERVER_IMAGE_CACHE.put(key, id);
-                return id;
+                FactionTexture resolved = new FactionTexture(id, width, height);
+                SERVER_IMAGE_CACHE.put(key, resolved);
+                return resolved;
             } catch (Exception e) {
                 return null;
             }
         }
 
-        private static ResourceLocation resolveEsFactionsTexture(String fileName) {
+        private static FactionTexture resolveResourceTexture(ResourceLocation location) {
+            FactionTexture cached = RESOURCE_TEXTURE_CACHE.get(location);
+            if (cached != null) return cached;
+            try {
+                var resource = Minecraft.getInstance().getResourceManager().getResource(location);
+                if (resource.isEmpty()) return null;
+                try (InputStream in = resource.get().open(); NativeImage image = NativeImage.read(in)) {
+                    FactionTexture resolved = new FactionTexture(
+                        location, image.getWidth(), image.getHeight());
+                    RESOURCE_TEXTURE_CACHE.put(location, resolved);
+                    return resolved;
+                }
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private static FactionTexture resolveEsFactionsTexture(String fileName) {
             String key = fileName.trim();
             if (DISK_TEXTURE_FAILED.containsKey(key)) return null;
-            ResourceLocation cached = DISK_TEXTURE_CACHE.get(key);
+            FactionTexture cached = DISK_TEXTURE_CACHE.get(key);
             if (cached != null) return cached;
             try {
                 Path gameDir = Minecraft.getInstance().gameDirectory.toPath();
@@ -299,13 +322,16 @@ public class ClassSelectScreen extends MutilScreen {
                 }
                 try (InputStream in = Files.newInputStream(imagePath)) {
                     NativeImage image = NativeImage.read(in);
+                    int width = image.getWidth();
+                    int height = image.getHeight();
                     DynamicTexture texture = new DynamicTexture(image);
                     String safe = Integer.toHexString(key.hashCode());
                     ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
                         "espetro", "dynamic/faction_" + safe);
                     Minecraft.getInstance().getTextureManager().register(id, texture);
-                    DISK_TEXTURE_CACHE.put(key, id);
-                    return id;
+                    FactionTexture resolved = new FactionTexture(id, width, height);
+                    DISK_TEXTURE_CACHE.put(key, resolved);
+                    return resolved;
                 }
             } catch (Exception e) {
                 DISK_TEXTURE_FAILED.put(key, true);

@@ -1,7 +1,6 @@
 package org.espetro.runtime;
 
 import org.espetro.bastion.BastionManager;
-import org.espetro.bastion.HabChannelManager;
 import org.espetro.dimension.BattlefieldWorldManager;
 import org.espetro.team.TeamPackManager;
 import org.espetro.stats.PlayerMatchStatsManager;
@@ -34,7 +33,6 @@ public final class ServerRuntimeMaintenance {
     public void reset() {
         tickCounter = 0;
         NetworkManager.clearQueuedFullScreens();
-        HabChannelManager.getInstance().reset();
     }
 
     public void onServerTick() {
@@ -42,7 +40,6 @@ public final class ServerRuntimeMaintenance {
         NetworkManager.drainQueuedFullScreens();
         PlayerMatchStatsManager.getInstance().onServerTick();
         TeamPackManager.getInstance().onServerTick();
-        HabChannelManager.getInstance().tick();
         VehicleManager.getInstance().processInitialVehicleDeployments();
         long tick = tickCounter++;
         // 分摊：兵站 / 队包 / 载具 不同步扫，降低尖峰

@@ -314,6 +314,8 @@ public class Espetro {
                 StaminaManager.removePlayer(serverPlayer.getUUID());
                 org.espetro.network.VehicleSupplyActionPacket.clearPlayerRateLimit(
                     serverPlayer.getUUID());
+                org.espetro.bastion.FortificationManager.getInstance()
+                    .clearPlayer(serverPlayer.getUUID());
                 try {
                     TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
                 } catch (Throwable t) {

@@ -252,9 +252,9 @@ Radio 或本方原部署点附近使用 F 轮盘装卸物资；战斗载具在�
 
 ## Radio 与兵站（HAB）拆分（2026-07）
 
-- **Radio**：指挥/小队长右键建筑指令放置，**不消耗建材**；持有 construction/ammunition 库存；地图显示 `build_radius` 范围圈。
-- **兵站 HAB**：潜行右键（或径向「部署兵站」）仅在**己方** Radio 建造半径内可放；费用 `hab_construction_cost` 从**所有覆盖该点的己方 Radio** 扣除，**优先从建材最少的 Radio 开始**；总和不足则整笔失败。
-- **摧毁**：拆 HAB **不扣**兵力；敌方玩家靠近 Radio 后潜行左键启动 30 秒服务端拆除计时，完成后扣 `bastion.json` 的 `destroy_troop_penalty`。离开 6 格范围、死亡或阵营状态改变会取消。
+- **Radio**：从 Alt 的“建造工事”选择，先预览占地，再用铁铲确认并修建；**不消耗建材**，建成后持有 construction/ammunition 库存，地图显示 `build_radius` 范围圈。
+- **兵站 HAB**：同样通过施工预览建造，仅能位于**己方** Radio 建造半径内；费用 `hab_construction_cost` 在确认施工范围时从覆盖该点的己方 Radio 扣除，总和不足则整笔失败。
+- **摧毁**：任意玩家可使用铁铲右键逐步拆除 Radio、HAB 和 JSON 工事。Radio 默认需约 30 秒、HAB 默认约 10 秒；参数位于 `fortifications.json` 的 `builtin_construction`。拆 HAB 不扣兵力；Radio 归零时按 `bastion.json` 处理兵力损失。
 - **地图显示**：HAB 失去同阵营 Radio 的 `build_radius` 覆盖后会停止运作，并从 ESPoints 战术地图隐藏；覆盖恢复后重新显示。
 - **队友人数**：嵌套字段 `logistics.radio.teammate_count` 为权威（覆盖平铺 `radio_teammate_count`）。设为 `0` 关闭人数要求。
 - 弹药箱通过“建造工事”单独建造，不会随 Radio 库存变化自动生成。

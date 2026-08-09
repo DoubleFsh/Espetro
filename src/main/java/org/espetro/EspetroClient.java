@@ -21,6 +21,8 @@ public class EspetroClient {
             .addListener(EspetroClient::registerKeyBindings);
         net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
             .addListener(EspetroClient::registerReloadListeners);
+        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
+            .addListener(EspetroClient::onClientSetup);
 
         // 注册 FORGE 事件总线（Tick + HUD 渲染 + 隐藏玩家名字）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
@@ -51,9 +53,20 @@ public class EspetroClient {
             .addListener(EspetroClient::onRightClickBlock);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(org.espetro.client.LeaderOverheadRenderer::onRenderLevelStage);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.FortificationPlacementController::onInteraction);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.FortificationPlacementController::render);
     }
 
     // ==================== 事件处理方法 ====================
+
+    @SuppressWarnings("deprecation")
+    private static void onClientSetup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+        event.enqueueWork(() -> net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(
+            org.espetro.bastion.BastionItems.ON_BUILDING_BLOCK,
+            net.minecraft.client.renderer.RenderType.cutout()));
+    }
 
     private static void registerKeyBindings(net.minecraftforge.client.event.RegisterKeyMappingsEvent event) {
         net.minecraft.client.KeyMapping keyTeam = new net.minecraft.client.KeyMapping(
@@ -86,6 +99,7 @@ public class EspetroClient {
         org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
         org.espetro.client.gui.RadioRadialController.tick(mc);
         org.espetro.client.gui.VehicleWheelController.tick(mc);
+        org.espetro.client.FortificationPlacementController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
         // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
         if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
@@ -133,6 +147,11 @@ public class EspetroClient {
         }
         net.minecraft.world.level.block.state.BlockState state = event.getLevel().getBlockState(event.getPos());
         if (!(state.getBlock() instanceof org.espetro.bastion.RadioBlock)) {
+            return;
+        }
+        if (org.espetro.client.FortificationPlacementController.isPreviewing()
+            || event.getEntity().getMainHandItem().getItem()
+                == net.minecraft.world.item.Items.IRON_SHOVEL) {
             return;
         }
         // 客户端先请求服务端校验并推送职业列表；成功后再开轮盘

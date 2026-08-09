@@ -34,6 +34,11 @@ public final class FortificationConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Map<String, FortificationDef> DEFS = new LinkedHashMap<>();
     private static VehicleServiceSettings vehicleService = new VehicleServiceSettings();
+    private static BuiltinConstructionSettings builtinConstruction =
+        new BuiltinConstructionSettings();
+
+    public static final int MAX_STRUCTURE_BLOCKS = 256;
+    public static final int MAX_STRUCTURE_OFFSET = 32;
 
     private FortificationConfig() {
     }
@@ -56,8 +61,10 @@ public final class FortificationConfig {
     public static void loadDefaults() {
         DEFS.clear();
         vehicleService = new VehicleServiceSettings();
+        builtinConstruction = new BuiltinConstructionSettings();
         register(defaultAmmoCrate());
         register(defaultVehicleSupplyStation());
+        register(defaultSandbagWall());
     }
 
     public static void loadFromPath(@Nullable Path path) {
@@ -75,6 +82,17 @@ public final class FortificationConfig {
                 if (parsed != null) {
                     parsed.normalize();
                     vehicleService = parsed;
+                }
+            }
+
+            if (root.has("builtin_construction")
+                && root.get("builtin_construction").isJsonObject()) {
+                BuiltinConstructionSettings parsed = GSON.fromJson(
+                    root.getAsJsonObject("builtin_construction"),
+                    BuiltinConstructionSettings.class);
+                if (parsed != null) {
+                    parsed.normalize();
+                    builtinConstruction = parsed;
                 }
             }
 
@@ -97,6 +115,7 @@ public final class FortificationConfig {
                 Espetro.LOGGER.warn("工事配置没有有效条目，恢复内置默认值");
                 register(defaultAmmoCrate());
                 register(defaultVehicleSupplyStation());
+                register(defaultSandbagWall());
             }
             Espetro.LOGGER.info("已冻结工事配置: {} 条，主基地补给半径={}，补给站半径={}",
                 DEFS.size(), vehicleService.mainBaseRadius, vehicleService.stationRadius);
@@ -108,8 +127,9 @@ public final class FortificationConfig {
     private static JsonObject defaultRoot() {
         JsonObject root = new JsonObject();
         root.add("vehicle_service", GSON.toJsonTree(new VehicleServiceSettings()));
+        root.add("builtin_construction", GSON.toJsonTree(new BuiltinConstructionSettings()));
         root.add("fortifications", GSON.toJsonTree(List.of(
-            defaultAmmoCrate(), defaultVehicleSupplyStation())));
+            defaultAmmoCrate(), defaultVehicleSupplyStation(), defaultSandbagWall())));
         return root;
     }
 
@@ -133,8 +153,9 @@ public final class FortificationConfig {
         }
         def.placeType = def.placeType == null
             ? "block" : def.placeType.trim().toLowerCase(Locale.ROOT);
-        if (!"block".equals(def.placeType) && !"entity".equals(def.placeType)) {
-            return def.id + " 的 place_type 必须是 block 或 entity";
+        if (!"block".equals(def.placeType) && !"entity".equals(def.placeType)
+            && !"structure".equals(def.placeType)) {
+            return def.id + " 的 place_type 必须是 block、entity 或 structure";
         }
         if ("block".equals(def.placeType) && isBlank(def.blockId)) {
             return def.id + " 缺少 block_id";
@@ -142,8 +163,34 @@ public final class FortificationConfig {
         if ("entity".equals(def.placeType) && isBlank(def.entityId) && isBlank(def.fallbackBlockId)) {
             return def.id + " 缺少 entity_id/fallback_block_id";
         }
+        if ("structure".equals(def.placeType)) {
+            if (def.blocks == null || def.blocks.isEmpty()) {
+                return def.id + " 缺少 blocks";
+            }
+            if (def.blocks.size() > MAX_STRUCTURE_BLOCKS) {
+                return def.id + " 的 blocks 超过 " + MAX_STRUCTURE_BLOCKS + " 个";
+            }
+            Set<String> offsets = new java.util.HashSet<>();
+            for (StructureBlockDef block : def.blocks) {
+                if (block == null || block.offset == null || block.offset.size() != 3
+                    || isBlank(block.blockId)) {
+                    return def.id + " 包含无效结构方块";
+                }
+                int x = block.offset.get(0);
+                int y = block.offset.get(1);
+                int z = block.offset.get(2);
+                if (Math.abs(x) > MAX_STRUCTURE_OFFSET || Math.abs(y) > MAX_STRUCTURE_OFFSET
+                    || Math.abs(z) > MAX_STRUCTURE_OFFSET) {
+                    return def.id + " 包含超出范围的结构偏移";
+                }
+                if (!offsets.add(x + "," + y + "," + z)) {
+                    return def.id + " 包含重复结构偏移 " + x + "," + y + "," + z;
+                }
+            }
+        }
         def.constructionCost = Math.max(0, def.constructionCost);
         def.ammunitionCost = Math.max(0, def.ammunitionCost);
+        def.normalizeProgress();
         if (def.usableBy == null || def.usableBy.isEmpty()) {
             def.usableBy = new ArrayList<>(List.of(
                 "commander", "squad_leader", "fireteam_leader"));
@@ -172,6 +219,14 @@ public final class FortificationConfig {
 
     public static VehicleServiceSettings vehicleService() {
         return vehicleService;
+    }
+
+    public static ConstructionProfile radioConstruction() {
+        return builtinConstruction.radio.copy();
+    }
+
+    public static ConstructionProfile habConstruction() {
+        return builtinConstruction.hab.copy();
     }
 
     public static Map<String, FortificationDef> all() {
@@ -219,6 +274,87 @@ public final class FortificationConfig {
         return d;
     }
 
+    private static FortificationDef defaultSandbagWall() {
+        FortificationDef d = new FortificationDef();
+        d.id = "sandbag_wall";
+        d.displayName = "沙袋掩体墙";
+        d.icon = "superbwarfare:textures/block/sandbag.png";
+        d.placeType = "structure";
+        d.constructionCost = 100;
+        d.ammunitionCost = 0;
+        d.requiredProgress = 100;
+        d.buildPerHit = 5;
+        d.removePerHit = 5;
+        d.requireRadioRange = true;
+        d.usableBy = new ArrayList<>(List.of(
+            "commander", "squad_leader", "fireteam_leader"));
+        d.blocks = new ArrayList<>();
+        for (int y = 0; y < 2; y++) {
+            for (int x = -1; x <= 1; x++) {
+                d.blocks.add(new StructureBlockDef(
+                    new ArrayList<>(List.of(x, y, 0)), "superbwarfare:sandbag"));
+            }
+        }
+        return d;
+    }
+
+    public static final class BuiltinConstructionSettings {
+        public ConstructionProfile radio = new ConstructionProfile(600, 30, 5);
+        public ConstructionProfile hab = new ConstructionProfile(200, 5, 5);
+
+        private void normalize() {
+            if (radio == null) radio = new ConstructionProfile(600, 30, 5);
+            if (hab == null) hab = new ConstructionProfile(200, 5, 5);
+            radio.normalize(600, 30, 5);
+            hab.normalize(200, 5, 5);
+        }
+    }
+
+    public static final class ConstructionProfile {
+        @SerializedName("required_progress")
+        public int requiredProgress;
+        @SerializedName("build_per_hit")
+        public int buildPerHit;
+        @SerializedName("remove_per_hit")
+        public int removePerHit;
+
+        public ConstructionProfile() {
+        }
+
+        public ConstructionProfile(int requiredProgress, int buildPerHit, int removePerHit) {
+            this.requiredProgress = requiredProgress;
+            this.buildPerHit = buildPerHit;
+            this.removePerHit = removePerHit;
+        }
+
+        private void normalize(int fallbackRequired, int fallbackBuild, int fallbackRemove) {
+            if (requiredProgress <= 0) requiredProgress = fallbackRequired;
+            requiredProgress = Math.min(1_000_000, requiredProgress);
+            if (buildPerHit <= 0) buildPerHit = fallbackBuild;
+            if (removePerHit <= 0) removePerHit = fallbackRemove;
+            buildPerHit = Math.min(requiredProgress, buildPerHit);
+            removePerHit = Math.min(requiredProgress, removePerHit);
+        }
+
+        public ConstructionProfile copy() {
+            return new ConstructionProfile(requiredProgress, buildPerHit, removePerHit);
+        }
+    }
+
+    public static final class StructureBlockDef {
+        public List<Integer> offset = new ArrayList<>();
+        @SerializedName(value = "block_id", alternate = {"blockId"})
+        public String blockId;
+
+        public StructureBlockDef() {
+        }
+
+        public StructureBlockDef(List<Integer> offset, String blockId) {
+            this.offset = offset;
+            this.blockId = blockId;
+        }
+    }
+
     public static final class VehicleServiceSettings {
         @SerializedName("main_base_radius")
         public double mainBaseRadius = 40.0;
@@ -260,9 +396,25 @@ public final class FortificationConfig {
         public int constructionCost;
         @SerializedName(value = "ammunition_cost", alternate = {"ammunitionCost"})
         public int ammunitionCost;
+        @SerializedName(value = "required_progress", alternate = {"requiredProgress"})
+        public int requiredProgress = 100;
+        @SerializedName(value = "build_per_hit", alternate = {"buildPerHit"})
+        public int buildPerHit = 5;
+        @SerializedName(value = "remove_per_hit", alternate = {"removePerHit"})
+        public int removePerHit = 5;
+        public List<StructureBlockDef> blocks = new ArrayList<>();
         @SerializedName(value = "require_radio_range", alternate = {"requireRadioRange"})
         public boolean requireRadioRange = true;
         @SerializedName(value = "usable_by", alternate = {"usableBy"})
         public List<String> usableBy = new ArrayList<>();
+
+        private void normalizeProgress() {
+            ConstructionProfile profile = new ConstructionProfile(
+                requiredProgress, buildPerHit, removePerHit);
+            profile.normalize(100, 5, 5);
+            requiredProgress = profile.requiredProgress;
+            buildPerHit = profile.buildPerHit;
+            removePerHit = profile.removePerHit;
+        }
     }
 }

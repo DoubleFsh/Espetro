@@ -31,6 +31,7 @@ public final class MutilHudOverlay {
             root = new GuiElement(0, 0, width, height);
             root.addChild(new StaminaElement());
             root.addChild(FobSupplyHud.createElement());
+            root.addChild(FortificationProgressHud.createElement());
         }
         // HUD widgets have no time-based MUtil animations. State changes are pushed by
         // their sync events, so the render path must not poll/update the tree per frame.

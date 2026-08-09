@@ -26,7 +26,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.21";
+    public static final String PROTOCOL_VERSION = "1.22";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -344,10 +344,37 @@ public class NetworkManager {
         NET.registerMessage(nextId(), FortificationCatalogPacket.class,
             FortificationCatalogPacket::write, FortificationCatalogPacket::read,
             FortificationCatalogPacket::handle);
+        NET.registerMessage(nextId(), FortificationPreviewPacket.class,
+            FortificationPreviewPacket::write, FortificationPreviewPacket::read,
+            FortificationPreviewPacket::handle);
+        NET.registerMessage(nextId(), FortificationPlacementPacket.class,
+            FortificationPlacementPacket::write, FortificationPlacementPacket::read,
+            FortificationPlacementPacket::handle);
+        NET.registerMessage(nextId(), FortificationWorkPacket.class,
+            FortificationWorkPacket::write, FortificationWorkPacket::read,
+            FortificationWorkPacket::handle);
+        NET.registerMessage(nextId(), FortificationProgressPacket.class,
+            FortificationProgressPacket::write, FortificationProgressPacket::read,
+            FortificationProgressPacket::handle);
     }
 
     public static void sendBuildFortification(String fortId) {
         NET.sendToServer(new BuildFortificationPacket(fortId));
+    }
+
+    public static void sendFortificationPlacement(FortificationPlacementPacket.Action action,
+                                                   UUID token,
+                                                   net.minecraft.core.BlockPos anchor,
+                                                   net.minecraft.core.Direction facing) {
+        NET.sendToServer(new FortificationPlacementPacket(action, token, anchor, facing));
+    }
+
+    public static void sendFortificationWork(net.minecraft.core.BlockPos target, boolean build) {
+        NET.sendToServer(FortificationWorkPacket.block(target, build));
+    }
+
+    public static void sendFortificationEntityWork(UUID target, boolean build) {
+        NET.sendToServer(FortificationWorkPacket.entity(target, build));
     }
 
     public static void requestFortificationCatalog() {

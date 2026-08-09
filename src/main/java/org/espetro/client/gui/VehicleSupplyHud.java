@@ -29,6 +29,7 @@ public final class VehicleSupplyHud {
     private static final int PANEL_HEIGHT = 28;
     private static final int TOP_MARGIN = 4;
     private static final int ICON_SIZE = 10;
+    private static final int ICON_TEXTURE_SIZE = 128;
 
     private static final ResourceLocation ICON_AMMO =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/ammo_supply.png");
@@ -120,14 +121,14 @@ public final class VehicleSupplyHud {
         if (supply.canCarryConstruction()) {
             // 补给载具：弹药左，建材右
             int ammoIconX = px + 35;
-            graphics.blit(ICON_AMMO, ammoIconX, iconRowY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            drawSupplyIcon(graphics, ICON_AMMO, ammoIconX, iconRowY);
             graphics.drawString(mc.font, String.valueOf(ammo),
                 ammoIconX + ICON_SIZE + 3, iconTextY, 0xFFFFFF);
 
             String constrText = String.valueOf(constr);
             int constrTextW = mc.font.width(constrText);
             int constrIconX = px + PANEL_WIDTH - 35 - ICON_SIZE - 3 - constrTextW;
-            graphics.blit(ICON_CONSTR, constrIconX, iconRowY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            drawSupplyIcon(graphics, ICON_CONSTR, constrIconX, iconRowY);
             graphics.drawString(mc.font, constrText,
                 constrIconX + ICON_SIZE + 3, iconTextY, 0xFFFFFF);
         } else {
@@ -135,10 +136,16 @@ public final class VehicleSupplyHud {
             String ammoText = String.valueOf(ammo);
             int totalW = ICON_SIZE + 3 + mc.font.width(ammoText);
             int startX = px + (PANEL_WIDTH - totalW) / 2;
-            graphics.blit(ICON_AMMO, startX, iconRowY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            drawSupplyIcon(graphics, ICON_AMMO, startX, iconRowY);
             graphics.drawString(mc.font, ammoText,
                 startX + ICON_SIZE + 3, iconTextY, 0xFFFFFF);
         }
+    }
+
+    private static void drawSupplyIcon(GuiGraphics graphics, ResourceLocation icon, int x, int y) {
+        graphics.blit(icon, x, y, ICON_SIZE, ICON_SIZE,
+            0.0F, 0.0F, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
     }
 
     // ==================== 准心提示 ====================

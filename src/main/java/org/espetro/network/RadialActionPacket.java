@@ -8,6 +8,7 @@ import org.espetro.Espetro;
 import org.espetro.bastion.BastionData;
 import org.espetro.bastion.BastionManager;
 import org.espetro.bastion.DeployActions;
+import org.espetro.bastion.FortificationManager;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.team.TeamPackManager;
 
@@ -44,12 +45,18 @@ public record RadialActionPacket(Action action) {
 
     private static void execute(ServerPlayer player, Action action) {
         switch (action) {
-            case DEPLOY_RADIO -> DeployActions.giveRadioItem(player);
-            case DEPLOY_HAB -> DeployActions.startHabChannel(player);
+            case DEPLOY_RADIO -> beginFortification(player, FortificationManager.BUILTIN_RADIO);
+            case DEPLOY_HAB -> beginFortification(player, FortificationManager.BUILTIN_HAB);
             case DEPLOY_VEHICLE -> DeployActions.openVehicleDeploy(player);
             case DEPLOY_RALLY -> deployRally(player);
             case FOB_STATUS -> showStatus(player);
         }
+    }
+
+    private static void beginFortification(ServerPlayer player, String id) {
+        String error = FortificationManager.getInstance().beginPreview(player, id);
+        if (error != null) player.sendSystemMessage(Component.literal(error));
+        else player.sendSystemMessage(Component.literal("§e铁铲左键确认施工范围，右键取消。"));
     }
 
     private static void deployRally(ServerPlayer player) {

@@ -56,8 +56,8 @@ public class VehicleConfig {
         public int initialDeployDelayDefendSeconds;
         /** 是否可装载建材 */
         public boolean canCarryConstruction() { return supplyVeh; }
-        /** 战斗/补给载具可作为移动换装点，换装消耗其携带的弹药。 */
-        public boolean canChangeClass() { return supplyVeh || fightVeh; }
+        /** 只有补给载具可作为移动换装点，换装消耗其携带的弹药。 */
+        public boolean canChangeClass() { return supplyVeh; }
 
         public int initialDeployDelaySeconds(String team) {
             if ("DEFEND".equalsIgnoreCase(team)) {

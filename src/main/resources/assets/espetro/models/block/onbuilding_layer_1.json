@@ -1,0 +1,4 @@
+{
+  "texture_size":[128,128],"textures":{"0":"espetro:block/building","particle":"espetro:block/building"},
+  "elements":[{"from":[1,0,1],"to":[15,2,15],"faces":{"north":{"uv":[6,3,8,3.25],"texture":"#0"},"east":{"uv":[6,3.25,8,3.5],"texture":"#0"},"south":{"uv":[6,3.5,8,3.75],"texture":"#0"},"west":{"uv":[6,3.75,8,4],"texture":"#0"},"up":{"uv":[4,2,2,0],"texture":"#0"},"down":{"uv":[4,2,2,4],"texture":"#0"}}}]
+}

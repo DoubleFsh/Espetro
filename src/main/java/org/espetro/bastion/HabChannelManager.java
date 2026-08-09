@@ -53,31 +53,13 @@ public final class HabChannelManager {
     private HabChannelManager() {
     }
 
-    /** 尝试开始读条；失败时已向玩家发送原因。 */
+    /** Compatibility entry point; stationary channels have been retired. */
     public void start(ServerPlayer player, String team) {
         cancel(player.getUUID(), null);
-
-        BastionManager manager = BastionManager.getInstance();
-        ServerLevel level = player.serverLevel();
-        BlockPos pos = player.blockPosition();
-
-        if (!manager.isInsideFriendlyRadioBuildRadius(level, pos, team)) {
-            player.sendSystemMessage(Component.literal(
-                "§c兵站必须建在己方 Radio 建造半径（"
-                    + (int) LogisticsConfig.get().radioBuildRadius + " 格）内！"));
-            return;
-        }
-        int cost = manager.getHabConstructionCost();
-        int available = manager.sumConstructionInCoveringRadios(level, pos, team);
-        if (available < cost) {
-            player.sendSystemMessage(Component.literal(
-                "§c部署兵站需要 " + cost + " 点 Radio 建材库存！覆盖范围内合计仅 " + available + " 点。"));
-            return;
-        }
-
-        channels.put(player.getUUID(), new Channel(player, team));
-        player.sendSystemMessage(Component.literal(
-            "§e开始建造兵站：原地不动 " + (CHANNEL_TICKS / 20) + " 秒…（移动会取消）"));
+        String error = FortificationManager.getInstance()
+            .beginPreview(player, FortificationManager.BUILTIN_HAB);
+        player.sendSystemMessage(Component.literal(error == null
+            ? "§e铁铲左键确认兵站施工范围，右键取消。" : error));
     }
 
     public void cancel(UUID playerId, @Nullable String reason) {

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.dimension.BattlefieldWorldManagerPathTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-08T20:35:20" hostname="cachyos-x8664" time="0.017">
+<testsuite name="org.espetro.dimension.BattlefieldWorldManagerPathTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-09T09:19:02" hostname="cachyos-x8664" time="0.019">
   <properties/>
-  <testcase name="rejectsDimensionSymlinkEscapingSelectedSave(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.004"/>
+  <testcase name="rejectsDimensionSymlinkEscapingSelectedSave(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.005"/>
   <testcase name="acceptsCustomDimensionInsideSelectedUnicodeSave(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.002"/>
-  <testcase name="replacesDestroyedSaveCopyWithoutChangingEsWorldTemplate(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.006"/>
+  <testcase name="replacesDestroyedSaveCopyWithoutChangingEsWorldTemplate(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.007"/>
   <testcase name="rejectsContainerRootAndSiblingPaths(Path)" classname="org.espetro.dimension.BattlefieldWorldManagerPathTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

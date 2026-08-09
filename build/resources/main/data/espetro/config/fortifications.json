@@ -5,6 +5,18 @@
     "transfer_amount": 100,
     "transfer_interval_ticks": 20
   },
+  "builtin_construction": {
+    "radio": {
+      "required_progress": 600,
+      "build_per_hit": 30,
+      "remove_per_hit": 5
+    },
+    "hab": {
+      "required_progress": 200,
+      "build_per_hit": 5,
+      "remove_per_hit": 5
+    }
+  },
   "fortifications": [
     {
       "id": "ammo_crate",
@@ -14,6 +26,9 @@
       "block_id": "minecraft:shulker_box",
       "construction_cost": 100,
       "ammunition_cost": 0,
+      "required_progress": 100,
+      "build_per_hit": 5,
+      "remove_per_hit": 5,
       "require_radio_range": true,
       "usable_by": ["commander", "squad_leader", "fireteam_leader"]
     },
@@ -26,8 +41,32 @@
       "fallback_block_id": "minecraft:barrel",
       "construction_cost": 200,
       "ammunition_cost": 0,
+      "required_progress": 100,
+      "build_per_hit": 5,
+      "remove_per_hit": 5,
       "require_radio_range": true,
       "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+    },
+    {
+      "id": "sandbag_wall",
+      "display_name": "沙袋掩体墙",
+      "icon": "superbwarfare:textures/block/sandbag.png",
+      "place_type": "structure",
+      "construction_cost": 100,
+      "ammunition_cost": 0,
+      "required_progress": 100,
+      "build_per_hit": 5,
+      "remove_per_hit": 5,
+      "require_radio_range": true,
+      "usable_by": ["commander", "squad_leader", "fireteam_leader"],
+      "blocks": [
+        {"offset": [-1, 0, 0], "block_id": "superbwarfare:sandbag"},
+        {"offset": [0, 0, 0], "block_id": "superbwarfare:sandbag"},
+        {"offset": [1, 0, 0], "block_id": "superbwarfare:sandbag"},
+        {"offset": [-1, 1, 0], "block_id": "superbwarfare:sandbag"},
+        {"offset": [0, 1, 0], "block_id": "superbwarfare:sandbag"},
+        {"offset": [1, 1, 0], "block_id": "superbwarfare:sandbag"}
+      ]
     }
   ]
 }

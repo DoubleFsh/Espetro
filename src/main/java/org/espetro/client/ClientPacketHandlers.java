@@ -470,4 +470,13 @@ public class ClientPacketHandlers {
         org.espetro.client.gui.AuraTipRadialController
             .updateFortifications(packet.entries());
     }
+
+    public static void handleFortificationPreview(FortificationPreviewPacket packet) {
+        org.espetro.client.FortificationPlacementController.begin(packet);
+    }
+
+    public static void handleFortificationProgress(FortificationProgressPacket packet) {
+        org.espetro.client.FortificationPlacementController.clear();
+        org.espetro.client.gui.FortificationProgressHud.update(packet);
+    }
 }

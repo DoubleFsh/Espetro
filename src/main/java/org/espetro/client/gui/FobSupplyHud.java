@@ -31,7 +31,7 @@ public final class FobSupplyHud {
     private static final int HALF_BAR_WIDTH = BAR_WIDTH / 2;
     private static final int AMMO_BAR_X = 4;
     private static final int CONSTRUCTION_BAR_X = AMMO_BAR_X + HALF_BAR_WIDTH;
-    private static final int ICON_SIZE = 8;
+    private static final int ICON_SIZE = 10;
 
     private static final int PANEL_BACKGROUND = 0xD0111111;
     private static final int PANEL_BORDER = 0xB05E646C;
@@ -221,8 +221,8 @@ public final class FobSupplyHud {
                     constructionWidth, BAR_HEIGHT, CONSTRUCTION_COLOR);
             }
 
-            drawIcon(ammoIcon, 8, 10, false);
-            drawIcon(constructionIcon, 57, 10, true);
+            drawIcon(ammoIcon, 8, 9, false);
+            drawIcon(constructionIcon, 57, 9, true);
             drawNumber(Integer.toString(ammunition), 19, 10);
             drawNumber(Integer.toString(construction), 68, 10);
         }
@@ -271,10 +271,41 @@ public final class FobSupplyHud {
         private void loadResourcesIfNecessary() {
             if (resourcesLoaded) return;
             closeSourceImages();
-            ammoIcon = loadIcon(AMMO_ICON);
-            constructionIcon = loadIcon(CONSTRUCTION_ICON);
+            ammoIcon = loadScaledIcon(AMMO_ICON);
+            constructionIcon = loadScaledIcon(CONSTRUCTION_ICON);
             asciiFont = loadIcon(VANILLA_ASCII_FONT);
             resourcesLoaded = true;
+        }
+
+        private NativeImage loadScaledIcon(ResourceLocation location) {
+            NativeImage source = loadIcon(location);
+            if (source == null) return null;
+            try {
+                int width = source.getWidth();
+                int height = source.getHeight();
+                int[] sourcePixels = new int[width * height];
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        sourcePixels[y * width + x] = source.getPixelRGBA(x, y);
+                    }
+                }
+                int[] fitted = IconRasterizer.fitAbgr(
+                    sourcePixels, width, height, ICON_SIZE, ICON_SIZE);
+                NativeImage scaled = new NativeImage(ICON_SIZE, ICON_SIZE, true);
+                try {
+                    for (int y = 0; y < ICON_SIZE; y++) {
+                        for (int x = 0; x < ICON_SIZE; x++) {
+                            scaled.setPixelRGBA(x, y, fitted[y * ICON_SIZE + x]);
+                        }
+                    }
+                    return scaled;
+                } catch (RuntimeException exception) {
+                    scaled.close();
+                    throw exception;
+                }
+            } finally {
+                source.close();
+            }
         }
 
         private NativeImage loadIcon(ResourceLocation location) {
@@ -295,12 +326,8 @@ public final class FobSupplyHud {
                 return;
             }
             for (int dy = 0; dy < ICON_SIZE; dy++) {
-                int sourceY = Math.min(source.getHeight() - 1,
-                    (int) (((dy + 0.5D) * source.getHeight()) / ICON_SIZE));
                 for (int dx = 0; dx < ICON_SIZE; dx++) {
-                    int sourceX = Math.min(source.getWidth() - 1,
-                        (int) (((dx + 0.5D) * source.getWidth()) / ICON_SIZE));
-                    int sampled = source.getPixelRGBA(sourceX, sourceY);
+                    int sampled = source.getPixelRGBA(dx, dy);
                     if ((sampled >>> 24) != 0) {
                         pixels.blendPixel(targetX + dx, targetY + dy, sampled);
                     }
@@ -310,25 +337,34 @@ public final class FobSupplyHud {
 
         private void drawFallbackIcon(int x, int y, boolean constructionType) {
             int symbol = argbToAbgr(constructionType ? CONSTRUCTION_COLOR : AMMO_COLOR);
+            int center = ICON_SIZE / 2;
+            int radius = Math.max(2, (ICON_SIZE - 2) / 2);
             for (int row = 0; row < ICON_SIZE; row++) {
                 for (int column = 0; column < ICON_SIZE; column++) {
-                    int dx = column - 3;
-                    int dy = row - 3;
-                    if (dx * dx + dy * dy <= 13) {
+                    int dx = column - center;
+                    int dy = row - center;
+                    if (dx * dx + dy * dy <= radius * radius) {
                         pixels.setPixelRGBA(x + column, y + row, 0xFF080808);
                     }
                 }
             }
             if (constructionType) {
-                pixels.setPixelRGBA(x + 2, y + 2, symbol);
                 pixels.setPixelRGBA(x + 3, y + 2, symbol);
-                pixels.setPixelRGBA(x + 4, y + 3, symbol);
-                pixels.setPixelRGBA(x + 4, y + 4, symbol);
+                pixels.setPixelRGBA(x + 4, y + 2, symbol);
+                pixels.setPixelRGBA(x + 5, y + 3, symbol);
+                pixels.setPixelRGBA(x + 5, y + 4, symbol);
                 pixels.setPixelRGBA(x + 4, y + 5, symbol);
+                pixels.setPixelRGBA(x + 3, y + 6, symbol);
+                pixels.setPixelRGBA(x + 2, y + 7, symbol);
             } else {
-                for (int i = 0; i < 4; i++) {
-                    pixels.setPixelRGBA(x + 2 + i, y + 5 - i, symbol);
-                    if (i < 3) pixels.setPixelRGBA(x + 3 + i, y + 5 - i, symbol);
+                for (int bullet = 0; bullet < 3; bullet++) {
+                    for (int i = 0; i < 3; i++) {
+                        int px = x + 2 + bullet + i;
+                        int py = y + 6 - i - bullet;
+                        if (px < x + ICON_SIZE && py >= y) {
+                            pixels.setPixelRGBA(px, py, symbol);
+                        }
+                    }
                 }
             }
         }

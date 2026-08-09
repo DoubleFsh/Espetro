@@ -19,6 +19,7 @@ public class BastionItems {
 
     public static RadioBlock RADIO_BLOCK;
     public static BlockItem RADIO_BLOCK_ITEM;
+    public static OnBuildingBlock ON_BUILDING_BLOCK;
 
     @SubscribeEvent
     public static void registerAll(RegisterEvent event) {
@@ -33,6 +34,16 @@ public class BastionItems {
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
                     Espetro.MOD_ID, RadioBlock.BLOCK_ID),
                 RADIO_BLOCK
+            );
+            ON_BUILDING_BLOCK = new OnBuildingBlock(BlockBehaviour.Properties.of()
+                .mapColor(MapColor.COLOR_YELLOW)
+                .strength(1.0f, 1.0f)
+                .sound(SoundType.WOOD)
+                .noOcclusion());
+            helper.register(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                    Espetro.MOD_ID, OnBuildingBlock.BLOCK_ID),
+                ON_BUILDING_BLOCK
             );
         });
         event.register(Registries.ITEM, helper -> {

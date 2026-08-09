@@ -400,9 +400,13 @@ public final class AuraTipRadialController {
      */
     private static cc.sighs.auratip.data.RadialMenuData buildMenu() {
         var builder = base(BUILD_MENU)
-            .slot("espetro.radio", RADIO, action(RadialActionPacket.Action.DEPLOY_RADIO),
+            .slot("espetro.radio", RADIO,
+                Actions.script(BUILD_FORT_ACTION,
+                    Map.of("fortId", org.espetro.bastion.FortificationManager.BUILTIN_RADIO)),
                 Component.translatable("radial.espetro.radio"), "#FFD5B25C")
-            .slot("espetro.hab", HAB, action(RadialActionPacket.Action.DEPLOY_HAB),
+            .slot("espetro.hab", HAB,
+                Actions.script(BUILD_FORT_ACTION,
+                    Map.of("fortId", org.espetro.bastion.FortificationManager.BUILTIN_HAB)),
                 Component.literal("部署兵站"), "#FF8CB4D5")
             .slot("espetro.rally", RALLY, action(RadialActionPacket.Action.DEPLOY_RALLY),
                 Component.translatable("radial.espetro.rally"), "#FF7DAE82");

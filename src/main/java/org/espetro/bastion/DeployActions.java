@@ -26,79 +26,20 @@ public final class DeployActions {
     private DeployActions() {
     }
 
-    /** 轮盘「部署 Radio」：发放 1 个 Radio 方块（限 1，含冷却）。 */
+    /** Legacy API: now enters the same server-approved construction preview. */
     public static void giveRadioItem(ServerPlayer serverPlayer) {
-        LogisticsConfig.RadioPlacementSettings radio = LogisticsConfig.get().getRadio();
-        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-        String phaseName = phase != null ? phase.name() : "";
-
-        if (!radio.allowsPhase(phaseName)) {
-            serverPlayer.sendSystemMessage(Component.literal(
-                "§c当前阶段不能部署 Radio！允许阶段: " + String.join(", ", radio.allowedPhases)));
-            return;
-        }
-        if (!checkCommanderOrLeader(serverPlayer, radio, "Radio")) {
-            return;
-        }
-        String team = Espetro.getPlayerTeam(serverPlayer);
-        if (team == null) {
-            serverPlayer.sendSystemMessage(Component.literal("§c无法确定你的队伍！"));
-            return;
-        }
-
-        BastionManager manager = BastionManager.getInstance();
-        String cooldownMsg = manager.canBuildBastion(
-            serverPlayer.getUUID(), manager.getEffectiveRadioCooldownSeconds());
-        if (cooldownMsg != null) {
-            serverPlayer.sendSystemMessage(Component.literal(cooldownMsg));
-            return;
-        }
-
-        if (BastionItems.RADIO_BLOCK_ITEM == null) {
-            serverPlayer.sendSystemMessage(Component.literal("§cRadio 物品未注册。"));
-            return;
-        }
-        if (hasRadioItem(serverPlayer)) {
-            serverPlayer.sendSystemMessage(Component.literal("§e你已经携带了一台 Radio，先放置它。"));
-            return;
-        }
-
-        ItemStack stack = new ItemStack(BastionItems.RADIO_BLOCK_ITEM);
-        if (!serverPlayer.getInventory().add(stack)) {
-            serverPlayer.drop(stack, false);
-        }
-        serverPlayer.sendSystemMessage(Component.literal(
-            "§a已领取 Radio。找到合适位置放置（放置时校验冷却/排斥/上限）。"));
+        beginConstructionPreview(serverPlayer, FortificationManager.BUILTIN_RADIO);
     }
 
-    /** 轮盘「部署兵站」：在脚下发起 10 秒原地读条。 */
+    /** Legacy API: the former stationary HAB channel now enters placement preview. */
     public static void startHabChannel(ServerPlayer serverPlayer) {
-        LogisticsConfig.RadioPlacementSettings radio = LogisticsConfig.get().getRadio();
-        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
-        String phaseName = phase != null ? phase.name() : "";
+        beginConstructionPreview(serverPlayer, FortificationManager.BUILTIN_HAB);
+    }
 
-        if (!radio.allowsPhase(phaseName)) {
-            serverPlayer.sendSystemMessage(Component.literal(
-                "§c当前阶段不能部署兵站！允许阶段: " + String.join(", ", radio.allowedPhases)));
-            return;
-        }
-        if (!checkCommanderOrLeader(serverPlayer, radio, "兵站")) {
-            return;
-        }
-        String team = Espetro.getPlayerTeam(serverPlayer);
-        if (team == null) {
-            serverPlayer.sendSystemMessage(Component.literal("§c无法确定你的队伍！"));
-            return;
-        }
-
-        // 编制配置：每个 Radio 范围内 HAB 上限
-        String limitErr = checkHabPerRadioLimit(serverPlayer, team);
-        if (limitErr != null) {
-            serverPlayer.sendSystemMessage(Component.literal(limitErr));
-            return;
-        }
-
-        HabChannelManager.getInstance().start(serverPlayer, team);
+    private static void beginConstructionPreview(ServerPlayer player, String id) {
+        String error = FortificationManager.getInstance().beginPreview(player, id);
+        player.sendSystemMessage(Component.literal(error == null
+            ? "§e铁铲左键确认施工范围，右键取消。" : error));
     }
 
     /** 检查玩家脚点覆盖 Radio 的 HAB 数量是否已达编制上限。 */

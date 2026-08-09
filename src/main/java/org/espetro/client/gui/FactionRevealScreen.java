@@ -1,11 +1,13 @@
 package org.espetro.client.gui;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import se.mickelus.mutil.gui.GuiElement;
 
+import java.io.InputStream;
 import java.util.Objects;
 
 /**
@@ -19,9 +21,9 @@ public class FactionRevealScreen extends MutilScreen {
     private static final ResourceLocation DEFAULT_DEFEND_TEXTURE =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/defend_faction.png");
 
-    /** 16:9 横向图片显示尺寸。 */
-    private static final int IMG_W = 192;
-    private static final int IMG_H = 108;
+    /** 图片可用区域；实际绘制尺寸始终按源图片比例适配。 */
+    private static final int IMG_MAX_W = 192;
+    private static final int IMG_MAX_H = 108;
     /** 两个图片间距。 */
     private static final int IMG_GAP = 48;
 
@@ -51,7 +53,6 @@ public class FactionRevealScreen extends MutilScreen {
 
         if (attackFactionImage != null && !attackFactionImage.isEmpty()) {
             atkTex = parseTexture(attackFactionImage);
-            // 尝试通过 NativeImage 读取实际尺寸；若失败则保底 128×128
             int[] dims = readTextureDimensions(atkTex);
             if (dims != null) { atkW = dims[0]; atkH = dims[1]; }
         }
@@ -69,18 +70,18 @@ public class FactionRevealScreen extends MutilScreen {
         this.defendTexH = defH;
     }
 
-    /** 从资源读取纹理实际像素尺寸；若失败返回 null。 */
+    /** 从资源包读取纹理实际像素尺寸；读取完成立即释放临时像素数据。 */
     private static int[] readTextureDimensions(ResourceLocation rl) {
+        if (rl == null) return null;
         try {
-            var mgr = Minecraft.getInstance().getTextureManager();
-            var tex = mgr.getTexture(rl);
-            if (tex != null) {
-                // AbstractTexture 多数情况下无法可靠获取尺寸；
-                // 对于 DynamicTexture 可以，对于 SimpleTexture 也可以用 NativeImage 重新读。
-                // 这里直接回退到 128×128，由渲染端的 16:9 裁剪统一处理。
+            var resource = Minecraft.getInstance().getResourceManager().getResource(rl);
+            if (resource.isEmpty()) return null;
+            try (InputStream in = resource.get().open(); NativeImage image = NativeImage.read(in)) {
+                return new int[] { image.getWidth(), image.getHeight() };
             }
-        } catch (Exception ignored) {}
-        return null; // 无法可靠获取 → 渲染端按 16:9 裁剪
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private static ResourceLocation parseTexture(String fullPath) {
@@ -102,13 +103,12 @@ public class FactionRevealScreen extends MutilScreen {
             "\u00a78" + getSecondsRemaining() + "秒后进入部署",
             EspetroMutilWidgets.GOLD);
         int headerH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
-        boolean stacked = this.width < IMG_W * 2 + IMG_GAP + 60;
-        // 16:9 横向图片，卡宽比图片略宽
-        int cardW = stacked ? Math.min(IMG_W + 32, this.width - 28) : IMG_W + 32;
+        boolean stacked = this.width < IMG_MAX_W * 2 + IMG_GAP + 60;
+        int cardW = stacked ? Math.min(IMG_MAX_W + 32, this.width - 28) : IMG_MAX_W + 32;
         int gap = IMG_GAP;
         int contentW = stacked ? cardW : cardW * 2 + gap;
         int panelW = Math.min(this.width - 18, Math.max(contentW + 20, stacked ? cardW + 40 : 430));
-        int cardH = IMG_H + 22;
+        int cardH = IMG_MAX_H + 22;
         int panelH = stacked ? cardH * 2 + gap : cardH;
         int panelX = (this.width - panelW) / 2;
         int panelY = headerH + Math.max(8, (this.height - headerH - panelH) / 2);
@@ -133,16 +133,16 @@ public class FactionRevealScreen extends MutilScreen {
     private void addFactionCard(GuiElement root, int x, int y, int cardW,
                                 ResourceLocation texture, int texW, int texH,
                                 String factionName, int textColor) {
-        int imgX = x + (cardW - IMG_W) / 2;
-        root.addChild(new FactionImageElement(imgX, y, IMG_W, IMG_H, texW, texH, texture));
-        root.addChild(EspetroMutilWidgets.centeredText(x, y + IMG_H + 5, cardW,
+        AspectFit.Size fitted = AspectFit.within(texW, texH, IMG_MAX_W, IMG_MAX_H);
+        int imgX = x + (cardW - fitted.width()) / 2;
+        int imgY = y + (IMG_MAX_H - fitted.height()) / 2;
+        root.addChild(new FactionImageElement(imgX, imgY, fitted.width(), fitted.height(),
+            texW, texH, texture));
+        root.addChild(EspetroMutilWidgets.centeredText(x, y + IMG_MAX_H + 5, cardW,
             fitText("\u00a7l" + factionName, cardW - 8), textColor));
     }
 
-    /**
-     * 从任意尺寸纹理中裁剪中心 16:9 区域，拉伸填满 {@link #IMG_W}×{@link #IMG_H}。
-     * 纹理原始宽高通过 texW/texH 指定（默认 128×128）。
-     */
+    /** Draws the complete texture at an aspect-fitted size without cropping or stretching. */
     private static final class FactionImageElement extends GuiElement {
         private final ResourceLocation texture;
         private final int texW, texH;

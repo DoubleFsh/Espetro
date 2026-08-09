@@ -1,0 +1,11 @@
+{
+  "multipart": [
+    {"apply": {"model": "espetro:block/onbuilding_frame"}},
+    {"when": {"stage": "1|2|3|4|5|6"}, "apply": {"model": "espetro:block/onbuilding_layer_1"}},
+    {"when": {"stage": "2|3|4|5|6"}, "apply": {"model": "espetro:block/onbuilding_layer_2"}},
+    {"when": {"stage": "3|4|5|6"}, "apply": {"model": "espetro:block/onbuilding_layer_3"}},
+    {"when": {"stage": "4|5|6"}, "apply": {"model": "espetro:block/onbuilding_layer_4"}},
+    {"when": {"stage": "5|6"}, "apply": {"model": "espetro:block/onbuilding_layer_5"}},
+    {"when": {"stage": "6"}, "apply": {"model": "espetro:block/onbuilding_layer_6"}}
+  ]
+}

@@ -3,8 +3,8 @@ Specification-Title: espetro
 Specification-Vendor: 
 Specification-Version: 1
 Implementation-Title: espetro
-Implementation-Version: 1.1.2-c
+Implementation-Version: 1.1.2-f
 Implementation-Vendor: 
-Implementation-Timestamp: 2026-08-09T04:36:24+0800
+Implementation-Timestamp: 2026-08-09T17:18:50+0800
 MixinConfigs: espetro.mixins.json
 
