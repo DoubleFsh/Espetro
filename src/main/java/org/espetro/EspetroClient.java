@@ -101,6 +101,7 @@ public class EspetroClient {
         org.espetro.client.gui.VehicleWheelController.tick(mc);
         org.espetro.client.FortificationPlacementController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
+        org.espetro.client.audio.ClientFormationAudioManager.tick(mc);
         // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
         if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
             boolean down = org.lwjgl.glfw.GLFW.glfwGetMouseButton(

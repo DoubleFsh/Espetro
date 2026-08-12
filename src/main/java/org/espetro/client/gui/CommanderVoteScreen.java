@@ -91,7 +91,8 @@ public class CommanderVoteScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+        CurrentMapBackgroundRenderer.render(
+            graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
     }
 
     @Override

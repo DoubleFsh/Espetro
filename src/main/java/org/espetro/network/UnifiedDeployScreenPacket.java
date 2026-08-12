@@ -49,6 +49,8 @@ public class UnifiedDeployScreenPacket {
     private final boolean waitingForDeploySelection;
     private final int outpostRedeployCooldownRemaining;
     private final int classSwitchCooldownRemaining;
+    /** 当前接收玩家由服务端确认的职业 ID；空串表示尚未选择。 */
+    private final String selectedClassId;
     /** true 时客户端应打开面板；false 时仅刷新当前已打开的面板和战术缓存。 */
     private final boolean openScreen;
 
@@ -111,6 +113,25 @@ public class UnifiedDeployScreenPacket {
             boolean waitingForDeploySelection, int outpostRedeployCooldownRemaining,
             List<SquadCategoryInfo> squadCategories, int classSwitchCooldownRemaining,
             boolean openScreen) {
+        this(factionId, factionName, factionDescription, factionIcon,
+            classes, classCounts, hasDeployPoint, deployPointPos, bastions,
+            isCommander, vehicles, squads, mySquadId, deployTimeRemaining, team,
+            commanderNames, teammateNameTagDistance, waitingForDeploySelection,
+            outpostRedeployCooldownRemaining, squadCategories, classSwitchCooldownRemaining,
+            openScreen, "");
+    }
+
+    public UnifiedDeployScreenPacket(
+            String factionId, String factionName, String factionDescription, String factionIcon,
+            List<ClassInfo> classes, Map<String, Integer> classCounts,
+            boolean hasDeployPoint, String deployPointPos, List<BastionItem> bastions,
+            boolean isCommander, List<VehicleInfo> vehicles,
+            List<SquadInfo> squads, int mySquadId,
+            int deployTimeRemaining, String team,
+            List<String> commanderNames, double teammateNameTagDistance,
+            boolean waitingForDeploySelection, int outpostRedeployCooldownRemaining,
+            List<SquadCategoryInfo> squadCategories, int classSwitchCooldownRemaining,
+            boolean openScreen, String selectedClassId) {
         this.factionId = factionId;
         this.factionName = factionName;
         this.factionDescription = factionDescription;
@@ -133,6 +154,7 @@ public class UnifiedDeployScreenPacket {
         this.outpostRedeployCooldownRemaining = Math.max(0, outpostRedeployCooldownRemaining);
         this.classSwitchCooldownRemaining = Math.max(0, classSwitchCooldownRemaining);
         this.openScreen = openScreen;
+        this.selectedClassId = selectedClassId == null ? "" : selectedClassId;
     }
 
     public UnifiedDeployScreenPacket(FriendlyByteBuf buf) {
@@ -195,6 +217,7 @@ public class UnifiedDeployScreenPacket {
         this.outpostRedeployCooldownRemaining = buf.readVarInt();
         this.classSwitchCooldownRemaining = buf.readVarInt();
         this.openScreen = buf.readBoolean();
+        this.selectedClassId = buf.readUtf();
     }
 
     public static UnifiedDeployScreenPacket read(FriendlyByteBuf buf) {
@@ -247,6 +270,7 @@ public class UnifiedDeployScreenPacket {
         buf.writeVarInt(outpostRedeployCooldownRemaining);
         buf.writeVarInt(classSwitchCooldownRemaining);
         buf.writeBoolean(openScreen);
+        buf.writeUtf(selectedClassId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -296,6 +320,7 @@ public class UnifiedDeployScreenPacket {
     public int getOutpostRedeployCooldownRemaining() { return outpostRedeployCooldownRemaining; }
     public int getClassSwitchCooldownRemaining() { return classSwitchCooldownRemaining; }
     public boolean shouldOpenScreen() { return openScreen; }
+    public String getSelectedClassId() { return selectedClassId; }
 
     // ============ Inner Classes ============
 

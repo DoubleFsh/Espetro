@@ -98,6 +98,8 @@ public class UnifiedDeployScreen extends MutilScreen {
     private boolean waitingForDeploySelection;
     private long outpostRedeployCooldownEndsAt;
     private long classSwitchCooldownEndsAt;
+    /** 服务端明确下发的本人职业 ID，不再从可能延迟的小队成员列表反推。 */
+    private String selectedClassId;
     private int lastDisplayedClassSwitchCooldown = -1;
     private boolean lastClassSelectionLocationAllowed;
     private GovernanceStatePacket governanceState = ClientGovernanceState.get();
@@ -210,6 +212,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         this.squadCategories = new ArrayList<>(data.getSquadCategories());
         this.mySquadId = data.getMySquadId();
         this.team = data.getTeam();
+        this.selectedClassId = normalizeSelectedClassId(data.getSelectedClassId());
         this.waitingForDeploySelection = data.isWaitingForDeploySelection();
         this.outpostRedeployCooldownEndsAt = System.currentTimeMillis()
             + data.getOutpostRedeployCooldownRemaining() * 1000L;
@@ -405,6 +408,20 @@ public class UnifiedDeployScreen extends MutilScreen {
             return;
         }
         refreshClassButtons();
+    }
+
+    public void updateSelectedClass(String updatedSelectedClassId) {
+        String next = normalizeSelectedClassId(updatedSelectedClassId);
+        if (Objects.equals(this.selectedClassId, next)) {
+            return;
+        }
+        this.selectedClassId = next;
+        refreshDeployButtonStates();
+        refreshClassButtons();
+    }
+
+    private static String normalizeSelectedClassId(String classId) {
+        return classId == null || classId.isBlank() ? null : classId;
     }
 
     /** 职业交互结构（职业及其变体的数量、ID 与顺序）。 */
@@ -1905,26 +1922,9 @@ public class UnifiedDeployScreen extends MutilScreen {
         return teamColor + teamName + squadStr + " \u00a7f| " + factionName;
     }
 
-    /** 本地玩家是否已有职业（依据小队同步的 className，事件驱动更新）。 */
+    /** 本地玩家是否已有职业（由服务端按接收玩家独立同步）。 */
     private boolean hasLocalPlayerSelectedClass() {
-        return getLocalPlayerClassName() != null;
-    }
-
-    /** 获取本地玩家当前选择的职业名称（来自小队同步），未选择则返回 null。 */
-    private String getLocalPlayerClassName() {
-        var player = Minecraft.getInstance().player;
-        if (player == null) return null;
-        UUID self = player.getUUID();
-        for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
-            for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
-                if (!self.equals(member.uuid)) continue;
-                String cn = member.className;
-                if (cn != null && !cn.isBlank() && !"未选择职业".equals(cn)) {
-                    return cn;
-                }
-            }
-        }
-        return null;
+        return selectedClassId != null;
     }
 
     private void refreshDeployButtonStates() {
@@ -2015,8 +2015,8 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 始终铺不透明纯黑，挡住世界与聊天。
-        graphics.fill(0, 0, this.width, this.height, SCREEN_SHADE);
+        CurrentMapBackgroundRenderer.render(
+            graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
         computeRegions();
         // 左/中列先铺实心，即使地图污染 GL 也不会露出世界。
         graphics.fill(leftX, leftY, leftX + leftW, leftY + leftH, PANEL_LEFT_BG);
@@ -2685,14 +2685,13 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     private void refreshClassButtons() {
         boolean coolingDown = getClassSwitchCooldownRemaining() > 0;
-        String selectedName = getLocalPlayerClassName();
         for (EspButton btn : classButtons) {
             Integer clsIdx = classButtonToClassIndex.get(btn);
             if (clsIdx == null || clsIdx < 0 || clsIdx >= classes.size()) continue;
             var cls = classes.get(clsIdx);
             boolean disabled = isClassButtonDisabled(cls);
             boolean emphasizeRed = isClassEmphasizeRed(cls, disabled);
-            boolean isSelected = selectedName != null && selectedName.equals(cls.name);
+            boolean isSelected = selectedClassId != null && selectedClassId.equals(cls.classId);
             // 仅非图标按钮（compact list）更新文字 label；图标按钮保持图标不变
             boolean isCompactBtn = btn.getWidth() > ICON_BTN + 4;
             if (isCompactBtn) {
@@ -2708,10 +2707,17 @@ public class UnifiedDeployScreen extends MutilScreen {
             final int classIndex = clsIdx;
             btn.setDisabledAction(() -> selectClass(classIndex));
             if (disabled) {
-                btn.setDisabledStyle(
-                    coolingDown ? BTN_BG_DISABLED : CLASS_BG_UNAVAILABLE,
-                    coolingDown ? 0x60383848 : CLASS_BORDER_UNAVAILABLE,
-                    coolingDown ? 0xFF777777 : 0xFFFF9A9A);
+                if (isSelected) {
+                    btn.setDisabledStyle(
+                        CLASS_BG_SELECTED,
+                        0xFFE8B85C,
+                        0xFFFFFFFF);
+                } else {
+                    btn.setDisabledStyle(
+                        coolingDown ? BTN_BG_DISABLED : CLASS_BG_UNAVAILABLE,
+                        coolingDown ? 0x60383848 : CLASS_BORDER_UNAVAILABLE,
+                        coolingDown ? 0xFF777777 : 0xFFFF9A9A);
+                }
             } else {
                 btn.setDisabledAction(null);
                 btn.normalColor = isSelected ? CLASS_BG_SELECTED : BTN_BG_NORMAL;

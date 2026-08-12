@@ -63,7 +63,8 @@ public class RequestGameStatePacket {
                     playerTeam,
                     playerFaction,
                     activeTeam,
-                    timeRemaining
+                    timeRemaining,
+                    gsm.getCurrentMapFolder()
                 );
 
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);

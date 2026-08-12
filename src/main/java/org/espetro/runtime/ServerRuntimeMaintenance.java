@@ -19,6 +19,7 @@ public final class ServerRuntimeMaintenance {
      * 禁止全图 getAllEntities 或强加载区块。
      */
     private static final int INVALID_STATE_SCAN_INTERVAL_TICKS = 100;
+    private static final int DEPLOY_POINT_SYNC_INTERVAL_TICKS = 100;
     private static final ServerRuntimeMaintenance INSTANCE = new ServerRuntimeMaintenance();
 
     private long tickCounter;
@@ -42,6 +43,9 @@ public final class ServerRuntimeMaintenance {
         TeamPackManager.getInstance().onServerTick();
         VehicleManager.getInstance().processInitialVehicleDeployments();
         long tick = tickCounter++;
+        if (tick % DEPLOY_POINT_SYNC_INTERVAL_TICKS == 20) {
+            NetworkManager.refreshWaitingDeployPoints();
+        }
         // 分摊：兵站 / 队包 / 载具 不同步扫，降低尖峰
         if (tick % INVALID_STATE_SCAN_INTERVAL_TICKS == 0) {
             BastionManager.getInstance().removeInvalidBastions();

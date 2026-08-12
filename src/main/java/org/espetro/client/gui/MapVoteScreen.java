@@ -10,9 +10,10 @@ import org.espetro.network.MapVoteStatePacket;
 import org.espetro.network.NetworkManager;
 import se.mickelus.mutil.gui.GuiElement;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,7 +37,7 @@ public final class MapVoteScreen extends MutilScreen {
     private static MapVoteStatePacket latest = new MapVoteStatePacket(
         false, 0, 0L, List.of(), java.util.Map.of(), null, null, null);
 
-    /** 缓存已从网络包解码的地图预览纹理：mapFolder → 纹理与源尺寸。 */
+    /** 缓存已从客户端 EsWorld 目录解码的地图预览纹理：mapFolder → 纹理与源尺寸。 */
     private static final Map<String, PreviewTexture> previewTextureCache = new LinkedHashMap<>();
 
     private record PreviewTexture(ResourceLocation location, int texW, int texH) {
@@ -56,23 +57,24 @@ public final class MapVoteScreen extends MutilScreen {
         preloadPreviewTextures();
     }
 
-    /** 从网络包 Candidate.previewBytes 解码并注册纹理。 */
+    /** 从客户端游戏根目录 EsWorld/&lt;mapFolder&gt;.png 解码并注册纹理。 */
     private static void preloadPreviewTextures() {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
 
         for (MapVoteStatePacket.Candidate c : latest.candidates) {
-            if (c.previewBytes == null || c.previewBytes.length == 0) continue;
             String key = c.mapFolder;
             if (previewTextureCache.containsKey(key)) continue;
+            Path previewPath = MapVotePreviewResolver.resolve(mc.gameDirectory.toPath(), key);
+            if (previewPath == null) continue;
 
-            try (InputStream in = new ByteArrayInputStream(c.previewBytes)) {
+            try (InputStream in = Files.newInputStream(previewPath)) {
                 NativeImage image = NativeImage.read(in);
                 int texW = image.getWidth();
                 int texH = image.getHeight();
                 DynamicTexture texture = new DynamicTexture(image);
                 ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(
-                    "espetro", "map_preview/" + key);
+                    "espetro", "map_preview/" + Integer.toHexString(key.hashCode()));
                 mc.getTextureManager().register(rl, texture);
                 previewTextureCache.put(key, new PreviewTexture(rl, texW, texH));
             } catch (IOException e) {
@@ -96,7 +98,22 @@ public final class MapVoteScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+        CurrentMapBackgroundRenderer.render(
+            graphics, this.width, this.height, resolveBackgroundMapFolder());
+    }
+
+    private static String resolveBackgroundMapFolder() {
+        if (latest.myVoteMapFolder != null && !latest.myVoteMapFolder.isBlank()) {
+            return latest.myVoteMapFolder;
+        }
+        if (latest.winnerMapFolder != null && !latest.winnerMapFolder.isBlank()) {
+            return latest.winnerMapFolder;
+        }
+        String current = ClientGameState.getCurrentMapFolder();
+        if (current != null && !current.isBlank()) {
+            return current;
+        }
+        return latest.candidates.isEmpty() ? null : latest.candidates.get(0).mapFolder;
     }
 
     /**

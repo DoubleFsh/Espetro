@@ -7,7 +7,7 @@
 
 1. 小队长、火力组长或指挥官通过 Alt 轮盘选择“建造工事”。
 2. 建造费用从覆盖目标点的己方 Radio 库存原子扣除；余额不足时不放置也不部分扣款。
-3. 玩家右击已建成的弹药箱打开职业轮盘；潜行右击补充当前职业装备变体的实际缺口，Radio 弹药不足完整费用时整次取消。
+3. 玩家右击已建成的弹药箱打开「补给步兵 / 更换职业」菜单；潜行右击直接补充当前职业装备变体的实际缺口，Radio 弹药不足完整费用时整次取消。
 4. 对准己方补给载具可用 F 轮盘装卸弹药与建材；战斗载具仅能装卸弹药。
 5. Radio 本体不提供存入物资、步兵补给，也不会因为收到物资自动生成弹药箱。
 
@@ -67,7 +67,7 @@
 | `allow_squad_leader` | true | 是否允许小队长；默认与「指挥或小队长」等价 |
 | `cooldown_seconds` | -1 | 玩家建造冷却；`-1` 回退 `bastion.json` 的 `cooldown_seconds` |
 | `required_planks` | -1 | **所需补给建材点数**；`-1` 回退 bastion；`0` 不消耗。只认 Espetro 补给站发放、带 `EspetroSupplyType=construction` 的物品点数，**不是**任意原版木板 |
-| `creative_bypasses_planks` | true | 创造模式是否免建材点数 |
+| `creative_bypasses_planks` | true | 创造模式是否免建材点数（兵站 HAB 除外，始终消耗 `hab_construction_cost`） |
 | `max_active_per_team` | -1 | 每队活跃 Radio 上限；`-1` 使用代码默认 4 |
 | `build_radius` | 150.0 | API/`FobSnapshot` 用半径；**不**限制 wand 视线放置距离 |
 | `require_target_block` | false | `true` 时必须看中实心方块，不允许回退到脚下 |

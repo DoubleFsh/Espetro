@@ -80,6 +80,25 @@ public class EspetroAPI {
         return GameStateManager.getInstance().endRound(winner);
     }
 
+    /**
+     * Notify Espetro that a capture point has finished changing ownership.
+     * The value may be ATTACK/DEFEND or the espetro_attack/espetro_defend scoreboard team ID.
+     */
+    public static boolean onCapturePointCaptured(String capturingTeam) {
+        return org.espetro.audio.FactionAudioCoordinator.broadcastCapture(capturingTeam);
+    }
+
+    /**
+     * Notify Espetro that an owned capture point has just become neutral.
+     * Both values may use ATTACK/DEFEND or Espetro scoreboard team IDs. The
+     * attacking value may be null; the old owner's opposing side is then used.
+     */
+    public static boolean onCapturePointNeutralized(String originalOwnerTeam,
+                                                    String attackingTeam) {
+        return org.espetro.audio.FactionAudioCoordinator.broadcastNeutralized(
+            originalOwnerTeam, attackingTeam);
+    }
+
     public static Optional<PlayerMatchStatsManager.PlayerMatchStats> getPlayerMatchStats(UUID playerId) {
         return PlayerMatchStatsManager.getInstance().get(playerId);
     }

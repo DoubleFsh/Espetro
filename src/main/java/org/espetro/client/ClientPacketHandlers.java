@@ -157,6 +157,11 @@ public class ClientPacketHandlers {
     // ==================== GamePhaseSyncPacket ====================
 
     public static void handleGamePhase(String phaseName) {
+        handleGamePhase(phaseName, "");
+    }
+
+    public static void handleGamePhase(String phaseName, String mapFolder) {
+        org.espetro.client.gui.ClientGameState.setCurrentMapFolder(mapFolder);
         try {
             GamePhase phase = GamePhase.valueOf(phaseName);
             org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
@@ -164,6 +169,9 @@ public class ClientPacketHandlers {
                 org.espetro.client.gui.ClientGovernanceState.clear();
                 org.espetro.client.ClientEquipZones.clear();
                 org.espetro.client.gui.ClientGameState.setBattleTimeRemaining(-1);
+            }
+            if (phase.isLobbyLike() || phase == GamePhase.CLEANUP) {
+                org.espetro.client.audio.ClientFormationAudioManager.stopAll();
             }
 
             net.minecraft.client.Minecraft phaseMc = net.minecraft.client.Minecraft.getInstance();
@@ -218,6 +226,13 @@ public class ClientPacketHandlers {
         }
     }
 
+    public static void handleDeployPointSync(DeployPointSyncPacket packet) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
+            screen.updateBastions(packet.getDeployPoints());
+        }
+    }
+
     // ==================== UnifiedDeployScreenPacket ====================
 
     public static void handleUnifiedDeployScreen(UnifiedDeployScreenPacket packet) {
@@ -247,6 +262,7 @@ public class ClientPacketHandlers {
             screen.updateBastions(packet.getBastions());
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
             screen.updateClasses(packet.getClasses(), packet.getClassCounts(), packet.getVariantCounts());
+            screen.updateSelectedClass(packet.getSelectedClassId());
         } else if (mc.screen instanceof org.espetro.client.gui.SquadScreen screen) {
             // 班组管理是部署界面的子界面。部署阶段会持续发送该包，
             // 此处只同步实时状态，不能把玩家强制切回部署界面。
@@ -270,6 +286,7 @@ public class ClientPacketHandlers {
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
         } else if (mc.screen instanceof org.espetro.client.gui.UnifiedDeployScreen screen) {
             screen.updateSquads(packet.getSquads(), packet.getMySquadId());
+            screen.updateSelectedClass(packet.getSelectedClassId());
         }
     }
 
@@ -277,6 +294,7 @@ public class ClientPacketHandlers {
 
     public static void handleGameStateResponse(org.espetro.network.GameStateResponsePacket packet) {
         // 更新客户端游戏状态
+        org.espetro.client.gui.ClientGameState.setCurrentMapFolder(packet.getMapFolder());
         try {
             org.espetro.client.gui.ClientGameState.setCurrentPhase(
                 GamePhase.valueOf(packet.getPhaseName()));
@@ -436,6 +454,10 @@ public class ClientPacketHandlers {
                 packet.attackTickets, packet.defendTickets,
                 packet.resultLevel, packet.attackerTimeout));
         }
+    }
+
+    public static void handleAudioCue(AudioCuePacket packet) {
+        org.espetro.client.audio.ClientFormationAudioManager.handle(packet);
     }
 
     // ==================== TutorialSyncPacket ====================

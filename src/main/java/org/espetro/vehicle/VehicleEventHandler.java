@@ -63,8 +63,16 @@ public class VehicleEventHandler {
                 VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
                 Espetro.LOGGER.debug("载具 {} 已被杀毁，移除追踪并处理兵力扣除", entity.getUUID());
             } else if (entity.getRemovalReason() == Entity.RemovalReason.DISCARDED) {
-                VehicleManager.getInstance().onVehicleRemoved(entity.getUUID());
-                Espetro.LOGGER.debug("载具 {} 已被主动移除，清除追踪", entity.getUUID());
+                if (isDestroyedSbwVehicle(entity)) {
+                    // SBW destroys vehicles by entering wreck state and finally calling discard().
+                    // This is a fallback for the destroy() mixin and remains idempotent when the
+                    // mixin has already registered the loss.
+                    VehicleManager.getInstance().onVehicleDeath(entity.getUUID());
+                    Espetro.LOGGER.debug("载具 {} 残骸已移除，确保自动刷新已登记", entity.getUUID());
+                } else {
+                    VehicleManager.getInstance().onVehicleRemoved(entity.getUUID());
+                    Espetro.LOGGER.debug("载具 {} 已被主动移除，清除追踪", entity.getUUID());
+                }
             } else {
                 Espetro.LOGGER.debug("载具 {} 暂时离开已加载世界，保留停服清理追踪", entity.getUUID());
             }
@@ -112,6 +120,16 @@ public class VehicleEventHandler {
             clazz = clazz.getSuperclass();
         }
         return false;
+    }
+
+    /** SBW uses its own wreck flag instead of vanilla living-entity death state. */
+    private static boolean isDestroyedSbwVehicle(Entity entity) {
+        if (!isSbwVehicle(entity)) return false;
+        try {
+            return Boolean.TRUE.equals(entity.getClass().getMethod("isWreck").invoke(entity));
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static String getVehicleDisplayName(Entity vehicle) {

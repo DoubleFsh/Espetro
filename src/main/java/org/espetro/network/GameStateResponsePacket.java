@@ -16,14 +16,21 @@ public class GameStateResponsePacket {
     private final String playerFaction;
     private final String activeTeam;
     private final int timeRemaining;
+    private final String mapFolder;
 
     public GameStateResponsePacket(String phaseName, String playerTeam, String playerFaction,
                                     String activeTeam, int timeRemaining) {
+        this(phaseName, playerTeam, playerFaction, activeTeam, timeRemaining, "");
+    }
+
+    public GameStateResponsePacket(String phaseName, String playerTeam, String playerFaction,
+                                   String activeTeam, int timeRemaining, String mapFolder) {
         this.phaseName = phaseName;
         this.playerTeam = playerTeam;
         this.playerFaction = playerFaction;
         this.activeTeam = activeTeam;
         this.timeRemaining = timeRemaining;
+        this.mapFolder = mapFolder == null ? "" : mapFolder;
     }
 
     public static GameStateResponsePacket read(FriendlyByteBuf buf) {
@@ -32,7 +39,8 @@ public class GameStateResponsePacket {
             buf.readUtf(),
             buf.readUtf(),
             buf.readUtf(),
-            buf.readVarInt()
+            buf.readVarInt(),
+            buf.readUtf()
         );
     }
 
@@ -42,6 +50,7 @@ public class GameStateResponsePacket {
         buf.writeUtf(playerFaction != null ? playerFaction : "");
         buf.writeUtf(activeTeam != null ? activeTeam : "");
         buf.writeVarInt(timeRemaining);
+        buf.writeUtf(mapFolder);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -62,4 +71,5 @@ public class GameStateResponsePacket {
     public String getPlayerFaction() { return playerFaction; }
     public String getActiveTeam() { return activeTeam; }
     public int getTimeRemaining() { return timeRemaining; }
+    public String getMapFolder() { return mapFolder; }
 }

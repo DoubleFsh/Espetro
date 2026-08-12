@@ -74,6 +74,9 @@ public final class FortificationManager {
                              UUID mapId) {
     }
 
+    public record RadioConstructionProgress(int progress, int required) {
+    }
+
     private enum Kind { CONFIG_BLOCKS, CONFIG_ENTITY, RADIO, HAB }
 
     private record Slot(BlockPos offset, @Nullable BlockState state) {
@@ -284,6 +287,9 @@ public final class FortificationManager {
         else NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
             new FortificationProgressPacket(construction.blueprint.displayName, 0,
                 construction.required(), build));
+        if (construction.blueprint.kind == Kind.RADIO && constructions.containsKey(construction.id)) {
+            FobSupplyTracker.notifyConstructionProgressChanged(level, construction.anchor, construction.team);
+        }
     }
 
     /** External block destruction; duplicate explosion/break callbacks are idempotent. */
@@ -291,15 +297,51 @@ public final class FortificationManager {
         damageAt(level, pos, null);
     }
 
+    /** 爆炸按中心与半径直接对附近工事扣血，不依赖 affectedBlocks 是否包含工事方块。 */
+    public void damageNearby(ServerLevel level, net.minecraft.world.phys.Vec3 center,
+                             float radius, @Nullable Entity attacker) {
+        if (level == null || center == null) return;
+        double checkRadius = radius + 1.5D;
+        double checkRadiusSq = checkRadius * checkRadius;
+        String dimension = level.dimension().location().toString();
+        for (Construction c : new ArrayList<>(constructions.values())) {
+            if (!dimension.equals(c.dimension) || c.finalSlots.isEmpty()) continue;
+            BlockPos probe = c.finalSlots.get(0).pos;
+            if (probe.distToCenterSqr(center.x, center.y, center.z) > checkRadiusSq) continue;
+            damageAt(level, probe, attacker, FortificationConfig.explosionDamageRatio());
+        }
+    }
+
     public void damageAt(ServerLevel level, BlockPos pos, @Nullable Entity attacker) {
+        damageAt(level, pos, attacker, 1.0f);
+    }
+
+    public void damageAt(ServerLevel level, BlockPos pos, @Nullable Entity attacker,
+                         float damageRatio) {
         UUID id = positionIndex.get(posKey(level, pos));
         Construction construction = id == null ? null : constructions.get(id);
         if (construction == null || !construction.missing.add(pos.immutable())) return;
         int parts = construction.complete ? construction.finalSlots.size() : construction.footprint.size();
-        int damage = FortificationProgressPolicy.damagePerPart(construction.required(), parts);
+        int baseDamage = FortificationProgressPolicy.damagePerPart(construction.required(), parts);
+        int damage = damageRatio >= 1.0f
+            ? baseDamage
+            : Math.max(0, Math.round(baseDamage * damageRatio));
         construction.progress = Math.max(0, construction.progress - damage);
         if (construction.progress == 0) destroy(level, construction, attacker, true);
         else if (!construction.complete) updateFoundationStage(level, construction);
+        if (construction.blueprint.kind == Kind.RADIO && constructions.containsKey(construction.id)) {
+            FobSupplyTracker.notifyConstructionProgressChanged(level, construction.anchor, construction.team);
+        }
+    }
+
+    /** 炮弹/导弹直接命中工事实体时扣除一次完整度。 */
+    public void damageEntity(ServerLevel level, UUID entityId, @Nullable Entity attacker) {
+        if (level == null || entityId == null) return;
+        UUID constructionId = entityIndex.get(entityId);
+        Construction construction = constructionId == null ? null : constructions.get(constructionId);
+        if (construction == null || construction.finalSlots.isEmpty()) return;
+        damageAt(level, construction.finalSlots.get(0).pos, attacker,
+            FortificationConfig.projectileHitDamageRatio());
     }
 
     /** Entity fortifications are a single integrity part. */
@@ -376,6 +418,32 @@ public final class FortificationManager {
 
     public static boolean canOpenBuildMenu(ServerPlayer player) {
         return FortificationConfig.list().stream().anyMatch(def -> canUse(player, def));
+    }
+
+    /** 查询指定位置附近己方 Radio 工事的建造进度（含在建和已建成）。 */
+    @Nullable
+    public RadioConstructionProgress getRadioConstructionProgress(ServerLevel level, BlockPos pos,
+                                                                  String team) {
+        if (level == null || pos == null || team == null) return null;
+        double radius = LogisticsConfig.get().radioBuildRadius;
+        double radiusSq = radius * radius;
+        String dimension = level.dimension().location().toString();
+        Construction best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (Construction c : constructions.values()) {
+            if (c.blueprint.kind != Kind.RADIO
+                || !team.equals(c.team)
+                || !dimension.equals(c.dimension)) {
+                continue;
+            }
+            double distance = c.anchor.distSqr(pos);
+            if (distance <= radiusSq && distance < bestDistance) {
+                best = c;
+                bestDistance = distance;
+            }
+        }
+        return best == null ? null
+            : new RadioConstructionProgress(best.progress, best.required());
     }
 
     private Blueprint createBlueprint(String id, String team) {
@@ -521,9 +589,8 @@ public final class FortificationManager {
         if (blueprint.kind == Kind.RADIO) return true;
         if (blueprint.kind == Kind.HAB) {
             int cost = BastionManager.getInstance().getHabConstructionCost();
-            return player.isCreative() && LogisticsConfig.get().getRadio().creativeBypassesPlanks
-                || BastionManager.getInstance().tryDebitConstructionFromCoveringRadios(
-                    player.serverLevel(), anchor, Espetro.getPlayerTeam(player), cost);
+            return BastionManager.getInstance().tryDebitConstructionFromCoveringRadios(
+                player.serverLevel(), anchor, Espetro.getPlayerTeam(player), cost);
         }
         return debit(backing.radio, blueprint.definition.constructionCost, blueprint.definition.ammunitionCost);
     }
@@ -531,8 +598,7 @@ public final class FortificationManager {
     private void refundBacking(ServerPlayer player, Blueprint blueprint, PlacementBacking backing) {
         if (blueprint.kind == Kind.CONFIG_BLOCKS || blueprint.kind == Kind.CONFIG_ENTITY) {
             refund(backing.radio, blueprint.definition.constructionCost, blueprint.definition.ammunitionCost);
-        } else if (blueprint.kind == Kind.HAB && backing.radio != null
-            && !(player.isCreative() && LogisticsConfig.get().getRadio().creativeBypassesPlanks)) {
+        } else if (blueprint.kind == Kind.HAB && backing.radio != null) {
             backing.radio.addConstructionSupplies(BastionManager.getInstance().getHabConstructionCost(),
                 LogisticsConfig.get().maxConstruction);
             FobSupplyTracker.notifySupplyChanged(backing.radio);

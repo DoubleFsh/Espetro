@@ -36,9 +36,18 @@ public final class FortificationConfig {
     private static VehicleServiceSettings vehicleService = new VehicleServiceSettings();
     private static BuiltinConstructionSettings builtinConstruction =
         new BuiltinConstructionSettings();
+    private static DamageSettings damageSettings = new DamageSettings();
 
     public static final int MAX_STRUCTURE_BLOCKS = 256;
     public static final int MAX_STRUCTURE_OFFSET = 32;
+
+    public static float explosionDamageRatio() {
+        return damageSettings.explosion;
+    }
+
+    public static float projectileHitDamageRatio() {
+        return damageSettings.projectileHit;
+    }
 
     private FortificationConfig() {
     }
@@ -62,6 +71,7 @@ public final class FortificationConfig {
         DEFS.clear();
         vehicleService = new VehicleServiceSettings();
         builtinConstruction = new BuiltinConstructionSettings();
+        damageSettings = new DamageSettings();
         register(defaultAmmoCrate());
         register(defaultVehicleSupplyStation());
         register(defaultSandbagWall());
@@ -93,6 +103,15 @@ public final class FortificationConfig {
                 if (parsed != null) {
                     parsed.normalize();
                     builtinConstruction = parsed;
+                }
+            }
+
+            if (root.has("damage") && root.get("damage").isJsonObject()) {
+                DamageSettings parsed = GSON.fromJson(
+                    root.getAsJsonObject("damage"), DamageSettings.class);
+                if (parsed != null) {
+                    parsed.normalize();
+                    damageSettings = parsed;
                 }
             }
 
@@ -128,9 +147,22 @@ public final class FortificationConfig {
         JsonObject root = new JsonObject();
         root.add("vehicle_service", GSON.toJsonTree(new VehicleServiceSettings()));
         root.add("builtin_construction", GSON.toJsonTree(new BuiltinConstructionSettings()));
+        root.add("damage", GSON.toJsonTree(new DamageSettings()));
         root.add("fortifications", GSON.toJsonTree(List.of(
             defaultAmmoCrate(), defaultVehicleSupplyStation(), defaultSandbagWall())));
         return root;
+    }
+
+    public static final class DamageSettings {
+        @SerializedName("explosion_damage_ratio")
+        public float explosion = 0.1f;
+        @SerializedName("projectile_hit_damage_ratio")
+        public float projectileHit = 0.1f;
+
+        private void normalize() {
+            explosion = Math.max(0.0f, Math.min(1.0f, explosion));
+            projectileHit = Math.max(0.0f, Math.min(1.0f, projectileHit));
+        }
     }
 
     @Nullable

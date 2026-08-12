@@ -29,14 +29,11 @@ public class MapVoteStatePacket {
         public final String mapFolder;
         public final String displayName;
         public final String dimensionId;
-        /** 服务端读取的 map_preview.png 字节数据；null 表示无预览图。 */
-        public final byte[] previewBytes;
 
-        public Candidate(String mapFolder, String displayName, String dimensionId, byte[] previewBytes) {
+        public Candidate(String mapFolder, String displayName, String dimensionId) {
             this.mapFolder = mapFolder;
             this.displayName = displayName;
             this.dimensionId = dimensionId;
-            this.previewBytes = previewBytes;
         }
     }
 
@@ -56,8 +53,7 @@ public class MapVoteStatePacket {
     public static MapVoteStatePacket from(MapVoteManager mgr, ServerPlayer viewer) {
         List<Candidate> list = new ArrayList<>();
         for (var c : mgr.getCandidates()) {
-            list.add(new Candidate(c.mapFolder, c.displayName, c.dimensionId.toString(),
-                c.previewImageBytes));
+            list.add(new Candidate(c.mapFolder, c.displayName, c.dimensionId.toString()));
         }
         String my = viewer != null ? mgr.getPlayerVote(viewer.getUUID()) : null;
         String winFolder = mgr.getWinner() != null ? mgr.getWinner().mapFolder : null;
@@ -80,11 +76,7 @@ public class MapVoteStatePacket {
             String folder = buf.readUtf();
             String name = buf.readUtf();
             String dimId = buf.readUtf();
-            byte[] previewBytes = null;
-            if (buf.readBoolean()) {
-                previewBytes = buf.readByteArray();
-            }
-            candidates.add(new Candidate(folder, name, dimId, previewBytes));
+            candidates.add(new Candidate(folder, name, dimId));
         }
         int m = buf.readVarInt();
         Map<String, Integer> tally = new LinkedHashMap<>();
@@ -106,11 +98,6 @@ public class MapVoteStatePacket {
             buf.writeUtf(c.mapFolder);
             buf.writeUtf(c.displayName);
             buf.writeUtf(c.dimensionId);
-            boolean hasBytes = c.previewBytes != null && c.previewBytes.length > 0;
-            buf.writeBoolean(hasBytes);
-            if (hasBytes) {
-                buf.writeByteArray(c.previewBytes);
-            }
         }
         buf.writeVarInt(tally.size());
         for (Map.Entry<String, Integer> e : tally.entrySet()) {

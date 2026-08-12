@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.espetro.Espetro;
+import org.espetro.audio.AudioPackId;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -32,7 +33,11 @@ public class FactionDataLoader {
     private static FactionDataLoader INSTANCE;
 
     private Map<String, FactionData> factions = new LinkedHashMap<>();
-    private Map<String, ClassKitData> classKits = new HashMap<>();
+    /**
+     * Keep the declaration order from the formation JSON. The client lays out
+     * each class row in this order, so a HashMap here would scramble later rows.
+     */
+    private Map<String, ClassKitData> classKits = new LinkedHashMap<>();
     /** factionId -> (vehicleType -> VehicleData) 来自编制JSON的载具配置 */
     private final Map<String, Map<String, VehicleData>> factionVehicles = new LinkedHashMap<>();
     /** factionId -> ordered vehicle type declarations from VehTypes. */
@@ -290,6 +295,17 @@ public class FactionDataLoader {
             warnRejected(resourceId, "faction.faction_id 缺失或为空");
             return false;
         }
+        if (data.faction.audioPack != null && !data.faction.audioPack.isBlank()) {
+            String normalizedAudioPack = AudioPackId.normalize(data.faction.audioPack);
+            if (normalizedAudioPack == null) {
+                warnRejected(resourceId,
+                    "faction.audio_pack 必须是 EsAudio 下的单层目录名，且不能包含路径分隔符或非法字符");
+                return false;
+            }
+            data.faction.audioPack = normalizedAudioPack;
+        } else {
+            data.faction.audioPack = null;
+        }
         data.faction.id = factionId;
 
         if (data.classes == null) {
@@ -438,7 +454,7 @@ public class FactionDataLoader {
         factionIdArray = factions.keySet().toArray(EMPTY_STRING_ARRAY);
         factionArray = factions.values().toArray(EMPTY_FACTION_ARRAY);
 
-        Map<String, List<ClassKitData>> groupedClasses = new HashMap<>();
+        Map<String, List<ClassKitData>> groupedClasses = new LinkedHashMap<>();
         for (String factionId : factions.keySet()) {
             groupedClasses.put(factionId, new ArrayList<>());
         }
@@ -511,6 +527,9 @@ public class FactionDataLoader {
         /** 编制投票卡片使用的完整 Minecraft 纹理资源位置。 */
         @SerializedName(value = "selection_image", alternate = {"selectionImage"})
         public String selectionImage;
+        /** 客户端根目录 EsAudio 下的音频套装目录索引。 */
+        @SerializedName(value = "audio_pack", alternate = {"audioPack", "audio_index", "audioIndex"})
+        public String audioPack;
         /** 编制所属真实阵营 ID；无需注册，使用精确字符串比较。 */
         @SerializedName("faction_id")
         public String factionId;

@@ -88,6 +88,20 @@ public final class FobSupplyTracker {
         }
     }
 
+    /** Radio 建造/修复进度变化时，通知该 Radio 附近的本队玩家刷新 HUD。 */
+    public static void notifyConstructionProgressChanged(ServerLevel level, BlockPos anchor,
+                                                         String team) {
+        if (level == null || anchor == null || team == null) return;
+        double radius = LogisticsConfig.get().radioBuildRadius;
+        double radiusSq = radius * radius;
+        for (ServerPlayer player : level.players()) {
+            if (!team.equals(Espetro.getPlayerTeam(player))) continue;
+            if (player.blockPosition().distSqr(anchor) <= radiusSq) {
+                syncPlayer(player, true);
+            }
+        }
+    }
+
     public static void clearPlayer(UUID playerId) {
         lastPositions.remove(playerId);
         lastSignatures.remove(playerId);
@@ -129,21 +143,29 @@ public final class FobSupplyTracker {
             ammunition += radio.getAmmunitionSupplies();
         }
         updateMembership(player.getUUID(), ids);
-        if (radios.isEmpty()) {
+        FortificationManager.RadioConstructionProgress radioProgress =
+            FortificationManager.getInstance()
+                .getRadioConstructionProgress(level, player.blockPosition(), team);
+        if (radios.isEmpty() && radioProgress == null) {
             sendOut(player, force);
             return;
         }
         LogisticsConfig.LogisticsSettings config = LogisticsConfig.get();
         int maxConstruction = Math.max(1, config.maxConstruction);
         int maxAmmunition = Math.max(1, config.maxAmmunition);
-        BastionData healthRadio = BastionManager.getInstance()
-            .findNearestRadio(level, player.blockPosition(), team,
-                LogisticsConfig.get().radioBuildRadius);
         int radioHealth = 0;
         int radioMaxHealth = 1;
-        if (healthRadio != null) {
+        if (radioProgress != null) {
+            radioHealth = radioProgress.progress();
+            radioMaxHealth = Math.max(1, radioProgress.required());
+        } else {
+            BastionData healthRadio = BastionManager.getInstance()
+                .findNearestRadio(level, player.blockPosition(), team,
+                    LogisticsConfig.get().radioBuildRadius);
+            if (healthRadio != null) {
             radioHealth = (int) Math.ceil(healthRadio.getCoreHealth());
             radioMaxHealth = Math.max(1, BastionManager.getInstance().getArmorStandHealth());
+            }
         }
         String signature = "1|" + construction + '|' + ammunition + '|'
             + maxConstruction + '|' + maxAmmunition + '|'

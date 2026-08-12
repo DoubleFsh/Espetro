@@ -16,6 +16,8 @@ public class ClientGameState {
     // 战局倒计时剩余秒数，-1 表示无倒计时
     private static int battleTimerAnchorSeconds = -1;
     private static long battleTimerAnchorMs;
+    // 服务端当前选中/正在运行的地图目录名，用于读取客户端 EsWorld/<name>.png。
+    private static String currentMapFolder = null;
 
     public static void setCurrentPhase(GamePhase phase) {
         currentPhase = phase;
@@ -23,6 +25,14 @@ public class ClientGameState {
 
     public static GamePhase getCurrentPhase() {
         return currentPhase;
+    }
+
+    public static void setCurrentMapFolder(String mapFolder) {
+        currentMapFolder = mapFolder == null || mapFolder.isBlank() ? null : mapFolder.trim();
+    }
+
+    public static String getCurrentMapFolder() {
+        return currentMapFolder;
     }
 
     public static void setPlayerFactionId(String factionId) {

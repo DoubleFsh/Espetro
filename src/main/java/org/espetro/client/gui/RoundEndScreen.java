@@ -81,8 +81,8 @@ public final class RoundEndScreen extends MutilScreen {
 
     @Override
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 全屏深色遮罩
-        EspetroMutilWidgets.drawScreenShade(graphics, width, height);
+        CurrentMapBackgroundRenderer.render(
+            graphics, width, height, ClientGameState.getCurrentMapFolder());
     }
 
     @Override

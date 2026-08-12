@@ -7,6 +7,9 @@
   "plugin": "org.espetro.mixin.EspetroMixinPlugin",
   "mixins": [
     "ServerGamePacketListenerWaitingLockMixin",
+    "hcrpoints.CapturePointAudioMixin",
+    "hcrpoints.CapturePointNeutralizedAudioMixin",
+    "tacz.CommonAssetsManagerMixin",
     "sbw.ChangeVehicleSeatMessageMixin",
     "sbw.VehicleEntityMainBaseProtectionMixin",
     "sbw.VehicleEntitySeatAccessMixin",

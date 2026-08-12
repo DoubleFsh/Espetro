@@ -17,6 +17,7 @@ public class SquadSyncPacket {
     private final int mySquadId;
     private final List<String> commanderNames;
     private final double teammateNameTagDistance;
+    private final String selectedClassId;
 
     public SquadSyncPacket(String team, List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId) {
         this(team, squads, mySquadId, new ArrayList<>(), 10.0);
@@ -24,11 +25,18 @@ public class SquadSyncPacket {
 
     public SquadSyncPacket(String team, List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId,
                            List<String> commanderNames, double teammateNameTagDistance) {
+        this(team, squads, mySquadId, commanderNames, teammateNameTagDistance, "");
+    }
+
+    public SquadSyncPacket(String team, List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId,
+                           List<String> commanderNames, double teammateNameTagDistance,
+                           String selectedClassId) {
         this.team = team == null ? "" : team;
         this.squads = squads != null ? squads : new ArrayList<>();
         this.mySquadId = mySquadId;
         this.commanderNames = commanderNames != null ? commanderNames : new ArrayList<>();
         this.teammateNameTagDistance = teammateNameTagDistance;
+        this.selectedClassId = selectedClassId == null ? "" : selectedClassId;
     }
 
     public static SquadSyncPacket read(FriendlyByteBuf buf) {
@@ -45,7 +53,9 @@ public class SquadSyncPacket {
             commanderNames.add(buf.readUtf());
         }
         double teammateNameTagDistance = buf.readDouble();
-        return new SquadSyncPacket(team, squads, mySquadId, commanderNames, teammateNameTagDistance);
+        String selectedClassId = buf.readUtf();
+        return new SquadSyncPacket(team, squads, mySquadId, commanderNames,
+            teammateNameTagDistance, selectedClassId);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -60,6 +70,7 @@ public class SquadSyncPacket {
             buf.writeUtf(commanderName);
         }
         buf.writeDouble(teammateNameTagDistance);
+        buf.writeUtf(selectedClassId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -93,5 +104,9 @@ public class SquadSyncPacket {
 
     public double getTeammateNameTagDistance() {
         return teammateNameTagDistance;
+    }
+
+    public String getSelectedClassId() {
+        return selectedClassId;
     }
 }

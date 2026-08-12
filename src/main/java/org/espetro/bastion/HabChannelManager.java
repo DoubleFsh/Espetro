@@ -111,8 +111,6 @@ public final class HabChannelManager {
     private void complete(ServerPlayer player, Channel channel) {
         BastionManager manager = BastionManager.getInstance();
         int cost = manager.getHabConstructionCost();
-        boolean bypass = player.isCreative()
-            && LogisticsConfig.get().getRadio().creativeBypassesPlanks;
 
         // 战局已结束 / 清理后不再生成 HAB（destroyAll 会 reset channels，但 tick 竞态下仍可能走到这里）
         org.espetro.team.GamePhase phase = org.espetro.team.GameStateManager.getInstance().getCurrentPhase();
@@ -131,7 +129,7 @@ public final class HabChannelManager {
             player.sendSystemMessage(Component.literal(limitError));
             return;
         }
-        if (!bypass && cost > 0
+        if (cost > 0
             && !manager.tryDebitConstructionFromCoveringRadios(
                 channel.level, channel.targetPos, channel.team, cost)) {
             player.sendSystemMessage(Component.literal("§c覆盖 Radio 建材不足，建造取消。"));
@@ -141,7 +139,7 @@ public final class HabChannelManager {
         String habName = generateHabName(channel.team);
         BastionData hab = manager.createHab(channel.level, channel.targetPos, channel.team, habName);
         if (hab == null) {
-            if (!bypass && cost > 0) {
+            if (cost > 0) {
                 var covering = manager.findCoveringRadios(channel.level, channel.targetPos, channel.team);
                 if (!covering.isEmpty()) {
                     covering.get(0).addConstructionSupplies(cost, LogisticsConfig.get().maxConstruction);
@@ -162,7 +160,7 @@ public final class HabChannelManager {
         if (activation > 0) {
             player.sendSystemMessage(Component.literal("§7启用倒计时 " + activation + " 秒。"));
         }
-        if (!bypass && cost > 0) {
+        if (cost > 0) {
             player.sendSystemMessage(Component.literal("§7已从覆盖 Radio 扣除 " + cost + " 点建材。"));
         }
         Espetro.broadcastToTeam(channel.team, "§6[兵站] §a" + player.getName().getString()

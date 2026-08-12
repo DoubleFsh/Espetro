@@ -2,6 +2,7 @@ package org.espetro.mixin.sbw;
 
 import com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity;
 import org.espetro.Espetro;
+import org.espetro.vehicle.VehicleManager;
 import org.espetro.vehicle.WreckDecayService;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,6 +17,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(VehicleEntity.class)
 public abstract class VehicleEntityWreckMixin {
+
+    /**
+     * SBW vehicles are plain {@code Entity} instances, so their destruction never emits a
+     * Forge {@code LivingDeathEvent}. Register the loss at the actual destruction hook instead
+     * of waiting for the wreck to be discarded several seconds later.
+     */
+    @Inject(method = "destroy", at = @At("HEAD"), require = 0, remap = false)
+    private void espetro$trackVehicleDestruction(CallbackInfo ci) {
+        try {
+            VehicleEntity vehicle = (VehicleEntity) (Object) this;
+            if (!vehicle.level().isClientSide
+                && vehicle.getTags().contains("espetro_vehicle")) {
+                VehicleManager.getInstance().onVehicleDeath(vehicle.getUUID());
+            }
+        } catch (Throwable t) {
+            Espetro.LOGGER.error("Espetro failed to register a destroyed vehicle", t);
+        }
+    }
 
     @Inject(method = "baseTick", at = @At("TAIL"), require = 0)
     private void espetro$decayVehicleWreck(CallbackInfo ci) {

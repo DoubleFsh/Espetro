@@ -323,7 +323,8 @@ public class ClassSelectionScreen extends MutilScreen {
     protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         lastMouseX = mouseX;
         lastMouseY = mouseY;
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+        CurrentMapBackgroundRenderer.render(
+            graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
         if (!hasVariantPopup()) {
             updateHoveredButton(mouseX, mouseY);
         }

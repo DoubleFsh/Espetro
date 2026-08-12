@@ -53,9 +53,6 @@ public final class ActiveMapConfig {
     public final String teamPackJson;
     public final ESPointsMapSnapshot esPoints;
 
-    /** 地图预览图 PNG 字节数据（服务端读取，通过网络发送给客户端）。null 表示无预览图。 */
-    public final byte[] previewImageBytes;
-
     /**
      * 获取 CapturePoints.json 原始内容，供 HCRPoints 运行时使用
      */
@@ -82,7 +79,6 @@ public final class ActiveMapConfig {
         String logisticsJson,
         String teamPackJson,
         ESPointsMapSnapshot esPoints,
-        byte[] previewImageBytes,
         List<String> rejectionReasons
     ) {
         this.displayName = displayName;
@@ -101,7 +97,6 @@ public final class ActiveMapConfig {
         this.logisticsJson = logisticsJson;
         this.teamPackJson = teamPackJson;
         this.esPoints = esPoints;
-        this.previewImageBytes = previewImageBytes;
         this.rejectionReasons = List.copyOf(rejectionReasons);
         this.usable = rejectionReasons.isEmpty();
     }
@@ -113,7 +108,7 @@ public final class ActiveMapConfig {
             new SpawnPointsSnapshot(null, null, false, reason),
             new VehSpawnSnapshot(List.of(), java.util.Map.of(), List.of(reason)),
             SquadTypesSnapshot.defaults(),
-            null, null, null, null, null, null,
+            null, null, null, null, null,
             List.of(reason)
         );
     }
@@ -174,17 +169,6 @@ public final class ActiveMapConfig {
             String teamPackJson = Files.readString(esConfig.resolve("team_pack.json"), StandardCharsets.UTF_8);
             ESPointsMapSnapshot esPoints = ESPointsMapSnapshot.load(esConfig);
 
-            // 读取 EsWorld/{map}/map_preview.png 字节数据
-            byte[] previewImageBytes = null;
-            Path previewPath = templateWorldDir.resolve("map_preview.png");
-            if (Files.isRegularFile(previewPath)) {
-                try {
-                    previewImageBytes = Files.readAllBytes(previewPath);
-                } catch (IOException e) {
-                    // 读取失败视为无预览图
-                }
-            }
-
             // Validate JSON syntax of remaining configs
             validateOutposts(outpostsJson, errors);
             validateObjectSection(bastionJson, "bastion.json", "bastion", errors);
@@ -199,7 +183,6 @@ public final class ActiveMapConfig {
                 displayName, mapFolder, dimensionId, templateWorldDir, esConfig, dimensionJson,
                 game, spawnPoints, vehSpawn, squadTypes,
                 outpostsJson, bastionJson, logisticsJson, teamPackJson, esPoints,
-                previewImageBytes,
                 List.of()
             );
         } catch (Exception e) {

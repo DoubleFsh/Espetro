@@ -26,7 +26,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.22";
+    public static final String PROTOCOL_VERSION = "1.28";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -37,15 +37,25 @@ public class NetworkManager {
 
     private static int packetId = 0;
     private static final int FULL_DEPLOY_PACKETS_PER_TICK = 8;
-    private static final Map<UUID, Integer> QUEUED_FULL_DEPLOY_SCREENS = new LinkedHashMap<>();
+    /** 单张编制图允许随包发送的最大字节数，超过则回退客户端本地加载。 */
+    private static final int MAX_SELECTION_IMAGE_BYTES = 180_000;
+    /** 整个编制选择包内图片数据的总预算，避免超过 Forge 网络包 1MB 上限。 */
+    private static final int MAX_SELECTION_IMAGE_TOTAL_BYTES = 700_000;
+    private static final Map<UUID, QueuedDeployScreen> QUEUED_FULL_DEPLOY_SCREENS = new LinkedHashMap<>();
 
     public static int nextId() {
         return packetId++;
     }
 
     public static void queueUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining) {
+        queueUnifiedDeployScreen(player, deployTimeRemaining, false);
+    }
+
+    public static void queueUnifiedDeployScreen(ServerPlayer player, int deployTimeRemaining,
+                                                 boolean playEntryAudio) {
         if (player != null) {
-            QUEUED_FULL_DEPLOY_SCREENS.put(player.getUUID(), deployTimeRemaining);
+            QUEUED_FULL_DEPLOY_SCREENS.put(player.getUUID(),
+                new QueuedDeployScreen(deployTimeRemaining, playEntryAudio));
         }
     }
 
@@ -57,11 +67,15 @@ public class NetworkManager {
         int sent = 0;
         var iterator = QUEUED_FULL_DEPLOY_SCREENS.entrySet().iterator();
         while (iterator.hasNext() && sent < FULL_DEPLOY_PACKETS_PER_TICK) {
-            Map.Entry<UUID, Integer> entry = iterator.next();
+            Map.Entry<UUID, QueuedDeployScreen> entry = iterator.next();
             iterator.remove();
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player != null) {
-                sendUnifiedDeployScreen(player, entry.getValue());
+                QueuedDeployScreen queued = entry.getValue();
+                sendUnifiedDeployScreen(player, queued.deployTimeRemaining());
+                if (queued.playEntryAudio()) {
+                    org.espetro.audio.FactionAudioCoordinator.sendEntry(player);
+                }
                 sent++;
             }
         }
@@ -69,6 +83,9 @@ public class NetworkManager {
 
     public static void clearQueuedFullScreens() {
         QUEUED_FULL_DEPLOY_SCREENS.clear();
+    }
+
+    private record QueuedDeployScreen(int deployTimeRemaining, boolean playEntryAudio) {
     }
 
     public static void registerNetwork() {
@@ -367,6 +384,14 @@ public class NetworkManager {
         NET.registerMessage(nextId(), FortificationProgressPacket.class,
             FortificationProgressPacket::write, FortificationProgressPacket::read,
             FortificationProgressPacket::handle);
+        NET.registerMessage(nextId(), AudioCuePacket.class,
+            AudioCuePacket::write, AudioCuePacket::read, AudioCuePacket::handle);
+        NET.registerMessage(nextId(), TaczGunPackSyncChunkPacket.class,
+            TaczGunPackSyncChunkPacket::write, TaczGunPackSyncChunkPacket::read,
+            TaczGunPackSyncChunkPacket::handle);
+        NET.registerMessage(nextId(), DeployPointSyncPacket.class,
+            DeployPointSyncPacket::write, DeployPointSyncPacket::read,
+            DeployPointSyncPacket::handle);
     }
 
     public static void sendBuildFortification(String fortId) {
@@ -754,12 +779,21 @@ public class NetworkManager {
         java.util.Map<String, Integer> voteCounts =
             ClassSelectManager.getInstance().getFactionVoteCounts(team);
         List<ClassSelectScreenPacket.FactionInfo> list = new ArrayList<>();
+        int totalImageBytes = 0;
 
         for (String id : pool) {
             FactionDataLoader.FactionData faction = loader.getFaction(id);
             String name = faction != null ? faction.name : id;
             String selectionImage = faction != null ? faction.selectionImage : "";
             byte[] imageData = loadEsFactionsImage(selectionImage);
+            if (imageData != null
+                && (imageData.length > MAX_SELECTION_IMAGE_BYTES
+                    || totalImageBytes + imageData.length > MAX_SELECTION_IMAGE_TOTAL_BYTES)) {
+                // 图片太大就不随包发送；客户端会尝试从本地 EsFactions/ 或资源包加载。
+                imageData = null;
+            } else if (imageData != null) {
+                totalImageBytes += imageData.length;
+            }
             list.add(new ClassSelectScreenPacket.FactionInfo(
                 id, name, selectionImage, voteCounts.getOrDefault(id, 0), imageData));
         }
@@ -780,6 +814,7 @@ public class NetworkManager {
             Path esFactionsDir = FMLPaths.GAMEDIR.get().resolve("EsFactions").normalize();
             if (!imagePath.startsWith(esFactionsDir)) return null;
             if (!Files.isRegularFile(imagePath)) return null;
+            if (Files.size(imagePath) > MAX_SELECTION_IMAGE_BYTES) return null;
             return Files.readAllBytes(imagePath);
         } catch (Exception e) {
             Espetro.LOGGER.debug("EsFactions 图片读取失败: {} ({})", selectionImage, e.toString());
@@ -1008,7 +1043,8 @@ public class NetworkManager {
     public static void broadcastGamePhase(GamePhase phase) {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
-        GamePhaseSyncPacket packet = new GamePhaseSyncPacket(phase);
+        GamePhaseSyncPacket packet = new GamePhaseSyncPacket(
+            phase, org.espetro.team.GameStateManager.getInstance().getCurrentMapFolder());
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
         }
@@ -1282,7 +1318,9 @@ public class NetworkManager {
             squadCategories,
             ClassCountManager.getInstance()
                 .getClassSwitchCooldownRemaining(player.getUUID()),
-            openScreen
+            openScreen,
+            java.util.Objects.toString(
+                ClassCountManager.getInstance().getPlayerClass(player.getUUID()), "")
         );
 
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
@@ -1293,6 +1331,71 @@ public class NetworkManager {
                 org.espetro.governance.CommanderGovernanceManager.getInstance(),
                 player.getUUID()));
         sendEquipZones(player);
+    }
+
+    public static void sendDeployPointSync(ServerPlayer player) {
+        if (player == null || player.connection == null) return;
+        String team = Espetro.getPlayerTeam(player);
+        if (team == null) return;
+        NET.send(PacketDistributor.PLAYER.with(() -> player),
+            new DeployPointSyncPacket(buildDeployPointItems(player, team)));
+    }
+
+    /** 对仍处于部署等待状态的玩家进行低成本兜底同步。 */
+    public static void refreshWaitingDeployPoints() {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) return;
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) return;
+        org.espetro.bastion.BastionManager bm = org.espetro.bastion.BastionManager.getInstance();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (bm.isWaitingForBastion(player.getUUID())) {
+                sendDeployPointSync(player);
+            }
+        }
+    }
+
+    /** HAB/Radio 生命周期变化后立即刷新该阵营正在等待部署的成员。 */
+    public static void refreshDeployPointsForTeam(String team) {
+        MinecraftServer server = Espetro.getServer();
+        if (server == null || team == null) return;
+        GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
+        if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) return;
+        org.espetro.bastion.BastionManager bm = org.espetro.bastion.BastionManager.getInstance();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (team.equals(Espetro.getPlayerTeam(player))
+                && bm.isWaitingForBastion(player.getUUID())) {
+                sendDeployPointSync(player);
+            }
+        }
+    }
+
+    private static java.util.List<UnifiedDeployScreenPacket.BastionItem> buildDeployPointItems(
+            ServerPlayer player, String team) {
+        org.espetro.bastion.BastionManager bm = org.espetro.bastion.BastionManager.getInstance();
+        java.util.List<UnifiedDeployScreenPacket.BastionItem> items = new java.util.ArrayList<>();
+        for (org.espetro.bastion.BastionData bd : bm.getTeamBastions(team)) {
+            net.minecraft.core.BlockPos armorStandPos = bm.getRecordedArmorStandPosition(bd);
+            if (armorStandPos == null) continue;
+            items.add(new UnifiedDeployScreenPacket.BastionItem(
+                bd.getBastionId(), bd.getName(),
+                armorStandPos.getX() + ", " + armorStandPos.getY() + ", " + armorStandPos.getZ(),
+                UnifiedDeployScreenPacket.BastionItem.TYPE_HAB,
+                bm.getFobStatus(bd), 0L, 0,
+                bd.getHabAvailableAt(),
+                org.espetro.logistics.LogisticsConfig.get().habActivationSeconds));
+        }
+        items.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));
+
+        if ("DEFEND".equals(team) && org.espetro.team.OutpostManager.getInstance().isAvailable()) {
+            var outposts = org.espetro.team.OutpostManager.getInstance().getOutposts();
+            for (int i = 0; i < outposts.size(); i++) {
+                var op = outposts.get(i);
+                items.add(new UnifiedDeployScreenPacket.BastionItem(
+                    new java.util.UUID(0L, i + 1L), "§d前哨: " + op.name, op.getPosString()));
+            }
+        }
+        return items;
     }
 
     /**
@@ -1329,7 +1432,9 @@ public class NetworkManager {
             squadList,
             SquadManager.getInstance().getPlayerSquadId(player.getUUID()),
             commanderNames,
-            GameConfig.getTeammateNameTagDistance()
+            GameConfig.getTeammateNameTagDistance(),
+            java.util.Objects.toString(
+                ClassCountManager.getInstance().getPlayerClass(player.getUUID()), "")
         );
         NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }

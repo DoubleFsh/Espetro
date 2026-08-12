@@ -63,6 +63,12 @@ public class ClassSelectScreen extends MutilScreen {
     }
 
     @Override
+    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        CurrentMapBackgroundRenderer.render(
+            graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
+    }
+
+    @Override
     protected void buildMutilRoot(GuiElement root) {
         factionCards.clear();
         int count = factions == null ? 0 : factions.size();
@@ -307,36 +313,43 @@ public class ClassSelectScreen extends MutilScreen {
             if (DISK_TEXTURE_FAILED.containsKey(key)) return null;
             FactionTexture cached = DISK_TEXTURE_CACHE.get(key);
             if (cached != null) return cached;
-            try {
-                Path gameDir = Minecraft.getInstance().gameDirectory.toPath();
-                Path esFactionsDir = gameDir.resolve("EsFactions");
-                Path imagePath = esFactionsDir.resolve(key).normalize();
-                // 安全检查：确保路径仍在 EsFactions 目录下
-                if (!imagePath.startsWith(esFactionsDir.normalize())) {
-                    DISK_TEXTURE_FAILED.put(key, true);
-                    return null;
+            // 按服务端规则读取本地 EsFactions/ 目录；尝试游戏目录、当前工作目录、
+            // 开发 run 目录和上一级目录，保证与服务端存放位置一致。
+            Path gameDir = Minecraft.getInstance().gameDirectory.toPath();
+            List<Path> candidateRoots = new ArrayList<>();
+            candidateRoots.add(gameDir.resolve("EsFactions").normalize());
+            candidateRoots.add(Path.of("EsFactions").toAbsolutePath().normalize());
+            candidateRoots.add(Path.of("run", "EsFactions").toAbsolutePath().normalize());
+            candidateRoots.add(Path.of("..", "EsFactions").toAbsolutePath().normalize());
+            for (Path esFactionsDir : candidateRoots) {
+                try {
+                    Path imagePath = esFactionsDir.resolve(key).normalize();
+                    // 安全检查：确保路径仍在对应 EsFactions 目录下
+                    if (!imagePath.startsWith(esFactionsDir.normalize())) {
+                        continue;
+                    }
+                    if (!Files.isRegularFile(imagePath)) {
+                        continue;
+                    }
+                    try (InputStream in = Files.newInputStream(imagePath)) {
+                        NativeImage image = NativeImage.read(in);
+                        int width = image.getWidth();
+                        int height = image.getHeight();
+                        DynamicTexture texture = new DynamicTexture(image);
+                        String safe = Integer.toHexString(key.hashCode());
+                        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
+                            "espetro", "dynamic/faction_" + safe);
+                        Minecraft.getInstance().getTextureManager().register(id, texture);
+                        FactionTexture resolved = new FactionTexture(id, width, height);
+                        DISK_TEXTURE_CACHE.put(key, resolved);
+                        return resolved;
+                    }
+                } catch (Exception ignored) {
+                    // 尝试下一个候选目录
                 }
-                if (!Files.isRegularFile(imagePath)) {
-                    DISK_TEXTURE_FAILED.put(key, true);
-                    return null;
-                }
-                try (InputStream in = Files.newInputStream(imagePath)) {
-                    NativeImage image = NativeImage.read(in);
-                    int width = image.getWidth();
-                    int height = image.getHeight();
-                    DynamicTexture texture = new DynamicTexture(image);
-                    String safe = Integer.toHexString(key.hashCode());
-                    ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
-                        "espetro", "dynamic/faction_" + safe);
-                    Minecraft.getInstance().getTextureManager().register(id, texture);
-                    FactionTexture resolved = new FactionTexture(id, width, height);
-                    DISK_TEXTURE_CACHE.put(key, resolved);
-                    return resolved;
-                }
-            } catch (Exception e) {
-                DISK_TEXTURE_FAILED.put(key, true);
-                return null;
             }
+            DISK_TEXTURE_FAILED.put(key, true);
+            return null;
         }
     }
 

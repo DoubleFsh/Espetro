@@ -3,11 +3,16 @@ package org.espetro.client.gui;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import se.mickelus.mutil.gui.GuiElement;
 
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -20,6 +25,12 @@ public class FactionRevealScreen extends MutilScreen {
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/attack_faction.png");
     private static final ResourceLocation DEFAULT_DEFEND_TEXTURE =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/defend_faction.png");
+
+    /** 已解析的资源包/客户端本地编制图片，避免界面重建时重复解码。 */
+    private static final Map<String, ResolvedTexture> TEXTURE_CACHE = new HashMap<>();
+
+    private record ResolvedTexture(ResourceLocation location, int width, int height) {
+    }
 
     /** 图片可用区域；实际绘制尺寸始终按源图片比例适配。 */
     private static final int IMG_MAX_W = 192;
@@ -46,53 +57,73 @@ public class FactionRevealScreen extends MutilScreen {
         this.defendFactionName = normalizeName(defendFactionName);
         this.ticksRemaining = Math.max(1, durationSeconds) * 20;
 
-        ResourceLocation atkTex = null;
-        ResourceLocation defTex = null;
-        int atkW = 128, atkH = 128;
-        int defW = 128, defH = 128;
+        ResolvedTexture attack = resolveTexture(attackFactionImage);
+        ResolvedTexture defend = resolveTexture(defendFactionImage);
+        if (attack == null) attack = resolveResourceTexture(DEFAULT_ATTACK_TEXTURE);
+        if (defend == null) defend = resolveResourceTexture(DEFAULT_DEFEND_TEXTURE);
 
-        if (attackFactionImage != null && !attackFactionImage.isEmpty()) {
-            atkTex = parseTexture(attackFactionImage);
-            int[] dims = readTextureDimensions(atkTex);
-            if (dims != null) { atkW = dims[0]; atkH = dims[1]; }
-        }
-        if (defendFactionImage != null && !defendFactionImage.isEmpty()) {
-            defTex = parseTexture(defendFactionImage);
-            int[] dims = readTextureDimensions(defTex);
-            if (dims != null) { defW = dims[0]; defH = dims[1]; }
-        }
-
-        this.attackTexture = atkTex != null ? atkTex : DEFAULT_ATTACK_TEXTURE;
-        this.defendTexture = defTex != null ? defTex : DEFAULT_DEFEND_TEXTURE;
-        this.attackTexW = atkW;
-        this.attackTexH = atkH;
-        this.defendTexW = defW;
-        this.defendTexH = defH;
+        this.attackTexture = attack != null ? attack.location() : DEFAULT_ATTACK_TEXTURE;
+        this.defendTexture = defend != null ? defend.location() : DEFAULT_DEFEND_TEXTURE;
+        this.attackTexW = attack != null ? attack.width() : 128;
+        this.attackTexH = attack != null ? attack.height() : 128;
+        this.defendTexW = defend != null ? defend.width() : 128;
+        this.defendTexH = defend != null ? defend.height() : 128;
     }
 
-    /** 从资源包读取纹理实际像素尺寸；读取完成立即释放临时像素数据。 */
-    private static int[] readTextureDimensions(ResourceLocation rl) {
-        if (rl == null) return null;
-        try {
-            var resource = Minecraft.getInstance().getResourceManager().getResource(rl);
-            if (resource.isEmpty()) return null;
-            try (InputStream in = resource.get().open(); NativeImage image = NativeImage.read(in)) {
-                return new int[] { image.getWidth(), image.getHeight() };
-            }
+    /** 先解析资源包位置，再回退到客户端根目录 EsFactions 下的相对图片。 */
+    private static ResolvedTexture resolveTexture(String configuredPath) {
+        if (configuredPath == null || configuredPath.isBlank()) return null;
+        String key = configuredPath.trim();
+        ResolvedTexture cached = TEXTURE_CACHE.get(key);
+        if (cached != null) return cached;
+
+        ResourceLocation resourceLocation = ResourceLocation.tryParse(key);
+        ResolvedTexture resource = resolveResourceTexture(resourceLocation);
+        if (resource != null) {
+            TEXTURE_CACHE.put(key, resource);
+            return resource;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return null;
+        Path imagePath = FactionSelectionImageResolver.resolveClientFile(
+            mc.gameDirectory.toPath(), key);
+        if (imagePath == null) return null;
+
+        try (InputStream in = Files.newInputStream(imagePath)) {
+            NativeImage image = NativeImage.read(in);
+            int width = image.getWidth();
+            int height = image.getHeight();
+            DynamicTexture texture = new DynamicTexture(image);
+            ResourceLocation dynamicLocation = ResourceLocation.fromNamespaceAndPath(
+                "espetro", "dynamic/faction_reveal_" + Integer.toHexString(key.hashCode()));
+            mc.getTextureManager().register(dynamicLocation, texture);
+            ResolvedTexture resolved = new ResolvedTexture(dynamicLocation, width, height);
+            TEXTURE_CACHE.put(key, resolved);
+            return resolved;
         } catch (Exception ignored) {
             return null;
         }
     }
 
-    private static ResourceLocation parseTexture(String fullPath) {
-        // 支持 "namespace:path" 格式
-        int colon = fullPath.indexOf(':');
-        if (colon > 0) {
-            String ns = fullPath.substring(0, colon);
-            String path = fullPath.substring(colon + 1);
-            return ResourceLocation.fromNamespaceAndPath(ns, path);
+    /** 从资源包读取纹理实际像素尺寸；读取完成立即释放临时像素数据。 */
+    private static ResolvedTexture resolveResourceTexture(ResourceLocation location) {
+        if (location == null) return null;
+        String cacheKey = "resource:" + location;
+        ResolvedTexture cached = TEXTURE_CACHE.get(cacheKey);
+        if (cached != null) return cached;
+        try {
+            var resource = Minecraft.getInstance().getResourceManager().getResource(location);
+            if (resource.isEmpty()) return null;
+            try (InputStream in = resource.get().open(); NativeImage image = NativeImage.read(in)) {
+                ResolvedTexture resolved = new ResolvedTexture(
+                    location, image.getWidth(), image.getHeight());
+                TEXTURE_CACHE.put(cacheKey, resolved);
+                return resolved;
+            }
+        } catch (Exception ignored) {
+            return null;
         }
-        return ResourceLocation.tryParse(fullPath);
     }
 
     @Override

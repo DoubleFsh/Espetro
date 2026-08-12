@@ -59,6 +59,11 @@ JSON 必须是 UTF-8，不支持注释和尾随逗号。指挥官技能仍由 Ku
 - `dimension_id`：可选的 `<namespace>:<path>`；省略时稳定生成 `espetro:<map>`。禁止使用 `minecraft`、`forge`、`espetro` 作为手工 namespace，也禁止重复 ID。
 - `map_vote_seconds`：全局地图投票时长，最少 5 秒。
 
+地图投票预览图由每个客户端从游戏根目录的 `EsWorld/<map>.png` 读取，其中
+`<map>` 是本文件条目的 `map` 字段，例如 `EsWorld/test_flat.png`。目录名也兼容
+`Esworld` 大小写。图片不会由服务端读取或通过网络发送；缺少或无法解码时，投票
+卡片显示“暂未添加图片”。建议使用 16:9 PNG；替换同名图片后需重启客户端以清除纹理缓存。
+
 缺失地图、非法目录、无效 `level.dat`、缺少区块或任一必需 `EsConfig` 时，该维度会输出明确错误并拒绝注册。
 
 `logistics.json` 的补给方块、方块标签、方块实体 NBT、补给物品和 FOB 库存配置见
@@ -443,6 +448,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
     "description": "用于说明配置格式",
     "icon": "★",
     "selection_image": "espetro:textures/gui/factions/example.png",
+    "audio_pack": "example",
     "faction_id": "EXAMPLE_COUNTRY",
     "team": "ATTACK",
     "color": "AA5555"
@@ -524,7 +530,8 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `name` | String | 玩家可见名称 |
 | `description` | String | 编制描述 |
 | `icon` | String | GUI 图标文本/Emoji |
-| `selection_image` | String | 可选；编制投票卡片使用的完整资源位置，如 `espetro:textures/gui/factions/plaagf.png`；也接受别名 `selectionImage` |
+| `selection_image` | String | 可选；可填写完整资源位置，如 `espetro:textures/gui/factions/plaagf.png`；也可填写客户端根目录 `EsFactions/` 下的相对图片路径，如 `images/plaagf.png`。用于编制投票卡片和投票结束后的双方编制揭晓；也接受别名 `selectionImage` |
+| `audio_pack` | String | 可选；客户端游戏根目录 `EsAudio/` 下的单层目录索引，例如 `modern_russia`。也接受 `audioPack`、`audio_index`、`audioIndex` |
 | `faction_id` | String | **必填**；编制所属阵营，直接使用此处字符串，不需要另行注册 |
 | `team` | String | 必须使用 `ATTACK` 或 `DEFEND` |
 | `color` | String | 六位 RGB，不带 `#` |
@@ -534,12 +541,53 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 
 `faction_id` 使用区分大小写、保留空白的精确字符串比较。某方确定编制后，另一方的候选池会排除所有拥有相同 `faction_id` 的编制，确保攻守双方不属于同一阵营。缺失或空白的 `faction_id` 会导致整个编制拒绝载入。
 
+### 客户端编制音频套装
+
+`audio_pack` 只传递套装目录索引，音频文件不会由服务器下发。每个客户端从自己的游戏根目录读取：
+
+```text
+<客户端游戏根目录>/
+└── EsAudio/
+    └── example/                       # audio_pack: "example"
+        ├── music/
+        │   ├── entry.ogg              # 入场音乐
+        │   ├── victory.ogg            # 普通胜利音乐
+        │   ├── victory_easter_egg.ogg # 彩蛋胜利音乐
+        │   └── defeat.ogg             # 失败音乐
+        └── voice/
+            ├── entry_attack/          # 进攻方入场语音，可放多个 .ogg
+            ├── entry_defend/          # 防守方入场语音，可放多个 .ogg
+            ├── capturing/             # 据点被中立化后，压旗方正在占领语音
+            ├── losing/                # 据点被中立化后，原主正在丢失语音
+            ├── capture/               # 己方占领点位后的语音
+            ├── lost/                  # 敌方占领点位后的失守语音
+            ├── victory/               # 胜利结算语音
+            └── defeat/                # 失败结算语音
+```
+
+音频使用 Minecraft 原生的 **OGG Vorbis（`.ogg`）** 流式播放器。音乐遵循游戏的“音乐”和“主音量”，语音遵循“语音”和“主音量”。语音目录只读取该目录第一层的 `.ogg` 文件，并在每次触发时等概率随机选择一个。
+
+| 事件 | 播放规则 |
+| --- | --- |
+| 编制揭示结束、进入部署/职业选择界面 | 立即播放 `music/entry.ogg`；3 秒后从本方 `voice/entry_attack/` 或 `voice/entry_defend/` 随机播放一条 |
+| 己方将敌方据点中立化 | 从 `voice/capturing/` 随机播放一条“正在占领”语音 |
+| 己方据点被敌方中立化 | 从 `voice/losing/` 随机播放一条“正在丢失”语音 |
+| 己方完成点位占领 | 从 `voice/capture/` 随机播放一条 |
+| 敌方完成点位占领 | 从 `voice/lost/` 随机播放一条 |
+| 胜利结算 | 服务器每局统一进行一次 10% 彩蛋判定；命中时播放 `victory_easter_egg.ogg`，否则播放 `victory.ogg`；3 秒后从 `voice/victory/` 随机播放一条 |
+| 失败结算 | 立即播放 `music/defeat.ogg`；3 秒后从 `voice/defeat/` 随机播放一条 |
+
+彩蛋文件缺失时会自动回退到普通胜利音乐；平局不播放胜负音频。套装目录、某个音乐文件或语音目录缺失时只跳过对应音频并在客户端日志警告一次，不会影响服务器阶段流转。切回大厅或断开服务器时，当前音乐、语音及尚未到时的延迟语音都会停止。
+
+`audio_pack` 随编制配置在服务器启动时冻结；修改索引需要完整重启。实际 `.ogg` 文件在客户端收到事件时读取，因此替换本地文件后，下一次事件即可使用新文件。
+
 ### `classes.<class_id>`
 
 | 字段 | 类型 | 默认/说明 |
 | --- | --- | --- |
 | `name`, `description`, `role` | String | GUI 信息 |
 | `icon` | String | 可选；`assets/espetro/textures/gui/roles/` 下不带扩展名的职业图标短名 |
+| `row` | Integer | 职业选择界面的行号（1–5）；也接受 `grid_row` / `gridRow`。同一行内按该职业在 `classes` 对象中的 JSON 书写顺序从左到右排列 |
 | `vehicle_crew` | Boolean | 可选；`true` 表示该职业可使用受限载具座位。缺失时为兼容旧编制，仅 `icon: "crewman"` 自动视为载具组员；显式 `false` 可关闭该兼容识别。也接受 `vehicleCrew` |
 | `IconImage` | String | 可选；**文件系统完整路径**的职业图标（优先于 `icon`），例 `/home/shu/图片/Icon/rifleman.png` |
 | `maxPlayers` | Integer | 必须大于 0。默认（`team_count: false`）为编制/队伍总上限；`team_count: true` 时为**每个班组小队**上限 |
@@ -551,6 +599,8 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `healthBonus` | Integer | 默认 0；额外生命点，`4` 等于两颗心 |
 | `speedBonus` | Float | 默认 0；移动速度比例，`0.1` 等于提高 10% |
 | `variants` | Object | 变体 ID 到装备变体的映射；JSON 中的顺序就是二级菜单显示顺序 |
+
+职业按钮不会按职业 ID 或名称排序；需要调整同一行的位置时，直接调整该职业在 `classes` 对象中的书写先后。
 
 ### `classes.<class_id>.variants.<variant_id>`
 

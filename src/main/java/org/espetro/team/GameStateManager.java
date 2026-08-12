@@ -111,6 +111,12 @@ public class GameStateManager {
         return currentPhase;
     }
 
+    /** Map folder selected for this round, including the loading transition. */
+    public String getCurrentMapFolder() {
+        ActiveMapConfig map = pendingMap != null ? pendingMap : BattlefieldContext.getOrNull();
+        return map == null || map.mapFolder == null ? "" : map.mapFolder;
+    }
+
     public void setPhase(GamePhase phase) {
         GamePhase previous = this.currentPhase;
         this.currentPhase = phase;
@@ -641,7 +647,8 @@ public class GameStateManager {
             if (team == null) continue;
 
             // 发送统一部署主界面（集成职业选择、复活点选择、载具部署、地图）
-            NetworkManager.queueUnifiedDeployScreen(player, GameConfig.getDeployTimeoutSeconds());
+            NetworkManager.queueUnifiedDeployScreen(
+                player, GameConfig.getDeployTimeoutSeconds(), true);
         }
         // 职业选择界面已通过 UnifiedDeployScreen 自动打开，不再发送聊天消息
     }
@@ -1666,7 +1673,7 @@ public class GameStateManager {
         // 只给该玩家同步阶段信息，避免全局广播
         org.espetro.network.NetworkManager.NET.send(
             net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
-            new org.espetro.network.GamePhaseSyncPacket(currentPhase));
+            new org.espetro.network.GamePhaseSyncPacket(currentPhase, getCurrentMapFolder()));
         NetworkManager.sendOpenFactionScreen(player);
 
         player.sendSystemMessage(Component.literal("§6========================================"));
@@ -1746,6 +1753,7 @@ public class GameStateManager {
                 // 发送统一部署主界面
                 int remaining = getDeployTimeRemainingSeconds();
                 NetworkManager.sendUnifiedDeployScreen(player, remaining);
+                NetworkManager.sendDeployPointSync(player);
                 NetworkManager.sendWaitingStatus(player, "ATTACK".equals(team)
                     ? "§c等待进攻§e[" + remaining + "秒]"
                     : "§9部署防线§e[" + remaining + "秒]", true);
@@ -1794,6 +1802,7 @@ public class GameStateManager {
                 player.sendSystemMessage(Component.literal("§e⚠ 请先在部署面板选择部署点，再选择职业！"));
 
                 NetworkManager.sendUnifiedDeployScreen(player, -1);
+                NetworkManager.sendDeployPointSync(player);
 
                 Espetro.broadcastToTeam(team, "§e⚡ 增援到达！" + player.getName().getString()
                     + " 加入了" + ("ATTACK".equals(team) ? " §c进攻方" : " §9防守方"));
@@ -1886,6 +1895,7 @@ public class GameStateManager {
         int displaySeconds = GameConfig.getRoundEndSeconds();
         NetworkManager.broadcastRoundEnd(normalized, displaySeconds,
             winShow, loseShow, atkRaw, defRaw, level, attackerTimedOut);
+        org.espetro.audio.FactionAudioCoordinator.broadcastRoundResult(normalized);
 
         String result = switch (normalized) {
             case "ATTACK" -> "§c进攻方胜利";

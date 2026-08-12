@@ -17,6 +17,10 @@
       "remove_per_hit": 5
     }
   },
+  "damage": {
+    "explosion_damage_ratio": 0.1,
+    "projectile_hit_damage_ratio": 0.1
+  },
   "fortifications": [
     {
       "id": "ammo_crate",

@@ -320,6 +320,8 @@ public class VehicleManager {
             .add(readyAt);
         refreshAutoRespawnCooldown(team, factionId, vehicleType);
         broadcastVehicleInfoToTeam(team);
+        Espetro.LOGGER.info("载具已摧毁，自动刷新已排队: {} / {} / {}, delay={}s",
+            team, factionId, vehicleType, Math.max(0L, ms) / 1000L);
     }
 
     private void processAutoRespawns() {
@@ -366,7 +368,18 @@ public class VehicleManager {
         VehicleConfig.DeploymentPointConfig deployment =
             slot != null ? slot.forTeam(team) : resolveDeploymentPoint(cfg, team);
         BlockPos spawnPos = resolveSpawnPosition(deployment);
-        if (spawnPos == null || !level.hasChunkAt(spawnPos)) return false;
+        if (spawnPos == null) return false;
+        if (!level.hasChunkAt(spawnPos)) {
+            // Respawn points are commonly unattended by the time a cooldown expires. Force-load
+            // this single spawn chunk on demand; otherwise the ready queue can remain stuck forever.
+            try {
+                level.getChunkAt(spawnPos);
+            } catch (RuntimeException e) {
+                Espetro.LOGGER.warn("载具自动刷新无法加载出生区块: {} / {} / {} at {}",
+                    team, factionId, vehicleType, spawnPos, e);
+                return false;
+            }
+        }
 
         Entity vehicle = createVehicleEntity(level, vehicleType, spawnPos, factionId, cfg,
             slot, deployment != null ? deployment.yaw : 0f);
