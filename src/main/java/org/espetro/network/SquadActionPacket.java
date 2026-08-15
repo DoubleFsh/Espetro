@@ -28,6 +28,8 @@ public class SquadActionPacket {
         TRANSFER_SQUAD_LEADER,
         /** 火力组组长：转移组长给同组 targetUuid */
         TRANSFER_FIRETEAM_LEADER,
+        /** 小队长：将 targetUuid 直接任命为 B/C 火力组组长 */
+        APPOINT_FIRETEAM_LEADER,
         /** 小队长：将 targetUuid 分配到 fireteamIndex (0=A,1=B,2=C) */
         ASSIGN_FIRETEAM,
         /** 小队长：锁定小队，其他人无法加入 */
@@ -79,6 +81,11 @@ public class SquadActionPacket {
     public static SquadActionPacket transferFireteamLeader(UUID targetUuid) {
         return new SquadActionPacket(Action.TRANSFER_FIRETEAM_LEADER, SquadManager.NO_SQUAD, "",
             targetUuid, (byte) -1);
+    }
+
+    public static SquadActionPacket appointFireteamLeader(UUID targetUuid, Fireteam fireteam) {
+        return new SquadActionPacket(Action.APPOINT_FIRETEAM_LEADER, SquadManager.NO_SQUAD, "",
+            targetUuid, fireteam != null ? fireteam.toNetwork() : (byte) -1);
     }
 
     public static SquadActionPacket assignFireteam(UUID targetUuid, Fireteam fireteam) {
@@ -147,6 +154,13 @@ public class SquadActionPacket {
                     }
                     yield SquadManager.getInstance().transferFireteamLeader(player, targetUuid);
                 }
+                case APPOINT_FIRETEAM_LEADER -> {
+                    if (targetUuid == null || fireteamIndex < 1 || fireteamIndex > 2) {
+                        yield SquadManager.ActionResult.failure(previousTeam, "无效的火力组长指认。");
+                    }
+                    yield SquadManager.getInstance().appointFireteamLeader(
+                        player, targetUuid, Fireteam.fromIndex(fireteamIndex));
+                }
                 case ASSIGN_FIRETEAM -> {
                     if (targetUuid == null || fireteamIndex < 0 || fireteamIndex > 2) {
                         yield SquadManager.ActionResult.failure(previousTeam, "无效的火力组分配。");
@@ -180,6 +194,7 @@ public class SquadActionPacket {
                     // 新队长 usableBy 技能列表需立即刷新
                     MinecraftServerBridge.refreshSkillSync(targetUuid);
                 } else if ((action == Action.TRANSFER_FIRETEAM_LEADER
+                    || action == Action.APPOINT_FIRETEAM_LEADER
                     || action == Action.ASSIGN_FIRETEAM) && targetUuid != null) {
                     MinecraftServerBridge.reconcileTargetPack(targetUuid);
                 }

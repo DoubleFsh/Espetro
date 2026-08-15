@@ -14,18 +14,29 @@ class VehicleSeatAccessPolicyTest {
 
     @ParameterizedTest
     @CsvSource({
-        "TANK,0,true", "TANK,1,true", "TANK,2,true", "TANK,3,false",
-        "IFV,0,true", "IFV,1,true", "IFV,2,false",
-        "HELICOPTER,0,true", "HELICOPTER,1,false",
-        "OTHER,0,false", "OTHER,1,false"
+        "0,0,false", "1,0,true", "1,1,false",
+        "2,0,true", "2,1,true", "2,2,false",
+        "3,0,true", "3,2,true", "3,3,false"
     })
-    void restrictedSeatMatrixMatchesConfiguredVehicleRules(
-            SbwVehicleSeatResolver.Kind kind, int seat, boolean restricted) {
+    void configuredCountRestrictsThatManyLeadingSeats(
+            int requiredSeatCount, int seat, boolean restricted) {
         if (restricted) {
-            assertTrue(VehicleSeatAccessPolicy.requiresVehicleCrew(kind, seat));
+            assertTrue(VehicleSeatAccessPolicy.requiresVehicleCrew(requiredSeatCount, seat));
         } else {
-            assertFalse(VehicleSeatAccessPolicy.requiresVehicleCrew(kind, seat));
+            assertFalse(VehicleSeatAccessPolicy.requiresVehicleCrew(requiredSeatCount, seat));
         }
+    }
+
+    @Test
+    void missingFieldKeepsLegacyVehicleTypeDefaults() {
+        assertEquals(3, VehicleSeatAccessPolicy.legacyVehicleCrewSeatCount(
+            SbwVehicleSeatResolver.Kind.TANK));
+        assertEquals(2, VehicleSeatAccessPolicy.legacyVehicleCrewSeatCount(
+            SbwVehicleSeatResolver.Kind.IFV));
+        assertEquals(1, VehicleSeatAccessPolicy.legacyVehicleCrewSeatCount(
+            SbwVehicleSeatResolver.Kind.HELICOPTER));
+        assertEquals(0, VehicleSeatAccessPolicy.legacyVehicleCrewSeatCount(
+            SbwVehicleSeatResolver.Kind.OTHER));
     }
 
     @Test
@@ -43,16 +54,16 @@ class VehicleSeatAccessPolicyTest {
         Object occupied = new Object();
 
         assertEquals(3, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.TANK,
+            3,
             Arrays.asList(null, null, null, null)));
         assertEquals(4, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.TANK,
+            3,
             Arrays.asList(null, null, null, occupied, null)));
         assertEquals(2, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.IFV,
+            2,
             Arrays.asList(null, null, null)));
         assertEquals(1, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.HELICOPTER,
+            1,
             Arrays.asList(null, null)));
     }
 
@@ -61,13 +72,13 @@ class VehicleSeatAccessPolicyTest {
         Object occupied = new Object();
 
         assertEquals(-1, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.TANK,
+            3,
             Arrays.asList(null, null, null)));
         assertEquals(-1, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.IFV,
+            2,
             Arrays.asList(null, null, occupied)));
         assertEquals(-1, VehicleSeatAccessPolicy.firstAvailableUnrestrictedSeat(
-            SbwVehicleSeatResolver.Kind.HELICOPTER,
+            1,
             Arrays.asList(null, occupied)));
     }
 }

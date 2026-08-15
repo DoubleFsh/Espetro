@@ -205,7 +205,7 @@ public class BastionManager {
                 team, getBastionLimitPerTeam(), name, pos);
             return null;
         }
-        if (structureKind == StructureKind.RADIO && wouldRadioCoverageOverlap(level, pos)) {
+        if (structureKind == StructureKind.RADIO && wouldRadioCoverageOverlap(level, pos, team)) {
             Espetro.LOGGER.warn("Radio 作用范围与现有 Radio 重叠，拒绝创建: {} ({})", name, pos);
             return null;
         }
@@ -422,10 +422,11 @@ public class BastionManager {
     }
 
     /**
-     * Checks all teams in the dimension. This is also called by the low-level
-     * creation path so commands or future integrations cannot bypass placement validation.
+     * Checks active Radios of the placing faction in this dimension. Enemy Radio
+     * coverage never reserves placement space for this faction. This is also called
+     * by the low-level creation path so commands or future integrations cannot bypass validation.
      */
-    public boolean wouldRadioCoverageOverlap(ServerLevel level, BlockPos pos) {
+    public boolean wouldRadioCoverageOverlap(ServerLevel level, BlockPos pos, String team) {
         if (level == null || pos == null) return true;
         LogisticsConfig.LogisticsSettings settings = LogisticsConfig.get();
         double separation = RadioCoveragePolicy.minimumCenterDistance(
@@ -434,8 +435,8 @@ public class BastionManager {
             if (!bastion.isActive() || !bastion.isRadio() || bastion.getLevel() != level) {
                 continue;
             }
-            if (RadioCoveragePolicy.overlaps(
-                bastion.getPosition().distSqr(pos), separation)) {
+            if (RadioCoveragePolicy.blocksPlacement(
+                bastion.getTeam(), team, bastion.getPosition().distSqr(pos), separation)) {
                 return true;
             }
         }

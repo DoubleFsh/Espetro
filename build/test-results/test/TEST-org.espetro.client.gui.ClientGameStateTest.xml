@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.client.gui.ClientGameStateTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-09T09:19:02" hostname="cachyos-x8664" time="0.004">
+<testsuite name="org.espetro.client.gui.ClientGameStateTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-13T12:33:28" hostname="DESKTOP-1GK3H0A" time="0.008">
   <properties/>
-  <testcase name="battleTimerUsesServerAnchorAndDecrementsLocally()" classname="org.espetro.client.gui.ClientGameStateTest" time="0.003"/>
+  <testcase name="battleTimerUsesServerAnchorAndDecrementsLocally()" classname="org.espetro.client.gui.ClientGameStateTest" time="0.006"/>
   <testcase name="missingTimerRemainsHiddenAndClockSkewCannotAddTime()" classname="org.espetro.client.gui.ClientGameStateTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

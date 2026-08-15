@@ -1,5 +1,7 @@
 package org.espetro.bastion;
 
+import java.util.Objects;
+
 /** Pure placement geometry shared by Radio validation and tests. */
 public final class RadioCoveragePolicy {
 
@@ -22,5 +24,12 @@ public final class RadioCoveragePolicy {
             return false;
         }
         return distanceSquared < minimumCenterDistance * minimumCenterDistance;
+    }
+
+    /** Only a Radio belonging to the same faction may reserve placement space. */
+    public static boolean blocksPlacement(String existingTeam, String placingTeam,
+                                          double distanceSquared, double minimumCenterDistance) {
+        return Objects.equals(existingTeam, placingTeam)
+            && overlaps(distanceSquared, minimumCenterDistance);
     }
 }

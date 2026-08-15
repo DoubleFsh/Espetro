@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-09T09:19:04" hostname="cachyos-x8664" time="0.003">
+<testsuite name="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-13T12:33:33" hostname="DESKTOP-1GK3H0A" time="0.007">
   <properties/>
-  <testcase name="claimsEveryConfiguredSlotOnceAcrossRepeatedPhaseHooks()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.002"/>
+  <testcase name="claimsEveryConfiguredSlotOnceAcrossRepeatedPhaseHooks()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.003"/>
   <testcase name="roundResetAllowsTheNextMatchToDeployItsFirstWave()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.001"/>
   <testcase name="initialDelayUsesDeployPhaseStartAndZeroIsImmediatelyDue()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.0"/>
-  <testcase name="initialDelayCalculationCannotOverflowEpochMillis()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.0"/>
+  <testcase name="initialDelayCalculationCannotOverflowEpochMillis()" classname="org.espetro.vehicle.InitialVehicleDeploymentLedgerTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

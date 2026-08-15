@@ -546,7 +546,8 @@ public final class FortificationManager {
             if (manager.getActiveBastionCount(preview.team) + pending >= manager.getBastionLimitPerTeam()) {
                 return new PlacementBacking(null, null, "§c本方 Radio 数量已达到上限。" );
             }
-            if (manager.wouldRadioCoverageOverlap(level, anchor) || pendingRadioOverlap(level, anchor)) {
+            if (manager.wouldRadioCoverageOverlap(level, anchor, preview.team)
+                || pendingRadioOverlap(level, anchor, preview.team)) {
                 return new PlacementBacking(null, null, "§cRadio 作用范围不能与其他 Radio 重叠。" );
             }
             if (cfg.teammateCount > 0 && countNearbyTeammates(player, preview.team, anchor, cfg.teammateRadius) < cfg.teammateCount) {
@@ -937,12 +938,12 @@ public final class FortificationManager {
         return hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(target);
     }
 
-    private boolean pendingRadioOverlap(ServerLevel level, BlockPos anchor) {
+    private boolean pendingRadioOverlap(ServerLevel level, BlockPos anchor, String team) {
         double min = BastionManager.getInstance().getMinimumRadioCenterDistance();
-        double minSq = min * min;
         String dimension = level.dimension().location().toString();
         return constructions.values().stream().anyMatch(c -> c.blueprint.kind == Kind.RADIO
-            && c.dimension.equals(dimension) && c.anchor.distSqr(anchor) < minSq);
+            && c.dimension.equals(dimension)
+            && RadioCoveragePolicy.blocksPlacement(c.team, team, c.anchor.distSqr(anchor), min));
     }
 
     private int habCountForRadio(BastionData radio, String team) {

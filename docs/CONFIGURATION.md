@@ -457,6 +457,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
     "transport": {
       "entity": ["minecraft:minecart", "minecraft:horse"],
       "display_name": "§6运输车",
+      "vehicle_crew_seats": 1,
       "per_max_count": 2,
       "respawn_minutes": 5,
       "troop_value": 5,
@@ -639,7 +640,8 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 #### `vehicle_crew` 与载具座位
 
 - 该限制只在当前战场的 `DEPLOYING`、`BATTLE` 阶段生效，管理员同样不能绕过；主城与非活动战场不限制。
-- SBW/DragonRise 坦克的 0、1、2 号座位、步战/APC 的 0、1 号座位及直升机的 0 号座位要求职业配置 `vehicle_crew: true`。其余座位和其他载具类型不限制。
+- 在 `vehicles.<vehicle_type>` 中配置 `vehicle_crew_seats: N`，表示从 0 号座位起，前 N 个座位要求职业配置 `vehicle_crew: true`。例如 `3` 限制 0、1、2 号座位，`0` 表示该载具不限制任何座位。
+- 缺失 `vehicle_crew_seats` 时兼容旧编制：SBW/DragonRise 坦克默认 3 个、步战/APC 默认 2 个、直升机默认 1 个受限座位，其他车型默认 0 个。建议新编制显式填写。
 - 首次上车和车内换座都由服务端校验。非载具组员上车时会自动顺位到第一个空闲的非受限座位；若不存在这种座位，则拒绝上车并提示载具没有空余位置。玩家在受限座位上更换为其他职业或离开小队时会立即下车。
 - `superbwarfare`、`dragonrise_reforge` 都是 Espetro 的软依赖；未安装时不会加载座位兼容代码，也不会影响 Espetro 启动。
 
@@ -674,6 +676,7 @@ Radio 能足额支付职业变体的 `ammo_cost` 时才会提交；满弹或库�
 | `per_max_count` | 1 | 同类型最大同时部署数量 |
 | `respawn_minutes` | 5 | 单辆刷新冷却 |
 | `troop_value` | 0 | 载具死亡/被摧毁时扣除的所属队伍兵力 |
+| `vehicle_crew_seats` | 按 SBW 类型兼容 | 从 0 号座位开始，前多少个座位要求 `vehicle_crew: true`；`0` 表示不限，负数会拒绝载入编制 |
 | `entity_tags` | `[]` | 生成后附加到实体的 tag 数组 |
 | `fightveh` | 兼容旧配置时为 true | 战斗载具；可在本方基地或载具补给站装卸弹药，不可运输建材，可用于更换职业 |
 | `supplyveh` | false | 补给载具；可在基地或 Radio 附近装卸弹药和建材，可用于更换职业 |

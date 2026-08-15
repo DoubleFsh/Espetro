@@ -692,6 +692,7 @@ public class UnifiedDeployScreenPacket {
 
     public static class SquadInfo {
         public final int id;
+        public final int displayId;
         public final String name;
         public final int memberCount;
         public final int maxMembers;
@@ -702,13 +703,21 @@ public class UnifiedDeployScreenPacket {
         public final List<SquadMemberInfo> members;
 
         public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked) {
-            this(id, name, memberCount, maxMembers, isLocked, "", "none", "无", new ArrayList<>());
+            this(id, id, name, memberCount, maxMembers, isLocked, "", "none", "无", new ArrayList<>());
         }
 
         public SquadInfo(int id, String name, int memberCount, int maxMembers, boolean isLocked,
                          String leaderName, String categoryId, String categoryDisplayName,
                          List<SquadMemberInfo> members) {
+            this(id, id, name, memberCount, maxMembers, isLocked,
+                leaderName, categoryId, categoryDisplayName, members);
+        }
+
+        public SquadInfo(int id, int displayId, String name, int memberCount, int maxMembers, boolean isLocked,
+                         String leaderName, String categoryId, String categoryDisplayName,
+                         List<SquadMemberInfo> members) {
             this.id = id;
+            this.displayId = displayId;
             this.name = name;
             this.memberCount = memberCount;
             this.maxMembers = maxMembers;
@@ -721,6 +730,7 @@ public class UnifiedDeployScreenPacket {
 
         public SquadInfo(FriendlyByteBuf buf) {
             this.id = buf.readVarInt();
+            this.displayId = buf.readVarInt();
             this.name = buf.readUtf();
             this.memberCount = buf.readVarInt();
             this.maxMembers = buf.readVarInt();
@@ -738,6 +748,7 @@ public class UnifiedDeployScreenPacket {
 
         public void write(FriendlyByteBuf buf)    {
             buf.writeVarInt(id);
+            buf.writeVarInt(displayId);
             buf.writeUtf(name);
             buf.writeVarInt(memberCount);
             buf.writeVarInt(maxMembers);
@@ -756,6 +767,7 @@ public class UnifiedDeployScreenPacket {
             if (this == other) return true;
             if (!(other instanceof SquadInfo that)) return false;
             return id == that.id
+                && displayId == that.displayId
                 && memberCount == that.memberCount
                 && maxMembers == that.maxMembers
                 && isLocked == that.isLocked
@@ -768,7 +780,7 @@ public class UnifiedDeployScreenPacket {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, name, memberCount, maxMembers, isLocked, leaderName,
+            return Objects.hash(id, displayId, name, memberCount, maxMembers, isLocked, leaderName,
                 categoryId, categoryDisplayName, members);
         }
     }

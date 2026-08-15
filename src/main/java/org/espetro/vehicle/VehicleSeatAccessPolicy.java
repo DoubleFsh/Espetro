@@ -30,22 +30,26 @@ public final class VehicleSeatAccessPolicy {
     private VehicleSeatAccessPolicy() {
     }
 
-    static boolean requiresVehicleCrew(SbwVehicleSeatResolver.Kind kind, int seatIndex) {
-        if (seatIndex < 0 || kind == null) return false;
+    static int legacyVehicleCrewSeatCount(SbwVehicleSeatResolver.Kind kind) {
+        if (kind == null) return 0;
         return switch (kind) {
-            case TANK -> seatIndex <= 2;
-            case IFV -> seatIndex <= 1;
-            case HELICOPTER -> seatIndex == 0;
-            case OTHER -> false;
+            case TANK -> 3;
+            case IFV -> 2;
+            case HELICOPTER -> 1;
+            case OTHER -> 0;
         };
     }
 
-    static int firstAvailableUnrestrictedSeat(SbwVehicleSeatResolver.Kind kind,
+    static boolean requiresVehicleCrew(int requiredSeatCount, int seatIndex) {
+        return seatIndex >= 0 && seatIndex < Math.max(0, requiredSeatCount);
+    }
+
+    static int firstAvailableUnrestrictedSeat(int requiredSeatCount,
                                               List<?> seatOccupants) {
-        if (kind == null || seatOccupants == null) return -1;
+        if (seatOccupants == null) return -1;
         for (int seatIndex = 0; seatIndex < seatOccupants.size(); seatIndex++) {
             if (seatOccupants.get(seatIndex) == null
-                && !requiresVehicleCrew(kind, seatIndex)) {
+                && !requiresVehicleCrew(requiredSeatCount, seatIndex)) {
                 return seatIndex;
             }
         }
@@ -69,8 +73,8 @@ public final class VehicleSeatAccessPolicy {
 
     public static boolean mayUseSeat(ServerPlayer player, Entity vehicle, int seatIndex) {
         if (!isRestrictionActive(player)) return true;
-        SbwVehicleSeatResolver.Kind kind = SbwVehicleSeatResolver.getKind(vehicle);
-        return !requiresVehicleCrew(kind, seatIndex) || isVehicleCrew(player);
+        int requiredSeatCount = getRequiredVehicleCrewSeatCount(vehicle);
+        return !requiresVehicleCrew(requiredSeatCount, seatIndex) || isVehicleCrew(player);
     }
 
     /** Used by the optional SBW changeSeat mixin. */
@@ -102,9 +106,8 @@ public final class VehicleSeatAccessPolicy {
         Entity vehicle = event.getEntityBeingMounted();
         if (!SbwVehicleSeatResolver.isSupportedVehicle(vehicle)) return;
 
-        SbwVehicleSeatResolver.Kind kind = SbwVehicleSeatResolver.getKind(vehicle);
-        if (!isRestrictionActive(player) || isVehicleCrew(player)
-            || kind == SbwVehicleSeatResolver.Kind.OTHER) {
+        int requiredSeatCount = getRequiredVehicleCrewSeatCount(vehicle);
+        if (!isRestrictionActive(player) || isVehicleCrew(player) || requiredSeatCount <= 0) {
             return;
         }
 
@@ -112,12 +115,27 @@ public final class VehicleSeatAccessPolicy {
         // it appears first in SBW's seat list. Route this one mount operation to the
         // first empty unrestricted passenger seat instead.
         List<?> seats = SbwVehicleSeatResolver.getOrderedSeatOccupants(vehicle);
-        int targetSeat = firstAvailableUnrestrictedSeat(kind, seats);
+        int targetSeat = firstAvailableUnrestrictedSeat(requiredSeatCount, seats);
         if (targetSeat < 0
             || !SbwVehicleSeatResolver.overrideNextMountSeat(vehicle, player, targetSeat)) {
             event.setCanceled(true);
             notifyNoVacancy(player);
         }
+    }
+
+    static int getRequiredVehicleCrewSeatCount(Entity vehicle) {
+        if (vehicle == null) return 0;
+        VehicleManager manager = VehicleManager.getInstance();
+        String factionId = manager.getVehicleFactionId(vehicle.getUUID());
+        String vehicleType = manager.getVehicleType(vehicle.getUUID());
+        if (factionId != null && vehicleType != null) {
+            VehicleConfig.VehicleTypeConfig config =
+                VehicleConfig.getVehicleConfig(factionId, vehicleType);
+            if (config != null && config.vehicleCrewSeats != null) {
+                return Math.max(0, config.vehicleCrewSeats);
+            }
+        }
+        return legacyVehicleCrewSeatCount(SbwVehicleSeatResolver.getKind(vehicle));
     }
 
     private static boolean isRestrictionActive(ServerPlayer player) {

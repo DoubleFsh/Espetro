@@ -54,7 +54,7 @@ public final class ClientTacticalState {
             for (UnifiedDeployScreenPacket.SquadMemberInfo member : squad.members) {
                 String memberKey = key(member.playerName);
                 markersByName.put(memberKey,
-                    new MarkerInfo(squad.id, member.leader, member.fireteamLeader,
+                    new MarkerInfo(squad.id, squad.displayId, member.leader, member.fireteamLeader,
                         member.commander, member.fireteam));
                 if (member.commander) {
                     commanderNames.add(memberKey);
@@ -105,12 +105,28 @@ public final class ClientTacticalState {
         return info != null && info.squadId == mySquadId && mySquadId != NO_SQUAD && info.leader;
     }
 
-    /** ESPoints 标点轮盘的客户端提示权限；服务端仍会再次权威校验。 */
+    /**
+     * 本地玩家是否拥有领导类战术权限。用于在客户端打开轮盘前拦截普通队员；
+     * 具体动作仍由服务端再次权威校验。
+     */
+    public static boolean canLocalPlayerOpenTacticalRadial(String playerName) {
+        MarkerInfo info = markersByName.get(key(playerName));
+        return hasSquadLeaderAccess(mySquadId, info);
+    }
+
+    /** ESPoints 标点轮盘仍允许指挥官、小队长和火力组长。 */
     public static boolean canLocalPlayerPlacePing(String playerName) {
         String normalized = key(playerName);
         MarkerInfo info = markersByName.get(normalized);
         return commanderNames.contains(normalized)
             || (info != null && (info.commander || info.leader || info.fireteamLeader));
+    }
+
+    static boolean hasSquadLeaderAccess(int localSquadId, MarkerInfo info) {
+        return localSquadId != NO_SQUAD
+            && info != null
+            && info.squadId == localSquadId
+            && info.leader;
     }
 
     private static String key(String name) {
@@ -132,12 +148,18 @@ public final class ClientTacticalState {
         return myFireteam;
     }
 
-    public record MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
+    public record MarkerInfo(int squadId, int displayId, boolean leader, boolean fireteamLeader,
                              boolean commander, byte fireteam) {
+        /** 兼容旧构造（显示序号与内部 ID 相同）。 */
+        public MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
+                          boolean commander, byte fireteam) {
+            this(squadId, squadId, leader, fireteamLeader, commander, fireteam);
+        }
+
         /** 兼容旧构造（无 fireteam 时默认 0 = A 组）。 */
         public MarkerInfo(int squadId, boolean leader, boolean fireteamLeader,
                           boolean commander) {
-            this(squadId, leader, fireteamLeader, commander, (byte) 0);
+            this(squadId, squadId, leader, fireteamLeader, commander, (byte) 0);
         }
     }
 }

@@ -1,14 +1,11 @@
 package org.espetro.client;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -24,17 +21,17 @@ import org.joml.Matrix4f;
  */
 public final class LeaderOverheadRenderer {
 
-    private static final int TEX_SIZE = 32;
-    private static final float HALF = 0.28f;
+    /** 原标识半宽为 0.28；PNG 画框按需求缩小为原来的 1/2。 */
+    private static final float HALF = 0.14f;
+    private static final float NUMBER_MAX_SCALE = 0.018f;
+    private static final float NUMBER_MAX_WIDTH = HALF * 1.45f;
+    private static final float NUMBER_FORWARD_OFFSET = 0.02f;
 
-    private static ResourceLocation CIRCLE_TEX;
-    private static ResourceLocation STAR_TEX;
-
-    private static final int CC = 0xFFFFD700;    // 指挥官金黄
-    private static final int SC_OWN = 0xFF00FF00; // 己队绿
-    private static final int SC_OTHER = 0xFF4488FF; // 他队蓝
-    private static final int FT_B = 0xFFB06CFF;    // B 组紫
-    private static final int FT_C = 0xFF2EE6D6;    // C 组青
+    private static final ResourceLocation COMMANDER_TEX = texture("commander.png");
+    private static final ResourceLocation SQUAD_LEADER_TEX = texture("squad_leader.png");
+    private static final ResourceLocation SELF_SQUAD_LEADER_TEX = texture("self_squad_leader.png");
+    private static final ResourceLocation FIRETEAM_B_TEX = texture("fireteam_b.png");
+    private static final ResourceLocation FIRETEAM_C_TEX = texture("fireteam_c.png");
 
     private static final double R_CMD = 200.0;
     private static final double R_SL_OTHER = 50.0;
@@ -45,8 +42,6 @@ public final class LeaderOverheadRenderer {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || !ClientGameState.getCurrentPhase().isMatchActive()) return;
         if (mc.options.hideGui || mc.player.isSpectator()) return;
-
-        ensureTextures(mc);
 
         PoseStack ps = event.getPoseStack();
         Camera camera = event.getCamera();
@@ -86,10 +81,11 @@ public final class LeaderOverheadRenderer {
         if (m == null) return null;
         boolean cmd = m.commander() || ClientTacticalState.isCommander(n);
         int sid = m.squadId();
+        int displayId = m.displayId();
         byte ft = m.fireteam();
-        if (cmd) return new OverheadInfo(sid, ft, T.COMMANDER);
-        if (m.leader() && sid > 0) return new OverheadInfo(sid, ft, T.SQUAD_LEADER);
-        if (m.fireteamLeader() && (ft == 1 || ft == 2)) return new OverheadInfo(sid, ft, T.FIRETEAM_LEADER);
+        if (cmd) return new OverheadInfo(sid, displayId, ft, T.COMMANDER);
+        if (m.leader() && sid > 0) return new OverheadInfo(sid, displayId, ft, T.SQUAD_LEADER);
+        if (m.fireteamLeader() && (ft == 1 || ft == 2)) return new OverheadInfo(sid, displayId, ft, T.FIRETEAM_LEADER);
         return null;
     }
 
@@ -116,112 +112,74 @@ public final class LeaderOverheadRenderer {
         double y = entity.yo + (entity.getY() - entity.yo) * pt + entity.getBbHeight() + 1.0;
         double z = entity.zo + (entity.getZ() - entity.zo) * pt;
 
-        int color = switch (info.type) {
-            case COMMANDER -> CC;
-            case SQUAD_LEADER -> info.squadId == ClientTacticalState.getMySquadId() ? SC_OWN : SC_OTHER;
-            case FIRETEAM_LEADER -> info.fireteam == 1 ? FT_B : FT_C;
-        };
-
-        // == 圆形 ==
+        ResourceLocation icon = textureFor(info);
         ps.pushPose();
         ps.translate(x - camera.getPosition().x, y - camera.getPosition().y, z - camera.getPosition().z);
         ps.mulPose(camera.rotation());
-        ps.scale(HALF, HALF, 1f);
-        quad(buf.getBuffer(RenderType.textSeeThrough(CIRCLE_TEX)), ps.last().pose(), color);
 
-        // == 指挥官星 ==
-        if (info.type == T.COMMANDER) {
-            ps.pushPose();
-            ps.translate(0f, 0f, 0.002f);
-            ps.scale(0.55f, 0.55f, 1f);
-            quad(buf.getBuffer(RenderType.textSeeThrough(STAR_TEX)), ps.last().pose(), 0xFFFFFFFF);
-            ps.popPose();
+        // == PNG 画框 ==
+        ps.pushPose();
+        // 保持正向缩放以维持顶点绕序；通过 UV 水平翻转修正镜像，避免被背面剔除。
+        RenderType iconLayer = RenderType.textSeeThrough(icon);
+        ps.scale(HALF, HALF, 1f);
+        quadFlippedX(buf.getBuffer(iconLayer), ps.last().pose(), 0xFFFFFFFF);
+        ps.popPose();
+        // 先提交不透明图标，再把数字写入字体缓冲，确保数字最终覆盖在图标上。
+        buf.endBatch(iconLayer);
+
+        // == 小队编号：居中叠在队长画框前方，按位数缩放且始终略小于画框 ==
+        if (info.type == T.SQUAD_LEADER) {
+            renderSquadNumber(ps, buf, info.displayId);
         }
         ps.popPose();
+    }
 
-        // == 文字标签 ==
-        String label = switch (info.type) {
-            case COMMANDER -> "\u2605";
-            case SQUAD_LEADER -> String.valueOf(info.squadId);
-            case FIRETEAM_LEADER -> info.fireteam == 1 ? "B" : "C";
+    private static ResourceLocation textureFor(OverheadInfo info) {
+        return switch (info.type) {
+            case COMMANDER -> COMMANDER_TEX;
+            case SQUAD_LEADER -> info.squadId == ClientTacticalState.getMySquadId()
+                ? SELF_SQUAD_LEADER_TEX : SQUAD_LEADER_TEX;
+            case FIRETEAM_LEADER -> info.fireteam == 1 ? FIRETEAM_B_TEX : FIRETEAM_C_TEX;
         };
-        float ly = (float)(y + 0.4 - camera.getPosition().y);
+    }
+
+    private static void renderSquadNumber(PoseStack ps, MultiBufferSource.BufferSource buf, int squadId) {
+        String label = String.valueOf(squadId);
+        var font = Minecraft.getInstance().font;
+        int textWidth = Math.max(1, font.width(label));
+        float scale = Math.min(NUMBER_MAX_SCALE, NUMBER_MAX_WIDTH / textWidth);
+
         ps.pushPose();
-        ps.translate(x - camera.getPosition().x, ly, z - camera.getPosition().z);
-        ps.mulPose(camera.rotation());
-        ps.scale(0.025f, -0.025f, 0.025f);
-        Matrix4f tm = ps.last().pose();
-        Minecraft.getInstance().font.drawInBatch(label,
-            -Minecraft.getInstance().font.width(label) / 2f,
-            -Minecraft.getInstance().font.lineHeight / 2f,
-            0xFFFFFFFF, false, tm, buf,
+        ps.translate(0f, 0f, NUMBER_FORWARD_OFFSET);
+        // 字体坐标 X/Y 都要反转，和 vanilla 名牌渲染保持一致。
+        ps.scale(-scale, -scale, scale);
+        font.drawInBatch(label,
+            -textWidth / 2f,
+            -font.lineHeight / 2f,
+            0xFFFFFFFF, false, ps.last().pose(), buf,
             net.minecraft.client.gui.Font.DisplayMode.SEE_THROUGH, 0, 0xF000F0);
         ps.popPose();
     }
 
-    private static void quad(VertexConsumer vc, Matrix4f m, int rgba) {
+    private static void quadFlippedX(VertexConsumer vc, Matrix4f m, int rgba) {
         int r = (rgba >> 16) & 0xFF, g = (rgba >> 8) & 0xFF, b = rgba & 0xFF, a = (rgba >> 24) & 0xFF;
         int light = 0xF000F0;
-        vc.vertex(m, -1f,  1f, 0f).color(r, g, b, a).uv(0, 0).uv2(light).endVertex();
-        vc.vertex(m,  1f,  1f, 0f).color(r, g, b, a).uv(1, 0).uv2(light).endVertex();
-        vc.vertex(m,  1f, -1f, 0f).color(r, g, b, a).uv(1, 1).uv2(light).endVertex();
-        vc.vertex(m, -1f, -1f, 0f).color(r, g, b, a).uv(0, 1).uv2(light).endVertex();
+        vc.vertex(m, -1f,  1f, 0f).color(r, g, b, a).uv(1, 0).uv2(light).endVertex();
+        vc.vertex(m,  1f,  1f, 0f).color(r, g, b, a).uv(0, 0).uv2(light).endVertex();
+        vc.vertex(m,  1f, -1f, 0f).color(r, g, b, a).uv(0, 1).uv2(light).endVertex();
+        vc.vertex(m, -1f, -1f, 0f).color(r, g, b, a).uv(1, 1).uv2(light).endVertex();
     }
 
-    // ==== 纹理 ====
-
-    private static void ensureTextures(Minecraft mc) {
-        if (CIRCLE_TEX == null) CIRCLE_TEX = circleTex(mc);
-        if (STAR_TEX == null) STAR_TEX = starTex(mc);
-    }
-
-    private static ResourceLocation circleTex(Minecraft mc) {
-        NativeImage img = new NativeImage(TEX_SIZE, TEX_SIZE, false);
-        float cx = (TEX_SIZE - 1) / 2f, cy = cx, r = cx - 1;
-        for (int y = 0; y < TEX_SIZE; y++)
-            for (int x = 0; x < TEX_SIZE; x++)
-                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r)
-                    img.setPixelRGBA(x, y, 0xFFFFFFFF);
-        DynamicTexture t = new DynamicTexture(img);
-        ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("espetro", "leader_circle");
-        mc.getTextureManager().register(rl, t);
-        return rl;
-    }
-
-    private static ResourceLocation starTex(Minecraft mc) {
-        NativeImage img = new NativeImage(TEX_SIZE, TEX_SIZE, false);
-        float cx = TEX_SIZE / 2f, cy = cx, or = TEX_SIZE * 0.40f, ir = or * 0.38f;
-        int[] px = new int[10], py = new int[10];
-        for (int i = 0; i < 10; i++) {
-            double a = Math.toRadians(-90 + i * 36), r = (i % 2 == 0) ? or : ir;
-            px[i] = (int)(cx + r * Math.cos(a)); py[i] = (int)(cy + r * Math.sin(a));
-        }
-        int minY = TEX_SIZE, maxY = 0;
-        for (int i = 0; i < 10; i++) { minY = Math.min(minY, py[i]); maxY = Math.max(maxY, py[i]); }
-        for (int sy = minY; sy <= maxY; sy++) {
-            java.util.List<Integer> xs = new java.util.ArrayList<>();
-            for (int i = 0; i < 10; i++) {
-                int j = (i + 1) % 10, y0 = py[i], y1 = py[j];
-                if ((y0 <= sy && y1 > sy) || (y1 <= sy && y0 > sy))
-                    xs.add(px[i] + (sy - y0) * (px[j] - px[i]) / (y1 - y0));
-            }
-            xs.sort(Integer::compareTo);
-            for (int k = 0; k + 1 < xs.size(); k += 2)
-                for (int fx = Math.max(0, Math.min(TEX_SIZE - 1, xs.get(k)));
-                     fx <= Math.max(0, Math.min(TEX_SIZE - 1, xs.get(k + 1))); fx++)
-                    img.setPixelRGBA(fx, sy, 0xFF000000);
-        }
-        DynamicTexture t = new DynamicTexture(img);
-        ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("espetro", "leader_star");
-        mc.getTextureManager().register(rl, t);
-        return rl;
+    private static ResourceLocation texture(String fileName) {
+        return ResourceLocation.fromNamespaceAndPath(
+            "espetro", "textures/gui/overhead/" + fileName);
     }
 
     private enum T { COMMANDER, SQUAD_LEADER, FIRETEAM_LEADER }
 
     private static class OverheadInfo {
-        final int squadId; final byte fireteam; final T type;
-        OverheadInfo(int s, byte f, T t) { squadId = s; fireteam = f; type = t; }
+        final int squadId; final int displayId; final byte fireteam; final T type;
+        OverheadInfo(int s, int d, byte f, T t) { squadId = s; displayId = d; fireteam = f; type = t; }
         int rankOrdinal() { return type == T.COMMANDER ? 0 : type == T.SQUAD_LEADER ? 1 : 2; }
     }
 

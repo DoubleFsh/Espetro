@@ -1092,7 +1092,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             boolean expanded = expandedSquadIds.contains(squad.id);
             String disclosure = expanded ? "\u00a7f\u25bc" : "\u00a7f\u25b6";
             String state = mine ? "\u00a7a\u25cf" : squad.isLocked ? "\u00a7c\u25a0" : "\u00a77\u25cb";
-            String label = disclosure + " " + state + " \u00a7f" + squad.id + ". " + squad.name
+            String label = disclosure + " " + state + " \u00a7f" + squad.displayId + ". " + squad.name
                 + " \u00a77" + squad.memberCount + "/" + squad.maxMembers;
             EspButton button = new EspButton(0, rowY, rowW, SQUAD_ROW_H,
                 label, () -> toggleSquadExpanded(squad.id));
@@ -2912,16 +2912,23 @@ public class UnifiedDeployScreen extends MutilScreen {
             }));
             for (Fireteam ft : Fireteam.values()) {
                 boolean already = targetFt == ft.toNetwork();
-                long targetCount = squad.members.stream()
-                    .filter(member -> member.fireteam == ft.toNetwork())
-                    .count();
-                boolean full = !already && targetCount >= Fireteam.CAPACITY;
                 final Fireteam assignFt = ft;
                 entries.add(new FireteamContextEntry(
-                    "将该玩家分配给" + ft.label() + "组",
-                    !already && !full,
-                    already || full ? null : () -> {
+                    "将该队员移至" + ft.label() + "组",
+                    !already,
+                    already ? null : () -> {
                         NetworkManager.assignFireteam(targetId, assignFt);
+                        closeFireteamContextMenu();
+                    }));
+            }
+            for (Fireteam ft : new Fireteam[]{Fireteam.B, Fireteam.C}) {
+                boolean alreadyLeader = targetFt == ft.toNetwork() && target.fireteamLeader;
+                final Fireteam appointFt = ft;
+                entries.add(new FireteamContextEntry(
+                    "指认为" + ft.label() + "组长",
+                    !alreadyLeader,
+                    alreadyLeader ? null : () -> {
+                        NetworkManager.appointFireteamLeader(targetId, appointFt);
                         closeFireteamContextMenu();
                     }));
             }

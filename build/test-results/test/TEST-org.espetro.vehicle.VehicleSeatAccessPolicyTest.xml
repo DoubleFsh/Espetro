@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.vehicle.VehicleSeatAccessPolicyTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-08-09T09:19:04" hostname="cachyos-x8664" time="0.054">
+<testsuite name="org.espetro.vehicle.VehicleSeatAccessPolicyTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-08-13T12:33:33" hostname="DESKTOP-1GK3H0A" time="0.127">
   <properties/>
-  <testcase name="nonCrewMountUsesFirstEmptyUnrestrictedSeat()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="nonCrewMountIsRejectedWhenOnlyRestrictedOrOccupiedSeatsRemain()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
-  <testcase name="[1] TANK, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.008"/>
-  <testcase name="[2] TANK, 1, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="nonCrewMountUsesFirstEmptyUnrestrictedSeat()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.003"/>
+  <testcase name="nonCrewMountIsRejectedWhenOnlyRestrictedOrOccupiedSeatsRemain()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
+  <testcase name="[1] TANK, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.02"/>
+  <testcase name="[2] TANK, 1, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[3] TANK, 2, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[4] TANK, 3, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="[5] IFV, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
+  <testcase name="[5] IFV, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.003"/>
   <testcase name="[6] IFV, 1, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[7] IFV, 2, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="[8] HELICOPTER, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="[8] HELICOPTER, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[9] HELICOPTER, 1, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
   <testcase name="[10] OTHER, 0, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[11] OTHER, 1, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="explicitCrewFlagOverridesLegacyIconFallback()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="explicitCrewFlagOverridesLegacyIconFallback()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

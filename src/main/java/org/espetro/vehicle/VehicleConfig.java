@@ -35,6 +35,9 @@ public class VehicleConfig {
         @Nullable
         public String displayName;
         public int troopValue;
+        /** null = legacy SBW type defaults; 0 = no restricted seats. */
+        @Nullable
+        public Integer vehicleCrewSeats;
         public Set<String> entityTags = new LinkedHashSet<>();
         public DeploymentConfig deployment = new DeploymentConfig();
         /** Ordered entity slots; index matches the map's ordered spawn points. */
@@ -245,6 +248,7 @@ public class VehicleConfig {
         cfg.entityTypeStr = vd.entityTypeStr;
         cfg.displayName = firstNonBlank(vd.displayName, vehicleType);
         cfg.troopValue = Math.max(0, vd.troopValue);
+        cfg.vehicleCrewSeats = vd.vehicleCrewSeats;
         cfg.nbt = firstNonBlank(vd.nbt, null);
         // 载具补给类型和容量
         applySupplyProfile(cfg, vd.supplyVeh, vd.fightVeh, vd.capacity);

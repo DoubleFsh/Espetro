@@ -226,7 +226,8 @@ public class SquadScreen extends MutilScreen {
         String lockIcon = squad.isLocked ? " §c🔒" : "";
         String marker = firstCodePoint(squad.categoryId, squad.categoryDisplayName);
         return (joined ? "§a" : full ? "§c" : "§f")
-            + squad.name + " " + count + lockIcon + (marker.isEmpty() ? "" : " §6[" + marker + "]");
+            + squad.displayId + ". " + squad.name + " " + count + lockIcon
+            + (marker.isEmpty() ? "" : " §6[" + marker + "]");
     }
 
     /** 原地刷新行按钮的标签/状态与展开三角。 */

@@ -284,6 +284,19 @@ public final class AuraTipRadialController {
             NetworkManager.requestFortificationCatalog();
         }
         keyWasDown = true;
+
+        /*
+         * 普通队员必须在 AuraTip.open() 之前被拦截。过去依赖服务端回传空目录，
+         * 会先打开一个空轮盘再迅速关闭，AuraTip 已经接管的鼠标状态因此可能吞掉左键。
+         */
+        if (!ClientTacticalState.canLocalPlayerOpenTacticalRadial(
+                minecraft.player.getName().getString())) {
+            closeOwnedOverlay();
+            heldTicks = 0;
+            consumedUntilRelease = false;
+            tryApplyPendingRebuild();
+            return;
+        }
         if (consumedUntilRelease) {
             return;
         }

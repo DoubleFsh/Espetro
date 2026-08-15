@@ -1,14 +1,11 @@
 package org.espetro.team;
 
-/**
- * 班组内火力组：A / B / C，每组上限 {@link #CAPACITY} 人。
- */
+/** 班组内火力组：A / B / C。各组不设独立人数上限。 */
 public enum Fireteam {
     A(0, "A", 0xFF2EE6D6),   // 青色
     B(1, "B", 0xFFB06CFF),   // 紫色（有别于小队长身份紫）
     C(2, "C", 0xFF4D9DFF);   // 蓝色
 
-    public static final int CAPACITY = 3;
     public static final int COUNT = 3;
 
     private final int index;

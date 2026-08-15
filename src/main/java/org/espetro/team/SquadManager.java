@@ -20,8 +20,9 @@ import java.util.regex.Pattern;
  * 班组小队管理器。
  * 小队按攻防方隔离，玩家同一时间只能属于一个小队。
  * <p>
- * 每个小队内部分 A/B/C 三个火力组（每组最多 {@link Fireteam#CAPACITY} 人）。
- * 入队按 A→B→C 填充；组内首个进入者成为该火力组组长；小队长强制属于 A 组并任 A 组长。
+ * 每个小队内部分 A/B/C 三个火力组，各组不设独立人数上限。
+ * 新成员默认进入 A 组，由小队长手动调整；组内首个进入者成为该火力组组长；
+ * 小队长强制属于 A 组并任 A 组长。
  */
 public class SquadManager {
 
@@ -34,6 +35,8 @@ public class SquadManager {
 
     private final Map<String, LinkedHashMap<Integer, Squad>> squadsByTeam = new HashMap<>();
     private final Map<UUID, Integer> playerSquads = new HashMap<>();
+    private final Map<String, Integer> nextDisplayIdByTeam = new HashMap<>();
+    /** Internal, server-wide ID used by packets and lookups. */
     private int nextSquadId = 1;
 
     private SquadManager() {
@@ -65,9 +68,6 @@ public class SquadManager {
         }
 
         String name = sanitizeName(requestedName);
-        if (name.isEmpty()) {
-            name = "小队" + nextSquadId;
-        }
 
         String catId = categoryId == null || categoryId.isBlank()
             ? org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID
@@ -90,7 +90,11 @@ public class SquadManager {
             }
         }
 
-        Squad squad = new Squad(nextSquadId++, team, name, player.getUUID());
+        int displayId = claimNextDisplayId(team);
+        if (name.isEmpty()) {
+            name = "小队" + displayId;
+        }
+        Squad squad = new Squad(nextSquadId++, displayId, team, name, player.getUUID());
         squad.categoryId = catId;
         squad.categoryDisplayName = catDisplay;
         addMemberToFireteam(squad, player.getUUID(), Fireteam.A, true);
@@ -136,14 +140,10 @@ public class SquadManager {
         if (squad.locked) {
             return ActionResult.failure(team, "该小队已锁定，无法加入。");
         }
-        Fireteam assigned = firstAvailableFireteam(squad);
-        if (assigned == null) {
-            return ActionResult.failure(team, "火力组已满，无法加入。");
-        }
-        addMemberToFireteam(squad, targetUuid, assigned, false);
+        addMemberToFireteam(squad, targetUuid, Fireteam.A, false);
         playerSquads.put(targetUuid, squad.id);
         return ActionResult.success(team, "已将 " + target.getName().getString()
-            + " 拉进小队（火力组 " + assigned.label() + "）。");
+            + " 拉进小队（火力组 A）。");
     }
 
     /**
@@ -229,15 +229,11 @@ public class SquadManager {
             // 切换小队也属于离队：职业记录与装备必须先撤销。
             ClassCountManager.getInstance().onPlayerLeftSquad(player);
         }
-        Fireteam assigned = firstAvailableFireteam(squad);
-        if (assigned == null) {
-            return ActionResult.failure(team, "火力组已满，无法加入。");
-        }
-        addMemberToFireteam(squad, player.getUUID(), assigned, false);
+        addMemberToFireteam(squad, player.getUUID(), Fireteam.A, false);
         playerSquads.put(player.getUUID(), squad.id);
 
         return ActionResult.success(team, "已加入小队 " + squad.name
-            + "（火力组 " + assigned.label() + "）。");
+            + "（火力组 A）。");
     }
 
     public ActionResult leaveSquad(ServerPlayer player) {
@@ -312,6 +308,7 @@ public class SquadManager {
     public void reset() {
         squadsByTeam.clear();
         playerSquads.clear();
+        nextDisplayIdByTeam.clear();
         nextSquadId = 1;
     }
 
@@ -431,21 +428,8 @@ public class SquadManager {
         }
 
         UUID oldLeader = squad.leader;
-        Fireteam targetFireteam = squad.memberFireteam.get(targetUuid);
-        boolean targetLedOriginalFireteam = targetFireteam != null
-            && targetUuid.equals(squad.fireteamLeaders.get(targetFireteam));
-
-        /*
-         * 队长交接必须只影响交接双方。目标不在 A 时与旧队长交换火力组，
-         * 避免 A 满员时把无关队员挤到另一个火力组。
-         */
-        if (targetFireteam != null && targetFireteam != Fireteam.A) {
-            squad.memberFireteam.put(targetUuid, Fireteam.A);
-            squad.memberFireteam.put(oldLeader, targetFireteam);
-            if (targetLedOriginalFireteam) {
-                squad.fireteamLeaders.put(targetFireteam, oldLeader);
-            }
-        }
+        // 新队长必须进入 A；旧队长和其他成员均保留现有分组。
+        moveMemberToFireteam(squad, targetUuid, Fireteam.A);
         squad.leader = targetUuid;
         squad.leaderSinceTick = currentGameTime();
         // A 组长固定为新队长；旧队长不再保留 A 组长权限。
@@ -490,6 +474,40 @@ public class SquadManager {
     }
 
     /**
+     * 小队长直接任命 B/C 火力组组长。目标不在指定组时先移入该组，
+     * 指定组的原组长保留组员身份并立即失去组长权限。
+     */
+    public ActionResult appointFireteamLeader(ServerPlayer actor, UUID targetUuid, Fireteam fireteam) {
+        String team = Espetro.getPlayerTeam(actor);
+        if (team == null) {
+            return ActionResult.failure(null, "你尚未加入阵营。");
+        }
+        if (!isSquadLeader(actor.getUUID())) {
+            return ActionResult.failure(team, "只有小队长可以指认火力组长。");
+        }
+        if (fireteam == null || fireteam == Fireteam.A) {
+            return ActionResult.failure(team, "只能指认火力组 B 或 C 的组长。");
+        }
+        Squad squad = getSquad(team, getPlayerSquadId(actor.getUUID()));
+        if (squad == null || !squad.members.contains(targetUuid)) {
+            return ActionResult.failure(team, "目标不在你的小队中。");
+        }
+        if (targetUuid.equals(squad.leader)) {
+            return ActionResult.failure(team, "小队长必须担任火力组 A 组长。");
+        }
+        if (squad.memberFireteam.get(targetUuid) == fireteam
+            && targetUuid.equals(squad.fireteamLeaders.get(fireteam))) {
+            return ActionResult.failure(team, "该玩家已经是火力组 " + fireteam.label() + " 组长。");
+        }
+
+        moveMemberToFireteam(squad, targetUuid, fireteam);
+        squad.fireteamLeaders.put(fireteam, targetUuid);
+        return ActionResult.success(team, "已指认 "
+            + getPlayerName(Espetro.getServer(), targetUuid)
+            + " 为火力组 " + fireteam.label() + " 组长。");
+    }
+
+    /**
      * 小队长将队员分配到指定火力组。
      */
     public ActionResult assignFireteam(ServerPlayer actor, UUID targetUuid, Fireteam fireteam) {
@@ -515,9 +533,7 @@ public class SquadManager {
         if (targetUuid.equals(squad.leader) && fireteam != Fireteam.A) {
             return ActionResult.failure(team, "小队长必须留在火力组 A。");
         }
-        if (!moveMemberToFireteam(squad, targetUuid, fireteam)) {
-            return ActionResult.failure(team, "火力组 " + fireteam.label() + " 已满。");
-        }
+        moveMemberToFireteam(squad, targetUuid, fireteam);
         // 队长若被“分配到 A”（已在 A 则前面已失败），保持 A 组长为队长
         if (targetUuid.equals(squad.leader)) {
             squad.fireteamLeaders.put(Fireteam.A, squad.leader);
@@ -551,7 +567,7 @@ public class SquadManager {
                     memberUuid, playerName, className,
                     memberUuid.equals(squad.leader), ft, ftLead));
             }
-            result.add(new SquadSnapshot(squad.id, squad.name, getPlayerName(server, squad.leader),
+            result.add(new SquadSnapshot(squad.id, squad.displayId, squad.name, getPlayerName(server, squad.leader),
                 squad.leader, MAX_MEMBERS, squad.locked, squad.categoryId, squad.categoryDisplayName, members));
         }
         return result;
@@ -560,6 +576,13 @@ public class SquadManager {
     private Squad getSquad(String team, int squadId) {
         LinkedHashMap<Integer, Squad> squads = squadsByTeam.get(team);
         return squads != null ? squads.get(squadId) : null;
+    }
+
+    /** Claims the next strictly increasing visible squad number within one faction. */
+    private int claimNextDisplayId(String team) {
+        int displayId = nextDisplayIdByTeam.getOrDefault(team, 1);
+        nextDisplayIdByTeam.put(team, displayId + 1);
+        return displayId;
     }
 
     /** 返回指定小队的队长 UUID，不存在时返回 null。 */
@@ -596,25 +619,6 @@ public class SquadManager {
         return ordered;
     }
 
-    private static Fireteam firstAvailableFireteam(Squad squad) {
-        for (Fireteam ft : Fireteam.values()) {
-            if (countInFireteam(squad, ft) < Fireteam.CAPACITY) {
-                return ft;
-            }
-        }
-        return null;
-    }
-
-    private static int countInFireteam(Squad squad, Fireteam ft) {
-        int n = 0;
-        for (UUID id : squad.members) {
-            if (squad.memberFireteam.get(id) == ft) {
-                n++;
-            }
-        }
-        return n;
-    }
-
     /**
      * 将成员加入小队并写入火力组；若该组尚无组长则任命为组长。
      * {@code forceLead} 为 true 时强制设为该组组长（创建小队用）。
@@ -630,16 +634,12 @@ public class SquadManager {
     }
 
     /**
-     * 将已在小队中的成员移到目标火力组。满员返回 false。
-     * 处理旧组/新组组长继承。
+     * 将已在小队中的成员移到目标火力组，并处理旧组/新组组长继承。
      */
-    private static boolean moveMemberToFireteam(Squad squad, UUID uuid, Fireteam target) {
+    private static void moveMemberToFireteam(Squad squad, UUID uuid, Fireteam target) {
         Fireteam current = squad.memberFireteam.get(uuid);
         if (current == target) {
-            return true;
-        }
-        if (countInFireteam(squad, target) >= Fireteam.CAPACITY) {
-            return false;
+            return;
         }
         // 卸任旧组组长
         if (current != null && uuid.equals(squad.fireteamLeaders.get(current))) {
@@ -650,7 +650,6 @@ public class SquadManager {
         if (squad.fireteamLeaders.get(target) == null) {
             squad.fireteamLeaders.put(target, uuid);
         }
-        return true;
     }
 
     /** 为火力组指定新组长：组内第一个成员（入队顺序），排除 {@code exclude}。 */
@@ -750,7 +749,10 @@ public class SquadManager {
     }
 
     private static class Squad {
+        /** Server-wide operation ID; never shown to players. */
         private final int id;
+        /** Human-facing sequence number, counted independently for each faction. */
+        private final int displayId;
         private final String team;
         private final String name;
         private UUID leader;
@@ -764,8 +766,9 @@ public class SquadManager {
         private long leaderSinceTick;
         private boolean locked;
 
-        private Squad(int id, String team, String name, UUID leader) {
+        private Squad(int id, int displayId, String team, String name, UUID leader) {
             this.id = id;
+            this.displayId = displayId;
             this.team = team;
             this.name = name;
             this.leader = leader;
@@ -780,6 +783,7 @@ public class SquadManager {
 
     public static class SquadSnapshot {
         public final int id;
+        public final int displayId;
         public final String name;
         public final String leaderName;
         public final UUID leaderUuid;
@@ -791,16 +795,26 @@ public class SquadManager {
 
         public SquadSnapshot(int id, String name, String leaderName, int maxMembers, boolean locked,
                              List<MemberSnapshot> members) {
-            this(id, name, leaderName, null, maxMembers, locked,
+            this(id, id, name, leaderName, null, maxMembers, locked,
                 org.espetro.mapconfig.SquadTypesSnapshot.NONE_ID,
                 org.espetro.mapconfig.SquadTypesSnapshot.NONE_DISPLAY,
                 members);
         }
 
-        public SquadSnapshot(int id, String name, String leaderName, UUID leaderUuid, int maxMembers, boolean locked,
+        public SquadSnapshot(int id, String name, String leaderName, UUID leaderUuid,
+                             int maxMembers, boolean locked,
+                             String categoryId, String categoryDisplayName,
+                             List<MemberSnapshot> members) {
+            this(id, id, name, leaderName, leaderUuid, maxMembers, locked,
+                categoryId, categoryDisplayName, members);
+        }
+
+        public SquadSnapshot(int id, int displayId, String name, String leaderName, UUID leaderUuid,
+                             int maxMembers, boolean locked,
                              String categoryId, String categoryDisplayName,
                              List<MemberSnapshot> members) {
             this.id = id;
+            this.displayId = displayId;
             this.name = name;
             this.leaderName = leaderName;
             this.leaderUuid = leaderUuid;

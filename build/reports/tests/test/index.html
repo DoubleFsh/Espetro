@@ -20,13 +20,13 @@
 <tr>
 <td>
 <div class="infoBox" id="tests">
-<div class="counter">120</div>
+<div class="counter">157</div>
 <p>tests</p>
 </div>
 </td>
 <td>
 <div class="infoBox" id="failures">
-<div class="counter">0</div>
+<div class="counter">2</div>
 <p>failures</p>
 </div>
 </td>
@@ -38,7 +38,7 @@
 </td>
 <td>
 <div class="infoBox" id="duration">
-<div class="counter">0.666s</div>
+<div class="counter">2.113s</div>
 <p>duration</p>
 </div>
 </td>
@@ -47,8 +47,8 @@
 </div>
 </td>
 <td>
-<div class="infoBox success" id="successRate">
-<div class="percent">100%</div>
+<div class="infoBox failures" id="successRate">
+<div class="percent">98%</div>
 <p>successful</p>
 </div>
 </td>
@@ -58,13 +58,29 @@
 <div id="tabs">
 <ul class="tabLinks">
 <li>
-<a href="#tab0">Packages</a>
+<a href="#tab0">Failed tests</a>
 </li>
 <li>
-<a href="#tab1">Classes</a>
+<a href="#tab1">Packages</a>
+</li>
+<li>
+<a href="#tab2">Classes</a>
 </li>
 </ul>
 <div id="tab0" class="tab">
+<h2>Failed tests</h2>
+<ul class="linkList">
+<li>
+<a href="classes/org.espetro.dimension.BattlefieldWorldManagerPathTest.html">BattlefieldWorldManagerPathTest</a>.
+<a href="classes/org.espetro.dimension.BattlefieldWorldManagerPathTest.html#rejectsDimensionSymlinkEscapingSelectedSave(Path)">rejectsDimensionSymlinkEscapingSelectedSave(Path)</a>
+</li>
+<li>
+<a href="classes/org.espetro.mapconfig.ExampleContentInstallerTest.html">ExampleContentInstallerTest</a>.
+<a href="classes/org.espetro.mapconfig.ExampleContentInstallerTest.html#rejectsTraversalAndAbsoluteManifestPaths()">rejectsTraversalAndAbsoluteManifestPaths()</a>
+</li>
+</ul>
+</div>
+<div id="tab1" class="tab">
 <h2>Packages</h2>
 <table>
 <thead>
@@ -85,27 +101,47 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.140s</td>
+<td>0.184s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="packages/org.espetro.audio.html">org.espetro.audio</a>
+</td>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>0.005s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
 <a href="packages/org.espetro.bastion.html">org.espetro.bastion</a>
 </td>
-<td>8</td>
+<td>9</td>
 <td>0</td>
 <td>0</td>
-<td>0.296s</td>
+<td>0.110s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="packages/org.espetro.client.audio.html">org.espetro.client.audio</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.043s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
 <a href="packages/org.espetro.client.gui.html">org.espetro.client.gui</a>
 </td>
-<td>10</td>
+<td>21</td>
 <td>0</td>
 <td>0</td>
-<td>0.010s</td>
+<td>0.053s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -115,18 +151,28 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.009s</td>
+<td>0.018s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
+<a href="packages/org.espetro.compat.tacz.html">org.espetro.compat.tacz</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.004s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="failures">
 <a href="packages/org.espetro.dimension.html">org.espetro.dimension</a>
 </td>
 <td>4</td>
+<td>1</td>
 <td>0</td>
-<td>0</td>
-<td>0.016s</td>
-<td class="success">100%</td>
+<td>0.247s</td>
+<td class="failures">75%</td>
 </tr>
 <tr>
 <td class="success">
@@ -135,7 +181,7 @@
 <td>6</td>
 <td>0</td>
 <td>0</td>
-<td>0.004s</td>
+<td>0.006s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -145,7 +191,7 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
-<td>0.045s</td>
+<td>0.074s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -155,18 +201,18 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0s</td>
+<td>0.003s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
-<td class="success">
+<td class="failures">
 <a href="packages/org.espetro.mapconfig.html">org.espetro.mapconfig</a>
 </td>
 <td>19</td>
+<td>1</td>
 <td>0</td>
-<td>0</td>
-<td>0.086s</td>
-<td class="success">100%</td>
+<td>1.148s</td>
+<td class="failures">94%</td>
 </tr>
 <tr>
 <td class="success">
@@ -175,17 +221,17 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.016s</td>
+<td>0.024s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
 <a href="packages/org.espetro.network.html">org.espetro.network</a>
 </td>
-<td>3</td>
+<td>14</td>
 <td>0</td>
 <td>0</td>
-<td>0.001s</td>
+<td>0.085s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -205,17 +251,17 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0s</td>
+<td>0.001s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
 <a href="packages/org.espetro.team.html">org.espetro.team</a>
 </td>
-<td>27</td>
+<td>30</td>
 <td>0</td>
 <td>0</td>
-<td>0.020s</td>
+<td>0.053s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -225,13 +271,13 @@
 <td>30</td>
 <td>0</td>
 <td>0</td>
-<td>0.022s</td>
+<td>0.054s</td>
 <td class="success">100%</td>
 </tr>
 </tbody>
 </table>
 </div>
-<div id="tab1" class="tab">
+<div id="tab2" class="tab">
 <h2>Classes</h2>
 <table>
 <thead>
@@ -252,7 +298,27 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.140s</td>
+<td>0.184s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.audio.AudioCuePolicyTest.html">org.espetro.audio.AudioCuePolicyTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.003s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.audio.AudioPackIdTest.html">org.espetro.audio.AudioPackIdTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0.002s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -262,7 +328,7 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0.291s</td>
+<td>0.106s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -272,17 +338,27 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0.003s</td>
+<td>0.002s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
 <a href="classes/org.espetro.bastion.RadioCoveragePolicyTest.html">org.espetro.bastion.RadioCoveragePolicyTest</a>
 </td>
-<td>2</td>
+<td>3</td>
 <td>0</td>
 <td>0</td>
 <td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.client.audio.ClientAudioSetResolverTest.html">org.espetro.client.audio.ClientAudioSetResolverTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.043s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -292,7 +368,7 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0.001s</td>
+<td>0.002s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -302,7 +378,37 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
+<td>0.007s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.client.gui.ClientTacticalStateTest.html">org.espetro.client.gui.ClientTacticalStateTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
 <td>0.004s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.client.gui.CurrentMapBackgroundRendererTest.html">org.espetro.client.gui.CurrentMapBackgroundRendererTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.008s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.client.gui.FactionSelectionImageResolverTest.html">org.espetro.client.gui.FactionSelectionImageResolverTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.012s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -312,7 +418,7 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
-<td>0.002s</td>
+<td>0.003s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -322,7 +428,17 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0.003s</td>
+<td>0.004s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.client.gui.MapVotePreviewResolverTest.html">org.espetro.client.gui.MapVotePreviewResolverTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.013s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -332,18 +448,28 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.009s</td>
+<td>0.018s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
 <td class="success">
+<a href="classes/org.espetro.compat.tacz.TaczGunPackSyncPayloadTest.html">org.espetro.compat.tacz.TaczGunPackSyncPayloadTest</a>
+</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>0.004s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="failures">
 <a href="classes/org.espetro.dimension.BattlefieldWorldManagerPathTest.html">org.espetro.dimension.BattlefieldWorldManagerPathTest</a>
 </td>
 <td>4</td>
+<td>1</td>
 <td>0</td>
-<td>0</td>
-<td>0.016s</td>
-<td class="success">100%</td>
+<td>0.247s</td>
+<td class="failures">75%</td>
 </tr>
 <tr>
 <td class="success">
@@ -352,7 +478,7 @@
 <td>6</td>
 <td>0</td>
 <td>0</td>
-<td>0.004s</td>
+<td>0.006s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -362,7 +488,7 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
-<td>0.045s</td>
+<td>0.074s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -372,7 +498,7 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0s</td>
+<td>0.003s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -382,18 +508,18 @@
 <td>6</td>
 <td>0</td>
 <td>0</td>
-<td>0.013s</td>
+<td>0.092s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
-<td class="success">
+<td class="failures">
 <a href="classes/org.espetro.mapconfig.ExampleContentInstallerTest.html">org.espetro.mapconfig.ExampleContentInstallerTest</a>
 </td>
 <td>3</td>
+<td>1</td>
 <td>0</td>
-<td>0</td>
-<td>0.031s</td>
-<td class="success">100%</td>
+<td>0.923s</td>
+<td class="failures">66%</td>
 </tr>
 <tr>
 <td class="success">
@@ -402,7 +528,7 @@
 <td>5</td>
 <td>0</td>
 <td>0</td>
-<td>0.040s</td>
+<td>0.131s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -422,7 +548,87 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.016s</td>
+<td>0.024s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.AudioCuePacketTest.html">org.espetro.network.AudioCuePacketTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0.061s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.CurrentMapPacketTest.html">org.espetro.network.CurrentMapPacketTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.DeployPointSyncPacketTest.html">org.espetro.network.DeployPointSyncPacketTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.003s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.DeploySelectedClassSyncPacketTest.html">org.espetro.network.DeploySelectedClassSyncPacketTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0.003s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.MapVoteStatePacketTest.html">org.espetro.network.MapVoteStatePacketTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.SquadActionPacketTest.html">org.espetro.network.SquadActionPacketTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.SquadInfoPacketTest.html">org.espetro.network.SquadInfoPacketTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.001s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.network.TaczGunPackSyncChunkPacketTest.html">org.espetro.network.TaczGunPackSyncChunkPacketTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.009s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -432,7 +638,7 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0.001s</td>
+<td>0.002s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -452,7 +658,7 @@
 <td>3</td>
 <td>0</td>
 <td>0</td>
-<td>0s</td>
+<td>0.001s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -472,7 +678,7 @@
 <td>20</td>
 <td>0</td>
 <td>0</td>
-<td>0.017s</td>
+<td>0.035s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -482,7 +688,27 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
-<td>0s</td>
+<td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.team.FactionAudioConfigTest.html">org.espetro.team.FactionAudioConfigTest</a>
+</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0.002s</td>
+<td class="success">100%</td>
+</tr>
+<tr>
+<td class="success">
+<a href="classes/org.espetro.team.FactionClassOrderTest.html">org.espetro.team.FactionClassOrderTest</a>
+</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0.009s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -492,7 +718,7 @@
 <td>2</td>
 <td>0</td>
 <td>0</td>
-<td>0.001s</td>
+<td>0.003s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -502,7 +728,7 @@
 <td>4</td>
 <td>0</td>
 <td>0</td>
-<td>0.003s</td>
+<td>0.005s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -512,7 +738,7 @@
 <td>14</td>
 <td>0</td>
 <td>0</td>
-<td>0.016s</td>
+<td>0.037s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -522,7 +748,7 @@
 <td>12</td>
 <td>0</td>
 <td>0</td>
-<td>0.003s</td>
+<td>0.012s</td>
 <td class="success">100%</td>
 </tr>
 </tbody>
@@ -536,7 +762,7 @@
 <input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
 </label>
 </div>Generated by 
-<a href="http://www.gradle.org">Gradle 8.5</a> at Aug 9, 2026, 5:19:04 PM</p>
+<a href="http://www.gradle.org">Gradle 8.5</a> at 2026年8月13日 下午8:33:33</p>
 </div>
 </div>
 </body>

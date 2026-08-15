@@ -26,7 +26,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.28";
+    public static final String PROTOCOL_VERSION = "1.30";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -683,6 +683,12 @@ public class NetworkManager {
     public static void transferFireteamLeader(java.util.UUID targetUuid) {
         if (targetUuid != null) {
             NET.sendToServer(SquadActionPacket.transferFireteamLeader(targetUuid));
+        }
+    }
+
+    public static void appointFireteamLeader(java.util.UUID targetUuid, org.espetro.team.Fireteam fireteam) {
+        if (targetUuid != null && fireteam != null && fireteam != org.espetro.team.Fireteam.A) {
+            NET.sendToServer(SquadActionPacket.appointFireteamLeader(targetUuid, fireteam));
         }
     }
 
@@ -1451,7 +1457,7 @@ public class NetworkManager {
                     member.fireteam.toNetwork(), member.fireteamLeader));
             }
             squadList.add(new UnifiedDeployScreenPacket.SquadInfo(
-                squad.id, squad.name, members.size(), squad.maxMembers, squad.locked,
+                squad.id, squad.displayId, squad.name, members.size(), squad.maxMembers, squad.locked,
                 squad.leaderName, squad.categoryId, squad.categoryDisplayName, members
             ));
         }

@@ -187,6 +187,11 @@ public class FactionDataLoader {
             }
             vehicle.entities = normalizedEntities;
             vehicle.perMaxCount = Math.max(1, vehicle.perMaxCount);
+            if (vehicle.vehicleCrewSeats != null && vehicle.vehicleCrewSeats < 0) {
+                warnRejected(id, "vehicles." + entry.getKey()
+                    + ".vehicle_crew_seats 不能小于 0");
+                return false;
+            }
             if (vehicle.nbt != null) {
                 String trimmedNbt = vehicle.nbt.trim();
                 vehicle.nbt = trimmedNbt.isEmpty() ? null : trimmedNbt;
@@ -778,6 +783,12 @@ public class FactionDataLoader {
         /** 载具死亡/被摧毁时扣除的兵力值。 */
         @SerializedName(value = "troop_value", alternate = {"troopValue"})
         public int troopValue = 0;
+        /**
+         * 从 0 号座位开始，需要载具组员职业的连续座位数量。
+         * null 表示旧编制，沿用按 SBW 载具类型判断的兼容规则；0 表示不限制任何座位。
+         */
+        @SerializedName(value = "vehicle_crew_seats", alternate = {"vehicleCrewSeats"})
+        public Integer vehicleCrewSeats;
         /** 生成实体时附加的通用 scoreboard tags。 */
         @SerializedName(value = "entity_tags", alternate = {"entityTags"})
         public String[] entityTags;

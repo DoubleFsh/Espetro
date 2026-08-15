@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.bastion.FortificationProgressPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-09T09:19:02" hostname="cachyos-x8664" time="0.003">
+<testsuite name="org.espetro.bastion.FortificationProgressPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-13T12:33:28" hostname="DESKTOP-1GK3H0A" time="0.005">
   <properties/>
   <testcase name="stageRevealsNumericLayersMonotonically()" classname="org.espetro.bastion.FortificationProgressPolicyTest" time="0.001"/>
   <testcase name="proportionalDamageDestroysAWholeStructureWithoutRoundingImmortality()" classname="org.espetro.bastion.FortificationProgressPolicyTest" time="0.001"/>
-  <testcase name="repairRestoresOnlyTheNumberOfPartsSupportedByProgress()" classname="org.espetro.bastion.FortificationProgressPolicyTest" time="0.001"/>
+  <testcase name="repairRestoresOnlyTheNumberOfPartsSupportedByProgress()" classname="org.espetro.bastion.FortificationProgressPolicyTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
