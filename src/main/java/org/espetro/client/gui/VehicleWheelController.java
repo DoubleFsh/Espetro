@@ -13,8 +13,10 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.espetro.network.NetworkManager;
+import org.espetro.network.RequestResupplyCatalogPacket;
 import org.espetro.network.VehicleSupplyActionPacket;
 import org.espetro.network.VehicleSupplySyncPacket;
+import org.espetro.logistics.resupply.ResupplySourceRef;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
@@ -52,14 +54,12 @@ public final class VehicleWheelController {
     private static boolean ownsOverlay;
     private static boolean consumedUntilRelease;
     private static boolean snapshotReady;
-    private static boolean pendingMenuPublish;
     private static int heldTicks;
     private static UUID currentVehicleId;
     private static VehicleSupplySyncPacket cachedSupply;
 
     private static String holdAction;
     private static int holdProgress;
-    private static boolean pendingReopen;
 
     private VehicleWheelController() {
     }
@@ -99,12 +99,18 @@ public final class VehicleWheelController {
                 sendSupplyAction(actionName);
                 consumedUntilRelease = true;
                 ownsOverlay = true;
-                pendingReopen = true;
                 return;
             }
             try {
                 VehicleSupplyActionPacket.Action action =
                     VehicleSupplyActionPacket.Action.valueOf(actionName);
+                if (action == VehicleSupplyActionPacket.Action.RESUPPLY_INFANTRY) {
+                    NetworkManager.NET.sendToServer(new RequestResupplyCatalogPacket(
+                        ResupplySourceRef.vehicle(currentVehicleId)));
+                    consumedUntilRelease = true;
+                    ownsOverlay = true;
+                    return;
+                }
                 if (action == VehicleSupplyActionPacket.Action.CHANGE_CLASS) {
                     RadioRadialController.markNextClassListAsVehicle(currentVehicleId);
                 }
@@ -114,7 +120,7 @@ public final class VehicleWheelController {
                 return;
             }
             consumedUntilRelease = true;
-            ownsOverlay = false;
+            ownsOverlay = true;
         });
     }
 
@@ -134,7 +140,6 @@ public final class VehicleWheelController {
     private static void publishMenu() {
         if (cachedSupply == null || !cachedSupply.hasAnyAction()) return;
         RadialMenuRegistry.setMenus(OWNER, List.of(buildRootMenu()));
-        pendingMenuPublish = false;
     }
 
     private static cc.sighs.auratip.data.RadialMenuData buildRootMenu() {
@@ -145,31 +150,31 @@ public final class VehicleWheelController {
 
         if (cachedSupply.canTransferAmmo()) {
             builder = builder
-                .slot("espetro.veh.load_ammo", ICON_AMMO_WHITE,
+                .persistentSlot("espetro.veh.load_ammo", ICON_AMMO_WHITE,
                     Actions.script(ACTION_ID, Map.of("action", "LOAD_AMMO")),
-                    Component.literal("装载弹药"), COLOR_LOAD)
-                .slot("espetro.veh.unload_ammo", ICON_AMMO_RED,
+                    Component.literal("装载弹药"), COLOR_LOAD, "#FF3D4650")
+                .persistentSlot("espetro.veh.unload_ammo", ICON_AMMO_RED,
                     Actions.script(ACTION_ID, Map.of("action", "UNLOAD_AMMO")),
-                    Component.literal("卸下弹药"), COLOR_UNLOAD);
+                    Component.literal("卸下弹药"), COLOR_UNLOAD, "#FF5C2525");
         }
         if (cachedSupply.canTransferConstruction()) {
             builder = builder
-                .slot("espetro.veh.load_construction", ICON_CONSTRUCTION_WHITE,
+                .persistentSlot("espetro.veh.load_construction", ICON_CONSTRUCTION_WHITE,
                     Actions.script(ACTION_ID, Map.of("action", "LOAD_CONSTRUCTION")),
-                    Component.literal("装载建材"), COLOR_LOAD)
-                .slot("espetro.veh.unload_construction", ICON_CONSTRUCTION_RED,
+                    Component.literal("装载建材"), COLOR_LOAD, "#FF3D4650")
+                .persistentSlot("espetro.veh.unload_construction", ICON_CONSTRUCTION_RED,
                     Actions.script(ACTION_ID, Map.of("action", "UNLOAD_CONSTRUCTION")),
-                    Component.literal("卸下建材"), COLOR_UNLOAD);
+                    Component.literal("卸下建材"), COLOR_UNLOAD, "#FF5C2525");
         }
         if (cachedSupply.canResupplyInfantry()) {
-            builder = builder.slot("espetro.veh.resupply_infantry", ICON_RESUPPLY,
+            builder = builder.persistentSlot("espetro.veh.resupply_infantry", ICON_RESUPPLY,
                 Actions.script(ACTION_ID, Map.of("action", "RESUPPLY_INFANTRY")),
-                Component.literal("补给步兵"), COLOR_LOAD);
+                Component.literal("补给步兵"), COLOR_LOAD, "#FF725E19");
         }
         if (cachedSupply.isSupplyVehicle() || cachedSupply.isFightVehicle()) {
-            builder = builder.slot("espetro.veh.change_class", ICON_AMMO_WHITE,
+            builder = builder.persistentSlot("espetro.veh.change_class", ICON_AMMO_WHITE,
                 Actions.script(ACTION_ID, Map.of("action", "CHANGE_CLASS")),
-                Component.literal("更换职业"), COLOR_LOAD);
+                Component.literal("更换职业"), COLOR_LOAD, "#FF3D4650");
         }
         return builder.build();
     }
@@ -182,8 +187,8 @@ public final class VehicleWheelController {
         cachedSupply = packet;
         snapshotReady = packet.hasAnyAction();
         if (!previousLayout.equals(layoutSignature(packet))) {
-            if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) {
-                pendingMenuPublish = true;
+            if (RadialMenuClientApi.activeMenuId().filter(ROOT::equals).isPresent()) {
+                RadialMenuClientApi.replace(buildRootMenu());
             } else {
                 publishMenu();
             }
@@ -219,11 +224,9 @@ public final class VehicleWheelController {
             consumedUntilRelease = false;
             holdAction = null;
             holdProgress = 0;
-            pendingReopen = false;
             currentVehicleId = null;
             cachedSupply = null;
             snapshotReady = false;
-            if (pendingMenuPublish && !RadialMenuOverlay.INSTANCE.isActive()) publishMenu();
             return;
         }
 
@@ -239,13 +242,9 @@ public final class VehicleWheelController {
         if (currentVehicleId == null) return;
 
         if (consumedUntilRelease) {
-            if (!RadialMenuOverlay.INSTANCE.isActive() && pendingReopen) {
-                pendingReopen = false;
-                publishMenu();
-                RadialMenuClientApi.open(ROOT);
-                ownsOverlay = true;
+            if (ownsOverlay && RadialMenuClientApi.activeMenuId().filter(ROOT::equals).isPresent()) {
+                tickHold(window);
             }
-            if (ownsOverlay && RadialMenuOverlay.INSTANCE.isActive()) tickHold(minecraft, window);
             return;
         }
         if (ownsOverlay || RadialMenuOverlay.INSTANCE.isActive()) return;
@@ -278,8 +277,8 @@ public final class VehicleWheelController {
         return actions;
     }
 
-    private static void tickHold(Minecraft minecraft, long window) {
-        int slot = getSlotUnderCursor(minecraft);
+    private static void tickHold(long window) {
+        int slot = RadialMenuClientApi.hoveredSlotIndex();
         List<String> actions = visibleActions();
         String action = slot >= 0 && slot < actions.size() ? actions.get(slot) : null;
         boolean leftDown = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT)
@@ -297,40 +296,6 @@ public final class VehicleWheelController {
             holdProgress = 0;
             sendSupplyAction(action);
         }
-    }
-
-    private static int getSlotUnderCursor(Minecraft minecraft) {
-        int slots = visibleActions().size();
-        if (slots == 0) return -1;
-        long window = minecraft.getWindow().getWindow();
-        double[] rawX = new double[1];
-        double[] rawY = new double[1];
-        GLFW.glfwGetCursorPos(window, rawX, rawY);
-        double x = rawX[0] * minecraft.getWindow().getGuiScaledWidth()
-            / minecraft.getWindow().getWidth();
-        double y = rawY[0] * minecraft.getWindow().getGuiScaledHeight()
-            / minecraft.getWindow().getHeight();
-        double dx = x - minecraft.getWindow().getGuiScaledWidth() / 2.0;
-        double dy = y - minecraft.getWindow().getGuiScaledHeight() / 2.0;
-        double distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < WHEEL_INNER || distance > WHEEL_OUTER) return -1;
-
-        double angle = Math.toDegrees(Math.atan2(-dy, dx));
-        if (angle < 0) angle += 360;
-        double step = 360.0 / slots;
-        int best = -1;
-        double bestDifference = step / 2.0 + 0.01;
-        for (int i = 0; i < slots; i++) {
-            double center = 90.0 - i * step;
-            if (center < 0) center += 360;
-            double difference = Math.abs(angle - center);
-            if (difference > 180) difference = 360 - difference;
-            if (difference < bestDifference) {
-                best = i;
-                bestDifference = difference;
-            }
-        }
-        return best;
     }
 
     @Nullable
@@ -356,6 +321,17 @@ public final class VehicleWheelController {
         ownsOverlay = false;
     }
 
+    /** Replace a currently visible vehicle child menu without close/reopen flicker. */
+    public static void replaceRoot() {
+        if (cachedSupply == null || !cachedSupply.hasAnyAction()) return;
+        if (!RadialMenuClientApi.replace(buildRootMenu())) {
+            publishMenu();
+            RadialMenuClientApi.open(ROOT);
+        }
+        ownsOverlay = true;
+        consumedUntilRelease = true;
+    }
+
     private static void reset() {
         closeOwnedOverlay();
         keyWasDown = false;
@@ -366,7 +342,6 @@ public final class VehicleWheelController {
         cachedSupply = null;
         holdAction = null;
         holdProgress = 0;
-        pendingReopen = false;
     }
 
     private static ResourceLocation id(String path) {

@@ -86,6 +86,11 @@ public final class MapVoteManager {
     }
 
     public boolean start(MinecraftServer server) {
+        if (!BattlefieldWorldManager.getInstance().isStartupReady()) {
+            Espetro.LOGGER.error("战场启动门禁未 READY，拒绝开始地图投票: {}",
+                BattlefieldWorldManager.getInstance().getStartupPreparation());
+            return false;
+        }
         List<ActiveMapConfig> pool = new ArrayList<>(ExternalConfigBootstrap.getUsableMaps());
         pool.removeIf(map -> {
             boolean prepared = BattlefieldWorldManager.getInstance().isPrepared(map);

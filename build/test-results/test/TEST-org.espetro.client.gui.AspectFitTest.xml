@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.client.gui.AspectFitTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-13T12:33:28" hostname="DESKTOP-1GK3H0A" time="0.003">
-  <properties/>
-  <testcase name="wideFactionImageKeepsItsOriginalAspectRatio()" classname="org.espetro.client.gui.AspectFitTest" time="0.001"/>
-  <testcase name="invalidDimensionsRemainSafeAndVisible()" classname="org.espetro.client.gui.AspectFitTest" time="0.0"/>
-  <testcase name="tallImageIsLimitedByAvailableHeight()" classname="org.espetro.client.gui.AspectFitTest" time="0.001"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

@@ -42,6 +42,7 @@ public final class HcrTacticalMapBridge {
         } catch (Throwable e) {
             renderFallback(graphics, x, y, width, height);
             logUnavailable(e);
+            return;
         } finally {
             graphics.disableScissor();
         }

@@ -43,6 +43,7 @@ import org.espetro.team.TeamManager;
 import org.espetro.team.TeamPackManager;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.logistics.SupplyManager;
+import org.espetro.logistics.resupply.ResupplySessionManager;
 import org.espetro.team.ClassEquipment;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.FactionDataLoader;
@@ -316,6 +317,7 @@ public class Espetro {
                     serverPlayer.getUUID());
                 org.espetro.bastion.FortificationManager.getInstance()
                     .clearPlayer(serverPlayer.getUUID());
+                ResupplySessionManager.clearPlayer(serverPlayer.getUUID());
                 try {
                     TutorialManager.getInstance().onPlayerLeave(serverPlayer.getUUID());
                 } catch (Throwable t) {
@@ -427,9 +429,11 @@ public class Espetro {
 
         @SubscribeEvent
         public static void onServerAboutToStart(ServerAboutToStartEvent event) {
-            int prepared = BattlefieldWorldManager.getInstance()
-                .prepareAllAtStartup(event.getServer());
-            LOGGER.info("战场地图启动准备完成: {} 个维度", prepared);
+            var prepared = BattlefieldWorldManager.getInstance()
+                .prepareAtStartup(event.getServer());
+            LOGGER.info("战场地图启动准备: status={} prepared={} warnings={} error={}",
+                prepared.status(), prepared.preparedCount(), prepared.warnings().size(),
+                prepared.error());
         }
 
         @SubscribeEvent
@@ -453,6 +457,7 @@ public class Espetro {
 
         @SubscribeEvent
         public static void onServerStopping(ServerStoppingEvent event) {
+            ResupplySessionManager.clearAll();
             clearAndSaveOnlinePlayerInventories(event.getServer());
 
             // 世界仍可访问时清理所有临时战局实体与方块。
@@ -470,6 +475,7 @@ public class Espetro {
         @SubscribeEvent
         public static void onServerStopped(ServerStoppedEvent event) {
             // 服务器已停止后只清理内存状态，避免在世界卸载阶段访问区块或实体。
+            ResupplySessionManager.clearAll();
             BastionManager.getInstance().clearRuntimeState();
             TeamPackManager.getInstance().clearRuntimeState();
             SupplyManager.getInstance().reset();
@@ -495,6 +501,14 @@ public class Espetro {
         @SubscribeEvent
         public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+                ResupplySessionManager.clearPlayer(serverPlayer.getUUID());
+                if (!BattlefieldWorldManager.getInstance().isStartupReady()
+                    && "espetro".equals(event.getTo().location().getNamespace())) {
+                    serverPlayer.sendSystemMessage(Component.literal(
+                        "§c战场启动重置失败，本次会话地图已禁用。"));
+                    GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
+                    return;
+                }
                 if (net.minecraft.world.level.Level.OVERWORLD.equals(event.getTo())) {
                     // 离开战场时清掉旧版疲劳残留
                     serverPlayer.removeEffect(net.minecraft.world.effect.MobEffects.DIG_SLOWDOWN);
@@ -621,6 +635,8 @@ public class Espetro {
             if (event.phase == TickEvent.Phase.END) {
                 GameStateManager.getInstance().onServerTick();
                 ServerRuntimeMaintenance.getInstance().onServerTick();
+                BastionManager.getInstance().tickDerivedTacticalState(event.getServer());
+                ResupplySessionManager.tick(event.getServer());
             }
         }
 

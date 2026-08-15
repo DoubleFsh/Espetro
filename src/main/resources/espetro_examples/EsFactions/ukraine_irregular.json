@@ -66,17 +66,18 @@
             "minecraft:ender_pearl 8"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:ender_pearl",
                 "count": 4,
-                "max": 8
+                "max": 8,
+                "ammo_cost": 1
               }
             ]
           }
@@ -109,17 +110,18 @@
             "minecraft:bread 16"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "minecraft:arrow",
                 "count": 16,
-                "max": 64
+                "max": 64,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 16
+                "max": 16,
+                "ammo_cost": 1
               }
             ]
           }
@@ -153,17 +155,18 @@
             "minecraft:bread 16"
           ],
           "resupply": {
-            "ammo_cost": 60,
             "items": [
               {
                 "id": "minecraft:arrow",
                 "count": 16,
-                "max": 64
+                "max": 64,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 16
+                "max": 16,
+                "ammo_cost": 1
               }
             ]
           }
@@ -197,17 +200,18 @@
             "minecraft:bread 20"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "minecraft:arrow",
                 "count": 16,
-                "max": 64
+                "max": 64,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               }
             ]
           }
@@ -240,17 +244,18 @@
             "minecraft:bread 16"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "minecraft:fire_charge",
                 "count": 8,
-                "max": 32
+                "max": 32,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 6,
-                "max": 16
+                "max": 16,
+                "ammo_cost": 1
               }
             ]
           }
@@ -284,22 +289,24 @@
             "minecraft:tnt 4"
           ],
           "resupply": {
-            "ammo_cost": 100,
             "items": [
               {
                 "id": "minecraft:fire_charge",
                 "count": 8,
-                "max": 32
+                "max": 32,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:tnt",
                 "count": 2,
-                "max": 4
+                "max": 4,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 6,
-                "max": 14
+                "max": 14,
+                "ammo_cost": 1
               }
             ]
           }
@@ -332,12 +339,12 @@
             "minecraft:bread 20"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               }
             ]
           }
@@ -372,17 +379,18 @@
             "minecraft:ender_pearl 4"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "minecraft:bread",
                 "count": 8,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:ender_pearl",
                 "count": 2,
-                "max": 4
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }

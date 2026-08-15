@@ -1,0 +1,2866 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "name": "pla_112th_brigade.json",
+      "variants": 30,
+      "resupply_items": 160,
+      "magazine_items": 43,
+      "details": [
+        {
+          "class": "PLA_112_COMMANDER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_COMMANDER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_COMMANDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_CREW_Leader",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_CREW",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_MEDIC",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_MEDIC",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "短管",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "短管红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ASSAULT",
+          "variant": "短管倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_RAIDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x21_50",
+              "ammo_id": "cib:58x21",
+              "capacity": 50,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_RAIDER",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x21_50",
+              "ammo_id": "cib:58x21",
+              "capacity": 50,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": [
+            "corrected Raider red-dot spare magazine to 58x21_50"
+          ]
+        },
+        {
+          "class": "PLA_112_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_BIG_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_BIG_SQUADMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ANTITANK",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ANTITANK",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_MARKSMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_GRENADIER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "35x32mm_6",
+              "ammo_id": "suffuse:35x32mm",
+              "capacity": 6,
+              "max": 6
+            },
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42",
+            "suffuse:35x32mm"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_GRENADIER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "35x32mm_6",
+              "ammo_id": "suffuse:35x32mm",
+              "capacity": 6,
+              "max": 6
+            },
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42",
+            "suffuse:35x32mm"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_SCOUT",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": [
+            "removed count suffix from Scout drone resupply id"
+          ]
+        },
+        {
+          "class": "PLA_112_MG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "308_100",
+              "ammo_id": "tacz:308",
+              "capacity": 100,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_MG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "308_100",
+              "ammo_id": "tacz:308",
+              "capacity": 100,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_HEAVYANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [
+            "suffuse:120mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_HEAVYANTITANK",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [
+            "suffuse:120mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_112_ENGINEER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        }
+      ]
+    },
+    {
+      "name": "pla_118th_brigade.json",
+      "variants": 30,
+      "resupply_items": 160,
+      "magazine_items": 43,
+      "details": [
+        {
+          "class": "PLA_118_COMMANDER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_COMMANDER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_COMMANDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_CREW_Leader",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_CREW",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_MEDIC",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_MEDIC",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "短管",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "短管红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ASSAULT",
+          "variant": "短管倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_RAIDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "58x21_50",
+              "ammo_id": "cib:58x21",
+              "capacity": 50,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_RAIDER",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x21_50",
+              "ammo_id": "cib:58x21",
+              "capacity": 50,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": [
+            "corrected Raider red-dot spare magazine to 58x21_50"
+          ]
+        },
+        {
+          "class": "PLA_118_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_BIG_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_BIG_SQUADMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_150_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 150,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ANTITANK",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ANTITANK",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_MARKSMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30_ext3",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_GRENADIER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "35x32mm_6",
+              "ammo_id": "suffuse:35x32mm",
+              "capacity": 6,
+              "max": 6
+            },
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42",
+            "suffuse:35x32mm"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_GRENADIER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "35x32mm_6",
+              "ammo_id": "suffuse:35x32mm",
+              "capacity": 6,
+              "max": 6
+            },
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42",
+            "suffuse:35x32mm"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_SCOUT",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": [
+            "removed count suffix from Scout drone resupply id"
+          ]
+        },
+        {
+          "class": "PLA_118_MG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "308_100",
+              "ammo_id": "tacz:308",
+              "capacity": 100,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_MG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "308_100",
+              "ammo_id": "tacz:308",
+              "capacity": 100,
+              "max": 6
+            },
+            {
+              "family": "58x21_20",
+              "ammo_id": "cib:58x21",
+              "capacity": 20,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_HEAVYANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [
+            "suffuse:120mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_HEAVYANTITANK",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [
+            "suffuse:120mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "PLA_118_ENGINEER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "58x42_30",
+              "ammo_id": "tacz:58x42",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:58x42"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        }
+      ]
+    },
+    {
+      "name": "ru_49th.json",
+      "variants": 21,
+      "resupply_items": 118,
+      "magazine_items": 31,
+      "details": [
+        {
+          "class": "RU_R1_COMMANDER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_COMMANDER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_COMMANDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_CREW",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "suffuse:545x39",
+              "capacity": 30,
+              "max": 2
+            }
+          ],
+          "removed_loose_ammo": [
+            "suffuse:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_MEDIC",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_MEDIC",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_RIFLEMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_RIFLEMAN",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_RIFLEMAN",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_45",
+              "ammo_id": "tacz:545x39",
+              "capacity": 45,
+              "max": 10
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_BIG_SQUADMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "545x39_45",
+              "ammo_id": "tacz:545x39",
+              "capacity": 45,
+              "max": 10
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_GRENADIER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [
+            "ts:40mm_vog25"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_GRENADIER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [
+            "ts:40mm_vog25"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_ANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [
+            "murasamet:pg7heat",
+            "murasamet:og7he"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_ANTITANK",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_HEAVYANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [
+            "murasamet:pg7heat",
+            "murasamet:pg7vr_tandem_heat"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_MARKSMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "762x54_10",
+              "ammo_id": "tacz:762x54",
+              "capacity": 10,
+              "max": 6
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:762x54",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_SCOUT",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 7
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_MMG",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "762x54_100_ext1",
+              "ammo_id": "tacz:762x54",
+              "capacity": 100,
+              "max": 5
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:762x54",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_MMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "762x54_100_ext1",
+              "ammo_id": "tacz:762x54",
+              "capacity": 100,
+              "max": 5
+            },
+            {
+              "family": "762x25_7",
+              "ammo_id": "tacz:762x25",
+              "capacity": 7,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:762x54",
+            "tacz:762x25"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "RU_R1_ENGINEER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "545x39_30",
+              "ammo_id": "tacz:545x39",
+              "capacity": 30,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:545x39"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        }
+      ]
+    },
+    {
+      "name": "us_2nd_stryker.json",
+      "variants": 31,
+      "resupply_items": 161,
+      "magazine_items": 40,
+      "details": [
+        {
+          "class": "US_2CAV_COMMANDER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_COMMANDER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_COMMANDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_CREW",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 4
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "握把",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "握把红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ASSAULT",
+          "variant": "握把倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 5
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_SQUADMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 5
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_GRENADIER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "tacz:40mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_GRENADIER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "tacz:40mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_MARKSMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "308_15",
+              "ammo_id": "tacz:308",
+              "capacity": 15,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ANTITANK",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ANTITANK",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_HEAVYANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "ts:84mm_ffv751"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_HEAVYANTITANK",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "ts:84mm_ffv751"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_RIFLEMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_RIFLEMAN",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_RIFLEMAN",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_MEDIC",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_MEDIC",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ENGINEER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_ENGINEER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_SCOUT",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_SCOUT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_MMG",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 3
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_2CAV_MMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 3
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        }
+      ]
+    },
+    {
+      "name": "us_redone.json",
+      "variants": 31,
+      "resupply_items": 161,
+      "magazine_items": 40,
+      "details": [
+        {
+          "class": "US_REDONE_COMMANDER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_COMMANDER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_COMMANDER",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_MEDIC",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_MEDIC",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_CREW",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 4
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 4
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_RIFLEMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_RIFLEMAN",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_RIFLEMAN",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "握把",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "握把红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ASSAULT",
+          "variant": "握把倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_SQUADMG",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 5
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_SQUADMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 5
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_GRENADIER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "tacz:40mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_GRENADIER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "tacz:40mm"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ANTITANK",
+          "variant": "红点",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ANTITANK",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 5
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_MARKSMAN",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "308_15",
+              "ammo_id": "tacz:308",
+              "capacity": 15,
+              "max": 7
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:308"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_MMG",
+          "variant": "机瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 3
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_MMG",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_75",
+              "ammo_id": "tacz:556x45",
+              "capacity": 75,
+              "max": 3
+            },
+            {
+              "family": "45acp_12",
+              "ammo_id": "tacz:45acp",
+              "capacity": 12,
+              "max": 3
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_HEAVYANTITANK",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "ts:84mm_ffv751"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_HEAVYANTITANK",
+          "variant": "光瞄",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [
+            "ts:84mm_ffv751"
+          ],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ENGINEER",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_ENGINEER",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_SCOUT",
+          "variant": "default",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        },
+        {
+          "class": "US_REDONE_SCOUT",
+          "variant": "倍镜",
+          "added_magazines": [
+            {
+              "family": "556x45_30",
+              "ammo_id": "tacz:556x45",
+              "capacity": 30,
+              "max": 6
+            }
+          ],
+          "removed_loose_ammo": [
+            "tacz:556x45"
+          ],
+          "retained_loose_ammo": [],
+          "fixes": []
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "files": 5,
+    "variants": 143,
+    "resupply_items": 760,
+    "magazine_items": 197
+  }
+}

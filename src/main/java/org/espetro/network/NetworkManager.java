@@ -5,6 +5,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import org.espetro.Espetro;
@@ -26,7 +27,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.30";
+    public static final String PROTOCOL_VERSION = "1.31";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -392,6 +393,37 @@ public class NetworkManager {
         NET.registerMessage(nextId(), DeployPointSyncPacket.class,
             DeployPointSyncPacket::write, DeployPointSyncPacket::read,
             DeployPointSyncPacket::handle);
+
+        NET.messageBuilder(RequestResupplyCatalogPacket.class, nextId(),
+                NetworkDirection.PLAY_TO_SERVER)
+            .encoder(RequestResupplyCatalogPacket::write)
+            .decoder(RequestResupplyCatalogPacket::read)
+            .consumerMainThread(RequestResupplyCatalogPacket::handle)
+            .add();
+        NET.messageBuilder(ResupplyCatalogPacket.class, nextId(),
+                NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(ResupplyCatalogPacket::write)
+            .decoder(ResupplyCatalogPacket::read)
+            .consumerMainThread(ResupplyCatalogPacket::handle)
+            .add();
+        NET.messageBuilder(SelectResupplyEntryPacket.class, nextId(),
+                NetworkDirection.PLAY_TO_SERVER)
+            .encoder(SelectResupplyEntryPacket::write)
+            .decoder(SelectResupplyEntryPacket::read)
+            .consumerMainThread(SelectResupplyEntryPacket::handle)
+            .add();
+        NET.messageBuilder(ResupplyEntryDeltaPacket.class, nextId(),
+                NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(ResupplyEntryDeltaPacket::write)
+            .decoder(ResupplyEntryDeltaPacket::read)
+            .consumerMainThread(ResupplyEntryDeltaPacket::handle)
+            .add();
+        NET.messageBuilder(CloseResupplySessionPacket.class, nextId(),
+                NetworkDirection.PLAY_TO_SERVER)
+            .encoder(CloseResupplySessionPacket::write)
+            .decoder(CloseResupplySessionPacket::read)
+            .consumerMainThread(CloseResupplySessionPacket::handle)
+            .add();
     }
 
     public static void sendBuildFortification(String fortId) {

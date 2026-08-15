@@ -80,6 +80,14 @@ public class BastionManager {
     // 弹药补给追踪（仅冷却，无次数限制）
     private final Map<UUID, Long> resupplyCooldowns = new HashMap<>(); // 已取消冷却，仅保留兼容
 
+    /**
+     * Time-derived fields used by the tactical-map snapshot are not covered by
+     * ordinary setters.  Keep a one-second snapshot so activation/suppression
+     * expiry and proximity changes invalidate the API cache exactly once.
+     */
+    private final Map<UUID, DerivedTacticalState> derivedTacticalStates = new HashMap<>();
+    private long lastDerivedTacticalTick = Long.MIN_VALUE / 2;
+
     /** 弹药补给冷却时间（毫秒）；已取消，保留常量仅为兼容。 */
     public static final long RESUPPLY_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -179,6 +187,44 @@ public class BastionManager {
     }
 
     /**
+     * Re-evaluate only the time/player-derived FOB fields exposed by
+     * {@code EspetroAPI}.  The caller invokes this every server tick; the scan
+     * itself is bounded to once per 20 ticks and only dirties on value changes.
+     */
+    public void tickDerivedTacticalState(MinecraftServer server) {
+        if (server == null) return;
+        long tick = server.getTickCount();
+        if (tick - lastDerivedTacticalTick < 20L) return;
+        lastDerivedTacticalTick = tick;
+
+        long now = System.currentTimeMillis();
+        Map<UUID, DerivedTacticalState> current = new HashMap<>();
+        for (BastionData bastion : bastions.values()) {
+            if (bastion == null || !bastion.isActive()) continue;
+            boolean activationReady = bastion.getHabAvailableAt() <= now;
+            boolean suppressionWindowActive = bastion.getHabDisabledUntil() > now;
+            boolean radioCovered = !bastion.isHab() || isCoveredByFriendlyRadio(bastion);
+            boolean proximitySuppressed = (bastion.isHab() || bastion.isLegacyCombined())
+                && bastion.isHabBuilt() && isHabProxied(bastion);
+            boolean habOperational = isHabOperational(bastion);
+            current.put(bastion.getBastionId(), new DerivedTacticalState(
+                habOperational, activationReady, suppressionWindowActive,
+                proximitySuppressed, radioCovered));
+        }
+        if (!current.equals(derivedTacticalStates)) {
+            derivedTacticalStates.clear();
+            derivedTacticalStates.putAll(current);
+            org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
+        }
+    }
+
+    private record DerivedTacticalState(boolean habOperational, boolean activationReady,
+                                        boolean suppressionWindowActive,
+                                        boolean proximitySuppressed,
+                                        boolean radioCovered) {
+    }
+
+    /**
      * 兼容旧调用：创建 Radio。
      */
     public BastionData createBastion(ServerLevel level, BlockPos pos, String team, String name) {
@@ -246,6 +292,7 @@ public class BastionManager {
         bastion.setActive(true);
 
         bastions.put(bastion.getBastionId(), bastion);
+        org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
         recomputeHabCoverage();
 
         Espetro.LOGGER.info("创建{}: {} (队伍: {}, 编号: {}, 核心位置: {})",
@@ -1075,7 +1122,10 @@ public class BastionManager {
         bastionCooldowns.clear();
         resupplyCooldowns.clear();
         habProxyCache.clear();
+        derivedTacticalStates.clear();
+        lastDerivedTacticalTick = Long.MIN_VALUE / 2;
         clearBastionRecords();
+        org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
     }
 
     private record HabChunkKey(ServerLevel level, ChunkPos chunk) {
@@ -1521,6 +1571,7 @@ public class BastionManager {
         }
 
         playerDeployPoints.put(player.getUUID(), new DeployPoint(deployPos, level));
+        org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
     }
 
     /**
@@ -1528,6 +1579,7 @@ public class BastionManager {
      */
     public void savePlayerDeployPoint(ServerPlayer player, BlockPos pos, ServerLevel level) {
         playerDeployPoints.put(player.getUUID(), new DeployPoint(pos, level));
+        org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
     }
 
     /**

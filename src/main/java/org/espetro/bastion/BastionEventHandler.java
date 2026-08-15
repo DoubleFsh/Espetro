@@ -1,18 +1,13 @@
 package org.espetro.bastion;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -29,21 +24,17 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
 import org.espetro.team.ClassCountManager;
-import org.espetro.team.FactionDataLoader;
-import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GamePhase;
 import org.espetro.team.GameStateManager;
 import org.espetro.team.SquadManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TeamPackManager;
 import org.espetro.logistics.LogisticsConfig;
-import org.espetro.logistics.AmmoResupplyPolicy;
 import org.espetro.logistics.SupplyManager;
 import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.network.RadioRadialPacket;
 
 import javax.annotation.Nullable;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -655,8 +646,8 @@ public class BastionEventHandler {
     }
 
     /**
-     * 玩家右击弹药箱（工事放置的潜影盒）— 更换职业；
-     * 潜行右击仍保留职业弹药补给（无冷却）。
+     * 右击已建成弹药箱：打开更换职业根菜单；潜行右击打开逐项补给会话。
+     * 识别以工事 behavior=ammo_crate 为准，原版潜影盒只作为旧世界形状兼容。
      */
     @SubscribeEvent
     public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
@@ -671,21 +662,20 @@ public class BastionEventHandler {
             return;
         }
         BlockState state = level.getBlockState(clickedPos);
-
-        // 工事弹药箱使用原版 shulker_box；兼容旧红/蓝箱
-        boolean isShulker = state.is(Blocks.SHULKER_BOX)
+        boolean legacyShulker = state.is(Blocks.SHULKER_BOX)
             || state.is(Blocks.RED_SHULKER_BOX)
             || state.is(Blocks.BLUE_SHULKER_BOX);
-        if (!isShulker) return;
 
         String team = Espetro.getPlayerTeam(player);
         if (team == null) return;
 
         BastionData radio = FortificationManager.getInstance()
             .findRadioForAmmoCrate(level, clickedPos, team);
+        boolean registeredCrate = FortificationManager.getInstance()
+            .isAmmoCrateAt(level, clickedPos, team);
+        if (radio == null && !registeredCrate && !legacyShulker) return;
         if (radio == null) {
-            // 非我方弹药箱：若是登记工事则静默取消开箱
-            if (FortificationManager.getInstance().isAmmoCrateAt(level, clickedPos, team)
+            if (registeredCrate
                 || BastionManager.getInstance().findBastionByShulkerPos(clickedPos) != null) {
                 event.setCanceled(true);
             }
@@ -695,259 +685,11 @@ public class BastionEventHandler {
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
         if (player.isShiftKeyDown()) {
-            performAmmoResupply(player, radio);
+            org.espetro.logistics.resupply.ResupplySessionManager.open(player,
+                org.espetro.logistics.resupply.ResupplySourceRef.radio(clickedPos));
         } else {
             RadioRadialPacket.openClassMenuAt(player, clickedPos);
         }
-    }
-
-    /**
-     * 从 Radio 领取职业弹药补给（原潜影盒逻辑，供潜影盒与 Radio 实体两个入口复用）。
-     */
-    public static void performAmmoResupply(ServerPlayer player, BastionData bastion) {
-        // 弹药箱与 Radio 解耦：调用方须已确认弹药箱实体存在；此处只校验 Radio 库存
-        if (bastion == null || !bastion.isActive()) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c附近没有可用的己方 Radio 弹药库存。"));
-            return;
-        }
-
-        // 获取玩家职业配置
-        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
-        String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
-        if (classId == null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
-            return;
-        }
-
-        // 加载补给配置
-        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
-        MinecraftServer server = player.getServer();
-        if (server != null) loader.ensureLoaded(server.getResourceManager());
-        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
-        FactionDataLoader.ClassVariantData variant = kit != null ? kit.getVariant(variantId) : null;
-        FactionDataLoader.ResupplyData resupply = variant != null ? variant.resupply : null;
-        if (resupply == null || resupply.items == null || resupply.items.length == 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业装备变体没有配置弹药补给！"));
-            return;
-        }
-
-        int ammoCost = resupply.ammoCost != null
-            ? Math.max(0, resupply.ammoCost)
-            : LogisticsConfig.get().defaultResupplyAmmoCost;
-        // 先只计算缺口，不改背包、不扣库存。满弹与 Radio 库存不足都必须零副作用。
-        java.util.List<PlannedResupply> planned = new java.util.ArrayList<>();
-        int validConfiguredItems = 0;
-        for (FactionDataLoader.ResupplyItem ri : resupply.items) {
-            if (ri.id == null || ri.id.isBlank()) continue;
-            ItemStack template = createResupplyStack(ri);
-            if (template.isEmpty()) {
-                continue;
-            }
-            validConfiguredItems++;
-            Item item = template.getItem();
-            if (item == net.minecraft.world.item.Items.AIR) {
-                Espetro.LOGGER.warn("补给物品不存在: {}", ri.id);
-                continue;
-            }
-            int maxCap = ri.max > 0 ? ri.max : 64;
-            int giveCount = ri.count > 0 ? ri.count : 16;
-
-            // 统计背包中已有数量
-            int current = 0;
-            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-                ItemStack stack = player.getInventory().getItem(i);
-                if (matchesResupplyItem(stack, template)) current += stack.getCount();
-            }
-
-            // 计算可补充数量（不超过上限）
-            int canGive = AmmoResupplyPolicy.grantCount(current, maxCap, giveCount);
-            if (canGive > 0) {
-                planned.add(new PlannedResupply(template, canGive));
-            }
-        }
-
-        if (validConfiguredItems == 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c该职业弹药补给配置中没有有效物品。"));
-            return;
-        }
-        if (planned.isEmpty()) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
-            return;
-        }
-
-        int availableAmmo = bastion.getAmmunitionSupplies();
-        if (!AmmoResupplyPolicy.canAfford(availableAmmo, ammoCost)) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§cRadio 弹药不足：需要 §b" + ammoCost + "§c，当前仅有 §b"
-                    + availableAmmo + "§c。"));
-            return;
-        }
-        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
-        if (errorMsg != null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
-            return;
-        }
-        // 先足额扣费再发放；任何不足都不能先发物品再把库存扣到零。
-        if (!BastionManager.getInstance().tryConsumeFobAmmunition(bastion, ammoCost)) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§cRadio 弹药库存发生变化，本次补给已取消。"));
-            return;
-        }
-
-        StringBuilder detail = new StringBuilder();
-        for (PlannedResupply plan : planned) {
-            ItemStack giveStack = plan.template().copy();
-            giveStack.setCount(plan.count());
-            if (!player.getInventory().add(giveStack) && !giveStack.isEmpty()) {
-                player.drop(giveStack, false);
-            }
-            if (!detail.isEmpty()) detail.append(", ");
-            detail.append(plan.template().getHoverName().getString())
-                .append(" ×").append(plan.count());
-        }
-
-        BastionManager.getInstance().recordResupply(player.getUUID());
-        FobSupplyTracker.notifySupplyChanged(bastion);
-        String chargeDetail = ammoCost > 0
-            ? "消耗 §b" + ammoCost + " Radio 弹药"
-            : "本职业补给无需消耗 Radio 弹药";
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§a▸ 已补充: §f" + detail + "  §7| " + chargeDetail + " §7| 无冷却"));
-    }
-
-    /**
-     * 从载具领取弹药补给（载具轮盘"补给步兵"操作）。
-     */
-    public static void performVehicleResupply(ServerPlayer player,
-                                               org.espetro.vehicle.VehicleManager.VehicleSupplyState supply,
-                                               int ammoCost) {
-        if (supply == null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c该载具没有可用的弹药库存。"));
-            return;
-        }
-
-        // 获取玩家职业配置
-        String classId = ClassCountManager.getInstance().getPlayerClass(player.getUUID());
-        String variantId = ClassCountManager.getInstance().getPlayerVariant(player.getUUID());
-        if (classId == null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你没有选择职业，无法补给弹药！"));
-            return;
-        }
-
-        FactionDataLoader loader = FactionDataProvider.getOrCreateLoader();
-        MinecraftServer server = player.getServer();
-        if (server != null) loader.ensureLoaded(server.getResourceManager());
-        FactionDataLoader.ClassKitData kit = loader.getClassKit(classId);
-        FactionDataLoader.ClassVariantData variant = kit != null ? kit.getVariant(variantId) : null;
-        FactionDataLoader.ResupplyData resupply = variant != null ? variant.resupply : null;
-        if (resupply == null || resupply.items == null || resupply.items.length == 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c该职业装备变体没有配置弹药补给！"));
-            return;
-        }
-
-        int cost = resupply.ammoCost != null ? Math.max(0, resupply.ammoCost) : ammoCost;
-
-        java.util.List<PlannedResupply> planned = new java.util.ArrayList<>();
-        int validConfiguredItems = 0;
-        for (FactionDataLoader.ResupplyItem ri : resupply.items) {
-            if (ri.id == null || ri.id.isBlank()) continue;
-            ItemStack template = createResupplyStack(ri);
-            if (template.isEmpty()) continue;
-            validConfiguredItems++;
-            Item item = template.getItem();
-            if (item == net.minecraft.world.item.Items.AIR) continue;
-            int maxCap = ri.max > 0 ? ri.max : 64;
-            int giveCount = ri.count > 0 ? ri.count : 16;
-            int current = 0;
-            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-                ItemStack stack = player.getInventory().getItem(i);
-                if (matchesResupplyItem(stack, template)) current += stack.getCount();
-            }
-            int canGive = AmmoResupplyPolicy.grantCount(current, maxCap, giveCount);
-            if (canGive > 0) planned.add(new PlannedResupply(template, canGive));
-        }
-
-        if (validConfiguredItems == 0) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c该职业弹药补给配置中没有有效物品。"));
-            return;
-        }
-        if (planned.isEmpty()) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e你的弹药已满，无需补给！"));
-            return;
-        }
-
-        if (!supply.canAffordAmmo(cost)) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                "§c载具弹药不足：需要 §b" + cost + "§c，当前仅有 §b" + supply.getAmmo() + "§c。"));
-            return;
-        }
-
-        String errorMsg = BastionManager.getInstance().tryResupply(player.getUUID());
-        if (errorMsg != null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(errorMsg));
-            return;
-        }
-
-        supply.removeAmmo(cost);
-
-        StringBuilder detail = new StringBuilder();
-        for (PlannedResupply plan : planned) {
-            ItemStack giveStack = plan.template().copy();
-            giveStack.setCount(plan.count());
-            if (!player.getInventory().add(giveStack) && !giveStack.isEmpty()) {
-                player.drop(giveStack, false);
-            }
-            if (!detail.isEmpty()) detail.append(", ");
-            detail.append(plan.template().getHoverName().getString()).append(" ×").append(plan.count());
-        }
-
-        BastionManager.getInstance().recordResupply(player.getUUID());
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-            "§a▸ 已补充: §f" + detail + "  §7| 消耗 §b" + cost + " 载具弹药 §7| 无冷却"));
-    }
-
-    private record PlannedResupply(ItemStack template, int count) {
-    }
-
-    private static ItemStack createResupplyStack(FactionDataLoader.ResupplyItem ri) {
-        String id = ri.id.trim();
-        String nbt = ri.nbt;
-        int tagStart = id.indexOf('{');
-        if (tagStart >= 0) {
-            if (nbt == null || nbt.isBlank()) {
-                nbt = id.substring(tagStart);
-            }
-            id = id.substring(0, tagStart);
-        }
-
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
-        if (item == net.minecraft.world.item.Items.AIR) {
-            Espetro.LOGGER.warn("补给物品不存在: {}", id);
-            return ItemStack.EMPTY;
-        }
-
-        ItemStack stack = new ItemStack(item);
-        if (nbt != null && !nbt.isBlank()) {
-            try {
-                CompoundTag tag = TagParser.parseTag(nbt);
-                stack.setTag(tag);
-            } catch (CommandSyntaxException e) {
-                Espetro.LOGGER.warn("补给物品 NBT 格式错误: id={}, nbt={}, error={}", id, nbt, e.getMessage());
-                return ItemStack.EMPTY;
-            }
-        }
-        return stack;
-    }
-
-    private static boolean matchesResupplyItem(ItemStack stack, ItemStack template) {
-        if (template.hasTag()) {
-            return ItemStack.isSameItemSameTags(stack, template);
-        }
-        return stack.is(template.getItem());
     }
 
     private static boolean isBastionCore(ArmorStand armorStand) {

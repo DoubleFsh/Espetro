@@ -34,9 +34,20 @@ public class EspetroAPI {
     private static ActiveMapConfig cachedActiveMap;
     private static ActiveBattlefieldSnapshot cachedBattlefieldSnapshot;
     private static long tacticalRevision;
+    private static long tacticalDirtyRevision = 1L;
+    private static long tacticalBuiltRevision = Long.MIN_VALUE;
     private static long tacticalSnapshotSession = Long.MIN_VALUE;
-    private static TacticalContent lastTacticalContent;
     private static TacticalMapStateSnapshot lastTacticalSnapshot;
+
+    /**
+     * Marks the immutable tactical snapshot stale. Mutators call this on the
+     * server thread; synchronized publication makes the next read visible to
+     * integrations without rebuilding unchanged lists on every poll.
+     */
+    public static synchronized void markTacticalMapStateDirty() {
+        tacticalDirtyRevision = tacticalDirtyRevision == Long.MAX_VALUE
+            ? 1L : tacticalDirtyRevision + 1L;
+    }
 
     public static Optional<String> getActiveMapId() {
         return BattlefieldContext.get().map(map -> map.mapFolder);
@@ -380,6 +391,11 @@ public class EspetroAPI {
      */
     public static synchronized TacticalMapStateSnapshot getTacticalMapStateSnapshot() {
         long session = BattlefieldContext.getSessionId();
+        if (lastTacticalSnapshot != null
+            && tacticalSnapshotSession == session
+            && tacticalBuiltRevision == tacticalDirtyRevision) {
+            return lastTacticalSnapshot;
+        }
         String dimension = getActiveBattlefieldDimension()
             .map(key -> key.location().toString())
             .orElse("");
@@ -417,27 +433,12 @@ public class EspetroAPI {
                 .sorted(java.util.Comparator.comparing(snapshot -> snapshot.id().toString()))
                 .toList();
 
-        TacticalContent content = new TacticalContent(
-            structures, rallies, teamBases, deployPoints, stations);
-        if (lastTacticalSnapshot == null
-            || tacticalSnapshotSession != session
-            || !content.equals(lastTacticalContent)) {
-            tacticalSnapshotSession = session;
-            lastTacticalContent = content;
-            tacticalRevision++;
-            lastTacticalSnapshot = new TacticalMapStateSnapshot(
-                tacticalRevision, session, structures, rallies, teamBases, deployPoints, stations);
-        }
+        tacticalSnapshotSession = session;
+        tacticalRevision++;
+        lastTacticalSnapshot = new TacticalMapStateSnapshot(
+            tacticalRevision, session, structures, rallies, teamBases, deployPoints, stations);
+        tacticalBuiltRevision = tacticalDirtyRevision;
         return lastTacticalSnapshot;
-    }
-
-    private record TacticalContent(
-        List<FobSnapshot> structures,
-        List<TacticalMapStateSnapshot.RallySnapshot> rallies,
-        List<TacticalMapStateSnapshot.TeamBaseSnapshot> teamBases,
-        List<TacticalMapStateSnapshot.PlayerDeployPointSnapshot> playerDeployPoints,
-        List<TacticalMapStateSnapshot.VehicleSupplyStationSnapshot> vehicleSupplyStations
-    ) {
     }
 
     public record FobSnapshot(UUID id, String team, String name, String dimension,

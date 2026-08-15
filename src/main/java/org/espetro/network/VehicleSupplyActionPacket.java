@@ -73,8 +73,8 @@ public final class VehicleSupplyActionPacket {
         }
 
         if (action == Action.RESUPPLY_INFANTRY) {
-            BastionEventHandler.performVehicleResupply(player, interaction.supply(),
-                LogisticsConfig.get().defaultResupplyAmmoCost);
+            org.espetro.logistics.resupply.ResupplySessionManager.open(player,
+                org.espetro.logistics.resupply.ResupplySourceRef.vehicle(vehicleId));
             sendSync(player, interaction);
             return;
         }
@@ -233,7 +233,8 @@ public final class VehicleSupplyActionPacket {
     }
 
     @Nullable
-    private static Interaction resolveInteraction(ServerPlayer player, UUID vehicleId) {
+    /** Revalidates a vehicle source for every menu action; never trust the client snapshot. */
+    public static Interaction resolveInteraction(ServerPlayer player, UUID vehicleId) {
         VehicleManager vehicles = VehicleManager.getInstance();
         String factionId = vehicles.getVehicleFactionId(vehicleId);
         String vehicleType = vehicles.getVehicleType(vehicleId);
@@ -284,7 +285,7 @@ public final class VehicleSupplyActionPacket {
         if (radio != null) FobSupplyTracker.notifySupplyChanged(radio);
     }
 
-    private record Interaction(
+    public record Interaction(
         UUID vehicleId,
         String factionId,
         VehicleConfig.VehicleTypeConfig config,

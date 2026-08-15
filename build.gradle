@@ -131,10 +131,28 @@ sourceSets.main.java.exclude 'com/example/hcrpoints/**'
 sourceSets.main.resources.exclude 'assets/hcrpoints/**'
 sourceSets.main.resources.exclude 'data/hcrpoints/**'
 
+def fixedAuraTipJar = providers.gradleProperty('auratipJar')
+    .map { file(it) }
+    .getOrElse(file("../AuraTip/build/libs/auratip-forge-1.20.1-${auratip_version}.jar"))
+if (!fixedAuraTipJar.isFile()) {
+    throw new GradleException("缺少固定 AuraTip 产物: ${fixedAuraTipJar}；请先构建 AuraTip 或设置 -PauratipJar=...")
+}
+if (fixedAuraTipJar.name != "auratip-forge-1.20.1-${auratip_version}.jar") {
+    throw new GradleException("AuraTip 文件名与固定版本不匹配: ${fixedAuraTipJar.name}")
+}
+
 repositories {
+    // Consume only the reproducibly published Tetrachord artifact. Upstream's
+    // generated publication metadata exposes its Forge userdev runtime as a
+    // transitive dependency, which is not a consumer dependency.
+    mavenLocal {
+        metadataSources { artifact() }
+        content { includeGroup 'com.hexagram2021.tetrachordlib' }
+    }
     flatDir {
         // 本地 ESPoints 与可选的 OELib/AuraTip 开发 jar
         dirs '../../../IdeaProjects/espetro-HCR/build/libs'
+        dirs fixedAuraTipJar.parentFile
         dirs 'run/mods'
     }
     maven {
@@ -172,9 +190,17 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // The fixed Tetrachord commit is published locally. Its upstream Gradle
+    // publication includes a Forge userdev dependency which consumers must not
+    // inherit; Forge for this project is declared by the minecraft dependency.
+    implementation(fg.deobf("com.hexagram2021.tetrachordlib:tetrachordlib:${tetrachord_version}")) {
+        transitive = false
+    }
     implementation fg.deobf("curse.maven:mutil-351914:7772906")
     implementation fg.deobf("cc.sighs.oelib:OELib-forge-1.20.1:${oelib_version}")
-    implementation fg.deobf("cc.sighs.auratip:auratip-forge-1.20.1:${auratip_version}")
+    // A flatDir module lets ForgeGradle deobfuscate the fixed sibling JAR;
+    // direct files(...) dependencies bypass its remapping pipeline.
+    implementation fg.deobf("local:auratip-forge-1.20.1:${auratip_version}")
     implementation fg.deobf("dev.latvian.mods:rhino-forge:${rhino_version}")
     implementation fg.deobf("dev.architectury:architectury-forge:${architectury_version}")
     implementation fg.deobf("dev.latvian.mods:kubejs-forge:${kubejs_version}")
@@ -218,6 +244,8 @@ tasks.named('processResources', ProcessResources).configure {
                              architectury_version: architectury_version, kubejs_version: kubejs_version,
                              oelib_version       : oelib_version,
                              auratip_version     : auratip_version,
+                             tetrachord_version  : tetrachord_version,
+                             taczmagazines_version_range: taczmagazines_version_range,
                              pingwheel_version   : pingwheel_version,]
 
     inputs.properties replaceProperties
@@ -278,6 +306,7 @@ tasks.register('syncRunMods') {
             }
             logger.warn("syncRunMods: 使用生产 jar 源 {}（勿用于 userdev runClient）", sourceDir)
             def patterns = [~/mutil-.*\.jar/, ~/OELib-.*\.jar/, ~/oelib-.*\.jar/,
+                            ~/tetrachordlib-.*\.jar/,
                             ~/.*auratip.*\.jar/, ~/rhino-.*\.jar/, ~/architectury-.*\.jar/, ~/kubejs-.*\.jar/]
             int n = 0
             sourceDir.listFiles()?.each { File f ->
@@ -293,7 +322,7 @@ tasks.register('syncRunMods') {
             return
         }
 
-        def wanted = ['mutil', 'oelib', 'auratip', 'rhino', 'architectury', 'kubejs']
+        def wanted = ['mutil', 'oelib', 'auratip', 'tetrachordlib', 'rhino', 'architectury', 'kubejs']
         int copied = 0
         configurations.runtimeClasspath.files.findAll { File f ->
             def n = f.name.toLowerCase()

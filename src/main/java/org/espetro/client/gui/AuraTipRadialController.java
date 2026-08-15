@@ -46,8 +46,6 @@ public final class AuraTipRadialController {
     private static final ResourceLocation SKILL_ACTIVATE_ACTION = id("skill_activate");
     private static final ResourceLocation BUILD_FORT_ACTION = id("build_fortification");
 
-    private static final ResourceLocation RADIO = id("textures/gui/squad/radio_deploy.png");
-    private static final ResourceLocation HAB = id("textures/gui/squad/hab_deploy.png");
     private static final ResourceLocation RALLY = id("textures/gui/squad/rally_deploy.png");
     private static final ResourceLocation BUILD_ICON =
         id("textures/gui/commander_skills/vehicle_supply_station.png");
@@ -408,22 +406,17 @@ public final class AuraTipRadialController {
     }
 
     /**
-     * 建造工事二级菜单：原部署项 + JSON 工事（弹药箱、载具补给站等）。
-     * 「部署」与「后勤」子菜单已取消。
+     * 建造工事二级菜单：Rally 仍是部署点，其余工事只来自 JSON 目录。
+     * Radio / 兵站已在 fortifications.json 中，不能再硬编码一份。
      */
     private static cc.sighs.auratip.data.RadialMenuData buildMenu() {
         var builder = base(BUILD_MENU)
-            .slot("espetro.radio", RADIO,
-                Actions.script(BUILD_FORT_ACTION,
-                    Map.of("fortId", org.espetro.bastion.FortificationManager.BUILTIN_RADIO)),
-                Component.translatable("radial.espetro.radio"), "#FFD5B25C")
-            .slot("espetro.hab", HAB,
-                Actions.script(BUILD_FORT_ACTION,
-                    Map.of("fortId", org.espetro.bastion.FortificationManager.BUILTIN_HAB)),
-                Component.literal("部署兵站"), "#FF8CB4D5")
             .slot("espetro.rally", RALLY, action(RadialActionPacket.Action.DEPLOY_RALLY),
                 Component.translatable("radial.espetro.rally"), "#FF7DAE82");
         for (FortificationCatalogPacket.Entry fort : cachedFortifications) {
+            if (fort == null || fort.id() == null || fort.id().isBlank()) {
+                continue;
+            }
             ResourceLocation icon = ResourceLocation.tryParse(fort.icon());
             if (icon == null) icon = UNAVAILABLE_ICON;
             StringBuilder label = new StringBuilder(fort.displayName());
@@ -487,6 +480,22 @@ public final class AuraTipRadialController {
         }
         ResourceLocation loc = ResourceLocation.tryParse(raw.trim());
         return loc != null ? loc : COMMAND_ICON;
+    }
+
+    /** Rally plus one slot per catalog fort; radio/HAB must not be hard-coded again. */
+    static List<String> buildMenuSlotIds(List<FortificationCatalogPacket.Entry> forts) {
+        List<String> ids = new ArrayList<>();
+        ids.add("espetro.rally");
+        if (forts == null) {
+            return ids;
+        }
+        for (FortificationCatalogPacket.Entry fort : forts) {
+            if (fort == null || fort.id() == null || fort.id().isBlank()) {
+                continue;
+            }
+            ids.add("espetro.fort." + fort.id());
+        }
+        return ids;
     }
 
     private static RadialMenuBuilder base(ResourceLocation menuId) {

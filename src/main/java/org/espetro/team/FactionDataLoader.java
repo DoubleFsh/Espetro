@@ -47,6 +47,7 @@ public class FactionDataLoader {
     private String[] factionIdArray = EMPTY_STRING_ARRAY;
     private FactionData[] factionArray = EMPTY_FACTION_ARRAY;
     private boolean loaded = false;
+    private boolean warnedLegacyResupplyCost;
 
     public FactionDataLoader() {
         INSTANCE = this;
@@ -353,6 +354,9 @@ public class FactionDataLoader {
                 fallback.id = "default";
                 fallback.classId = classId;
                 fallback.factionId = factionId;
+                if (!validateResupply(resourceId, classId, fallback.id, fallback.resupply)) {
+                    return false;
+                }
                 kit.variants.put(fallback.id, fallback);
                 kit.legacyImplicitVariant = true;
                 continue;
@@ -387,12 +391,75 @@ public class FactionDataLoader {
                 if (variant.name == null || variant.name.isBlank()) {
                     variant.name = variantId;
                 }
+                if (!validateResupply(resourceId, classId, variantId, variant.resupply)) {
+                    return false;
+                }
                 variantLimitSum += variant.maxPlayers;
             }
 
             if (kit.strictCount && variantLimitSum != kit.maxPlayers) {
                 warnRejected(resourceId, "职业 " + classId + " (strict_count=true) 的变体上限总和 "
                     + variantLimitSum + " 不等于职业上限 " + kit.maxPlayers);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean validateResupply(ResourceLocation resourceId, String classId,
+                                     String variantId, ResupplyData resupply) {
+        if (resupply == null) return true;
+        if (resupply.items == null || resupply.items.length == 0) {
+            warnRejected(resourceId, "职业 " + classId + " 的变体 " + variantId
+                + " resupply.items 不可为空");
+            return false;
+        }
+        if (resupply.items.length > 64) {
+            warnRejected(resourceId, "职业 " + classId + " 的变体 " + variantId
+                + " resupply.items 超过 64 项硬上限");
+            return false;
+        }
+        if (resupply.ammoCost != null
+            && (resupply.ammoCost < 0 || resupply.ammoCost > 1_000_000)) {
+            warnRejected(resourceId, "职业 " + classId + " 的变体 " + variantId
+                + " 旧 resupply.ammo_cost 超出 0..1000000");
+            return false;
+        }
+        if (resupply.ammoCost != null && !warnedLegacyResupplyCost) {
+            warnedLegacyResupplyCost = true;
+            Espetro.LOGGER.warn("resupply.ammo_cost 顶层费用已弃用；请迁移到每个 items[].ammo_cost");
+        }
+        for (int index = 0; index < resupply.items.length; index++) {
+            ResupplyItem item = resupply.items[index];
+            String path = "职业 " + classId + " 的变体 " + variantId
+                + " resupply.items[" + index + "]";
+            if (item == null || item.id == null || item.id.isBlank()
+                || item.id.length() > 512) {
+                warnRejected(resourceId, path + ".id 缺失或过长");
+                return false;
+            }
+            String rawId = item.id.trim();
+            int inlineTag = rawId.indexOf('{');
+            String registryId = inlineTag >= 0 ? rawId.substring(0, inlineTag) : rawId;
+            if (ResourceLocation.tryParse(registryId) == null) {
+                warnRejected(resourceId, path + ".id 不是有效 ResourceLocation");
+                return false;
+            }
+            if (item.nbt != null && item.nbt.length() > 32_768) {
+                warnRejected(resourceId, path + ".nbt 超过 32768 字符");
+                return false;
+            }
+            if (item.count < 1 || item.count > 1_000_000) {
+                warnRejected(resourceId, path + ".count 必须在 1..1000000");
+                return false;
+            }
+            if (item.max < 1 || item.max > 1_000_000 || item.count > item.max) {
+                warnRejected(resourceId, path + ".max 必须在 1..1000000 且不少于 count");
+                return false;
+            }
+            if (item.ammoCost != null
+                && (item.ammoCost < 0 || item.ammoCost > 1_000_000)) {
+                warnRejected(resourceId, path + ".ammo_cost 必须在 0..1000000");
                 return false;
             }
         }
@@ -751,6 +818,9 @@ public class FactionDataLoader {
         public int count = 16;
         /** 背包中该物品数量上限 */
         public int max = 64;
+        /** 每次有效点击固定扣费；null 仅用于旧顶层字段的一版迁移兼容。 */
+        @SerializedName(value = "ammo_cost", alternate = {"ammoCost"})
+        public Integer ammoCost;
     }
 
     /**

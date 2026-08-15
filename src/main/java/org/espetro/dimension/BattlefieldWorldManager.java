@@ -25,6 +25,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.LevelEvent;
 import org.espetro.Espetro;
 import org.espetro.bastion.BastionManager;
+import org.espetro.bastion.FortificationConfig;
 import org.espetro.mapconfig.ActiveMapConfig;
 import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.mapconfig.ExternalConfigBootstrap;
@@ -50,7 +51,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -58,6 +61,13 @@ import java.util.function.Consumer;
  * EsWorld templates.
  */
 public final class BattlefieldWorldManager {
+
+    public enum StartupResetStatus {
+        NOT_RUN,
+        RESETTING,
+        READY,
+        FAILED
+    }
 
     public enum ImportState {
         IDLE,
@@ -77,11 +87,14 @@ public final class BattlefieldWorldManager {
     });
 
     private final AtomicBoolean busy = new AtomicBoolean(false);
+    private final AtomicLong sessionGeneration = new AtomicLong();
     /** Templates that passed startup validation and remain eligible for voting. */
     private final Set<ResourceLocation> availableDimensions = new LinkedHashSet<>();
     private volatile ImportState state = ImportState.IDLE;
     private volatile String lastError = null;
     private volatile ActiveMapConfig lastLoaded = null;
+    private volatile StartupPreparationResult startupPreparation =
+        new StartupPreparationResult(StartupResetStatus.NOT_RUN, 0, List.of(), null);
     private final Object pendingCleanupLock = new Object();
     private boolean pendingCleanupRequested;
     private ActiveMapConfig pendingCleanupMap;
@@ -97,6 +110,7 @@ public final class BattlefieldWorldManager {
     private ActiveMapConfig activationMap;
     private Consumer<Result> activationCallback;
     private long activationGeneration;
+    private long activationSessionGeneration;
 
     private BattlefieldWorldManager() {
     }
@@ -115,6 +129,19 @@ public final class BattlefieldWorldManager {
 
     public boolean isBusy() {
         return busy.get();
+    }
+
+    public StartupPreparationResult getStartupPreparation() {
+        return startupPreparation;
+    }
+
+    public boolean isStartupReady() {
+        return startupPreparation.status == StartupResetStatus.READY;
+    }
+
+    private boolean isCurrent(MinecraftServer server, long generation) {
+        return sessionGeneration.get() == generation
+            && (Espetro.getServer() == null || Espetro.getServer() == server);
     }
 
     /**
@@ -141,7 +168,8 @@ public final class BattlefieldWorldManager {
             level.getChunkSource()
                 .getChunkFuture(chunk.x, chunk.z, ChunkStatus.FULL, true)
                 .whenComplete((loaded, error) -> level.getServer().execute(() -> {
-                    if (generation != activationGeneration) {
+                    if (generation != activationGeneration
+                        || activationSessionGeneration != sessionGeneration.get()) {
                         return;
                     }
                     activationChunksInFlight--;
@@ -163,16 +191,30 @@ public final class BattlefieldWorldManager {
      * server thread even though only one map can win the vote. The selected
      * map is imported later on the dedicated battlefield I/O executor.
      */
-    public int prepareAllAtStartup(MinecraftServer server) {
-        if (!busy.compareAndSet(false, true)) {
-            Espetro.LOGGER.error("战场地图启动准备重复执行");
-            return 0;
-        }
+    public StartupPreparationResult prepareAtStartup(MinecraftServer server) {
+        long generation = sessionGeneration.incrementAndGet();
+        busy.set(true);
         availableDimensions.clear();
         lastError = null;
         lastLoaded = null;
         state = ImportState.IDLE;
+        startupPreparation = new StartupPreparationResult(
+            StartupResetStatus.RESETTING, 0, List.of(), null);
+        List<String> warnings = new ArrayList<>();
         try {
+            Path worldRoot = server.storageSource.getLevelPath(LevelResource.ROOT);
+            Future<BattlefieldNamespaceReset.ResetResult> barrier = IO.submit(() ->
+                BattlefieldNamespaceReset.reset(worldRoot, generation));
+            BattlefieldNamespaceReset.ResetResult reset = barrier.get();
+            warnings.addAll(reset.warnings());
+            if (generation != sessionGeneration.get()) {
+                return failStartup("启动 generation 已失效", warnings);
+            }
+            if (!reset.isolated()) {
+                return failStartup("战场启动重置失败: " + reset.error(), warnings);
+            }
+
+            // Reset is deliberately before any EsDimensions/EsWorld validation.
             ExternalConfigBootstrap.bootstrapIfNeeded();
             for (ActiveMapConfig map : ExternalConfigBootstrap.getUsableMaps()) {
                 Path template = map.templateWorldDir.toAbsolutePath().normalize();
@@ -186,15 +228,43 @@ public final class BattlefieldWorldManager {
                         map.displayName, lastError);
                 }
             }
-            return availableDimensions.size();
+            FortificationConfig.loadServerConfig();
+            FortificationConfig.PreparationResult fortifications =
+                FortificationConfig.compileAndFreeze(server,
+                    ExternalConfigBootstrap.getUsableMaps());
+            if (!fortifications.success()) {
+                return failStartup("工事 registry 无法冻结: " + fortifications.error(), warnings);
+            }
+            startupPreparation = new StartupPreparationResult(
+                StartupResetStatus.READY, availableDimensions.size(), List.copyOf(warnings), null);
+            return startupPreparation;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return failStartup("等待战场 I/O barrier 时被中断", warnings);
+        } catch (Exception e) {
+            return failStartup("战场启动准备异常: " + e.getMessage(), warnings);
         } finally {
-            state = ImportState.IDLE;
             busy.set(false);
         }
     }
 
+    /** Compatibility count API retained for integrations compiled against 1.1.x. */
+    public int prepareAllAtStartup(MinecraftServer server) {
+        return prepareAtStartup(server).preparedCount;
+    }
+
+    private StartupPreparationResult failStartup(String error, List<String> warnings) {
+        availableDimensions.clear();
+        lastError = error;
+        state = ImportState.FAILED;
+        startupPreparation = new StartupPreparationResult(
+            StartupResetStatus.FAILED, 0, List.copyOf(warnings), error);
+        Espetro.LOGGER.error("{}；主城继续运行，但本次会话全部战场已禁用", error);
+        return startupPreparation;
+    }
+
     public boolean isPrepared(ActiveMapConfig map) {
-        return map != null && availableDimensions.contains(map.dimensionId);
+        return isStartupReady() && map != null && availableDimensions.contains(map.dimensionId);
     }
 
     /**
@@ -202,13 +272,20 @@ public final class BattlefieldWorldManager {
      * template and mounts a new ServerLevel. Callback runs on the server thread.
      */
     public void importAndLoad(MinecraftServer server, ActiveMapConfig map, Consumer<Result> onComplete) {
+        if (!isStartupReady()) {
+            onComplete.accept(Result.fail("战场启动重置失败，本次会话地图已禁用: "
+                + startupPreparation.error));
+            return;
+        }
         if (!busy.compareAndSet(false, true)) {
             onComplete.accept(Result.fail("战场正在切换中"));
             return;
         }
         lastError = null;
         state = ImportState.LOADING;
+        long generation = sessionGeneration.get();
         server.execute(() -> {
+            if (!isCurrent(server, generation)) return;
             try {
                 if (!isPrepared(map)) {
                     fail(server, "地图模板在启动阶段准备失败: " + map.displayName, onComplete);
@@ -241,6 +318,7 @@ public final class BattlefieldWorldManager {
         @Nullable ActiveMapConfig map,
         Consumer<Result> onComplete
     ) {
+        long generation = sessionGeneration.get();
         if (!busy.compareAndSet(false, true)) {
             synchronized (pendingCleanupLock) {
                 pendingCleanupRequested = true;
@@ -256,6 +334,7 @@ public final class BattlefieldWorldManager {
         }
         state = ImportState.CLEANING;
         server.execute(() -> {
+            if (!isCurrent(server, generation)) return;
             ActiveMapConfig target = map != null ? map
                 : lastLoaded != null ? lastLoaded : BattlefieldContext.getOrNull();
             try {
@@ -277,6 +356,7 @@ public final class BattlefieldWorldManager {
                 CompletableFuture
                     .supplyAsync(() -> discardAndDelete(discarded, dimPath, tempPath), IO)
                     .whenComplete((result, error) -> server.execute(() -> {
+                        if (!isCurrent(server, generation)) return;
                         Result completed = error == null
                             ? result
                             : Result.fail("删除战场存档副本失败: " + error.getMessage());
@@ -295,6 +375,7 @@ public final class BattlefieldWorldManager {
         @Nullable ServerLevel existing,
         Consumer<Result> onComplete
     ) {
+        long generation = sessionGeneration.get();
         state = existing == null ? ImportState.COPYING : ImportState.UNLOADING;
         ServerLevel discarded = existing == null ? null : detachForDiscard(server, map.dimensionKey);
         Path dimPath = dimensionDirectory(server, map.dimensionKey);
@@ -306,10 +387,14 @@ public final class BattlefieldWorldManager {
                 if (!discardedResult.success()) {
                     return discardedResult;
                 }
+                if (!isCurrent(server, generation)) {
+                    return Result.fail("过期 generation 已丢弃");
+                }
                 state = ImportState.COPYING;
                 return copyTemplate(map, dimPath, tempPath);
             }, IO)
             .whenComplete((result, error) -> server.execute(() -> {
+                if (!isCurrent(server, generation)) return;
                 if (error != null) {
                     fail(server, "复制地图失败: " + error.getMessage(), onComplete);
                     return;
@@ -350,6 +435,7 @@ public final class BattlefieldWorldManager {
         activationLevel = level;
         activationMap = map;
         activationCallback = onComplete;
+        activationSessionGeneration = sessionGeneration.get();
         collectCriticalChunks(map, activationChunks);
         pendingActivationChunks.addAll(activationChunks);
         activationChunksTotal = activationChunks.size();
@@ -404,6 +490,7 @@ public final class BattlefieldWorldManager {
 
     private void finishActivationPreparationIfReady() {
         if (activationLevel == null
+            || activationSessionGeneration != sessionGeneration.get()
             || !pendingActivationChunks.isEmpty()
             || activationChunksInFlight > 0) {
             return;
@@ -528,12 +615,15 @@ public final class BattlefieldWorldManager {
     }
 
     public void resetAfterServerStop() {
+        sessionGeneration.incrementAndGet();
         clearActivationPreparation();
-        busy.set(false);
         availableDimensions.clear();
         state = ImportState.IDLE;
         lastError = null;
         lastLoaded = null;
+        startupPreparation = new StartupPreparationResult(
+            StartupResetStatus.NOT_RUN, 0, List.of(), null);
+        FortificationConfig.resetForNextServer();
         BattlefieldContext.clear();
         synchronized (pendingCleanupLock) {
             pendingCleanupRequested = false;
@@ -943,6 +1033,13 @@ public final class BattlefieldWorldManager {
 
         public static Result fail(String error) {
             return new Result(false, error);
+        }
+    }
+
+    public record StartupPreparationResult(StartupResetStatus status, int preparedCount,
+                                           List<String> warnings, @Nullable String error) {
+        public StartupPreparationResult {
+            warnings = warnings == null ? List.of() : List.copyOf(warnings);
         }
     }
 }

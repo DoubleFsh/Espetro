@@ -14,6 +14,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import org.espetro.Espetro;
+import org.espetro.api.EspetroAPI;
 import org.espetro.bastion.BastionManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
 
@@ -75,7 +76,12 @@ public class TeamPackManager {
     }
 
     public static void init() {
+        boolean removedVisibleRallies = INSTANCE != null
+            && INSTANCE.teamPacks.values().stream().anyMatch(teamPack -> teamPack.active);
         INSTANCE = new TeamPackManager();
+        if (removedVisibleRallies) {
+            EspetroAPI.markTacticalMapStateDirty();
+        }
     }
 
     /** @deprecated 不从 datapack 加载；战场激活时 applyExternalJson。 */
@@ -310,10 +316,15 @@ public class TeamPackManager {
 
     private void processPendingRespawns(MinecraftServer server) {
         long now = System.currentTimeMillis();
+        boolean waveDisplayChanged = false;
         for (TeamPackData teamPack : teamPacks.values()) {
-            while (teamPack.nextWaveAt <= now) {
+            while (teamPack.active && teamPack.nextWaveAt <= now) {
                 teamPack.nextWaveAt += waveSeconds * 1000L;
+                waveDisplayChanged = true;
             }
+        }
+        if (waveDisplayChanged) {
+            EspetroAPI.markTacticalMapStateDirty();
         }
         if (pendingRespawns.isEmpty()) {
             return;
@@ -510,6 +521,7 @@ public class TeamPackManager {
         teamPacks.put(teamPack.teamPackId, teamPack);
         squadTeamPacks.put(squadKey, teamPack.teamPackId);
         teamPackPositions.put(pos.immutable(), teamPack.teamPackId);
+        EspetroAPI.markTacticalMapStateDirty();
         setSquadCooldown(squadKey);
 
         pendingItemSyncs.add(player.getUUID());
@@ -691,6 +703,7 @@ public class TeamPackManager {
     }
 
     public void cleanupInvalidTeamPacks(@Nullable String team) {
+        boolean removedVisibleRally = false;
         Iterator<TeamPackData> iterator = teamPacks.values().iterator();
         while (iterator.hasNext()) {
             TeamPackData teamPack = iterator.next();
@@ -706,7 +719,11 @@ public class TeamPackManager {
                 squadTeamPacks.remove(squadKey(teamPack.team, teamPack.squadId));
                 teamPackPositions.remove(teamPack.pos);
                 iterator.remove();
+                removedVisibleRally = true;
             }
+        }
+        if (removedVisibleRally) {
+            EspetroAPI.markTacticalMapStateDirty();
         }
     }
 
@@ -789,10 +806,17 @@ public class TeamPackManager {
     }
 
     private void unregisterTeamPack(TeamPackData teamPack) {
+        TeamPackData registered = teamPacks.remove(teamPack.teamPackId);
+        boolean removedVisibleRally = registered != null && registered.active;
+        if (registered != null) {
+            registered.active = false;
+        }
         teamPack.active = false;
-        teamPacks.remove(teamPack.teamPackId);
         squadTeamPacks.remove(squadKey(teamPack.team, teamPack.squadId));
         teamPackPositions.remove(teamPack.pos);
+        if (removedVisibleRally) {
+            EspetroAPI.markTacticalMapStateDirty();
+        }
         MinecraftServer server = Espetro.getServer();
         if (server != null) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {

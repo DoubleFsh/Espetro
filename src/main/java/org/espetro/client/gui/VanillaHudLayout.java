@@ -1,16 +1,21 @@
 package org.espetro.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.AttackIndicatorStatus;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraftforge.client.extensions.common.IClientItemExtensions;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import se.mickelus.mutil.gui.GuiElement;
@@ -45,6 +50,8 @@ public final class VanillaHudLayout {
     private static double hotbarOffsetDelta;
     private static double hotbarAlpha;
     private static double hotbarAlphaDelta;
+    private static int itemNameTimer;
+    private static ItemStack itemNameStack = ItemStack.EMPTY;
 
     private VanillaHudLayout() {
     }
@@ -79,7 +86,29 @@ public final class VanillaHudLayout {
             revealHotbar();
         }
 
+        tickItemName(mc, mainHand);
         tickHotbarAnimation();
+    }
+
+    /**
+     * Vanilla selected-item highlight timer. The name is drawn beside the
+     * matching vertical hotbar slot instead of above the bottom-center bar.
+     */
+    private static void tickItemName(Minecraft mc, ItemStack selected) {
+        if (selected.isEmpty()) {
+            itemNameTimer = 0;
+        } else if (!itemNameStack.isEmpty()
+                && selected.getItem() == itemNameStack.getItem()
+                && selected.getHoverName().equals(itemNameStack.getHoverName())
+                && selected.getHighlightTip(selected.getHoverName())
+                    .equals(itemNameStack.getHighlightTip(itemNameStack.getHoverName()))) {
+            if (itemNameTimer > 0) {
+                itemNameTimer--;
+            }
+        } else {
+            itemNameTimer = (int) (40.0D * mc.options.notificationDisplayTime().get());
+        }
+        itemNameStack = selected.copy();
     }
 
     public static void onRenderOverlayPre(RenderGuiOverlayEvent.Pre event) {
@@ -89,6 +118,14 @@ public final class VanillaHudLayout {
         if (VanillaGuiOverlay.HOTBAR.id().equals(overlayId)) {
             if (renderRightHotbar(event.getGuiGraphics(), mc, event.getPartialTick(),
                     event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight())) {
+                event.setCanceled(true);
+            }
+            return;
+        }
+
+        if (VanillaGuiOverlay.ITEM_NAME.id().equals(overlayId)) {
+            if (!mc.options.hideGui && mc.gameMode != null
+                    && mc.gameMode.getPlayerMode() != GameType.SPECTATOR) {
                 event.setCanceled(true);
             }
             return;
@@ -133,6 +170,8 @@ public final class VanillaHudLayout {
         hotbarOffsetDelta = 0.0D;
         hotbarAlpha = 0.0D;
         hotbarAlphaDelta = 0.0D;
+        itemNameTimer = 0;
+        itemNameStack = ItemStack.EMPTY;
     }
 
     private static boolean shouldRevealHotbarForLowDurability(ItemStack stack) {
@@ -281,6 +320,7 @@ public final class VanillaHudLayout {
         }
 
         renderAttackIndicator(graphics, mc, player, baseX - 22, selectedY + 2);
+        renderSelectedItemNameAtSlot(graphics, mc, baseX, selectedY, alpha);
 
         graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         graphics.pose().popPose();
@@ -325,6 +365,37 @@ public final class VanillaHudLayout {
         int filled = (int) (attackStrength * 19.0F);
         graphics.blit(GUI_ICONS_LOCATION, x, y, 0, 94, 18, 18);
         graphics.blit(GUI_ICONS_LOCATION, x, y + 18 - filled, 18, 112 - filled, 18, filled);
+    }
+
+    private static void renderSelectedItemNameAtSlot(GuiGraphics graphics, Minecraft mc,
+                                                    int slotX, int slotY, float hotbarAlpha) {
+        if (itemNameTimer <= 0 || itemNameStack.isEmpty()) {
+            return;
+        }
+
+        MutableComponent styled = Component.empty()
+            .append(itemNameStack.getHoverName())
+            .withStyle(itemNameStack.getRarity().getStyleModifier());
+        if (itemNameStack.hasCustomHoverName()) {
+            styled.withStyle(ChatFormatting.ITALIC);
+        }
+        Component tip = itemNameStack.getHighlightTip(styled);
+        int fade = VanillaHudNameLayout.nameFade(itemNameTimer, hotbarAlpha);
+        if (fade <= 0) {
+            return;
+        }
+
+        Font font = IClientItemExtensions.of(itemNameStack)
+            .getFont(itemNameStack, IClientItemExtensions.FontContext.SELECTED_ITEM_NAME);
+        if (font == null) {
+            font = mc.font;
+        }
+        int textWidth = font.width(tip);
+        int textX = VanillaHudNameLayout.nameX(slotX, textWidth);
+        int textY = VanillaHudNameLayout.nameY(slotY);
+        graphics.fill(textX - 2, textY - 2, textX + textWidth + 2, textY + 9 + 2,
+            VanillaHudNameLayout.nameBackgroundColor(fade));
+        graphics.drawString(font, tip, textX, textY, 0xFFFFFF | fade << 24, true);
     }
 
     private static void renderHealthLine(GuiGraphics graphics, Minecraft mc,

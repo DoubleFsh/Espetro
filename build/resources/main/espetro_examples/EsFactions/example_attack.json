@@ -23,7 +23,10 @@
       "respawn_minutes": 1,
       "fightveh": true,
       "capacity": 500,
-      "initial_deploy_delay_seconds": { "attack": 0, "defend": 0 },
+      "initial_deploy_delay_seconds": {
+        "attack": 0,
+        "defend": 0
+      },
       "entity_tags": [
         "espetro_example"
       ]

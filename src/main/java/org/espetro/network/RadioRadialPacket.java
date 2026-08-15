@@ -332,14 +332,8 @@ public class RadioRadialPacket {
     }
 
     private void handleResupply(ServerPlayer player) {
-        // 电台补给必须在己方 Radio 旁；统一复用库存与缺口结算（无冷却），
-        // 不能用 equipPlayer 整套清包重发绕过 Radio 弹药库存。
-        BastionData radio = findFriendlyRadioNearby(player, pos);
-        if (radio == null) {
-            player.sendSystemMessage(Component.literal("§c请在己方 Radio 附近补充弹药与装备。"));
-            return;
-        }
-        BastionEventHandler.performAmmoResupply(player, radio);
+        org.espetro.logistics.resupply.ResupplySessionManager.open(player,
+            org.espetro.logistics.resupply.ResupplySourceRef.radio(pos));
     }
 
     public static boolean isFriendlyRadioNearby(ServerPlayer player, BlockPos clickPos) {

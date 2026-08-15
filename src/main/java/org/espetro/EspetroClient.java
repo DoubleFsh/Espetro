@@ -41,6 +41,7 @@ public class EspetroClient {
         org.espetro.client.gui.AuraTipRadialController.initialize();
         org.espetro.client.gui.RadioRadialController.initialize();
         org.espetro.client.gui.VehicleWheelController.initialize();
+        org.espetro.client.gui.ResupplyRadialController.initialize();
         org.espetro.client.gui.VehicleSupplyHud.register();
         org.espetro.client.gui.FobSupplyHud.register();
         org.espetro.client.gui.SeatSwitchHandler.register();
@@ -99,6 +100,7 @@ public class EspetroClient {
         org.espetro.client.gui.AuraTipRadialController.tick(mc, radialKey);
         org.espetro.client.gui.RadioRadialController.tick(mc);
         org.espetro.client.gui.VehicleWheelController.tick(mc);
+        org.espetro.client.gui.ResupplyRadialController.tick();
         org.espetro.client.FortificationPlacementController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
         org.espetro.client.audio.ClientFormationAudioManager.tick(mc);

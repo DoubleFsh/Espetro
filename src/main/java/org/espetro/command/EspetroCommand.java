@@ -136,6 +136,12 @@ public class EspetroCommand {
                     ctx.getSource().sendSystemMessage(Component.literal("§e在线玩家: §f" + server.getPlayerCount() + " 人"));
                     ctx.getSource().sendSystemMessage(Component.literal(
                         "§e已选边: §f" + gameState.getTeamSelectedCount() + " 人"));
+                    var startup = org.espetro.dimension.BattlefieldWorldManager.getInstance()
+                        .getStartupPreparation();
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "§e战场启动门禁: §f" + startup.status() + " §7prepared="
+                            + startup.preparedCount()
+                            + (startup.error() == null ? "" : " §c" + startup.error())));
                     org.espetro.mapconfig.BattlefieldContext.get().ifPresent(map ->
                         ctx.getSource().sendSystemMessage(Component.literal(
                             "§e战场: §f" + map.displayName + " §7[" + map.dimensionId + "]")));

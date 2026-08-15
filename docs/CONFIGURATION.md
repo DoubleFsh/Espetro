@@ -33,7 +33,7 @@
             └── map.png              # 可选战术地图底图
 ```
 
-`level.dat` 与至少一个非空 `region/*.mca` 是有效地图模板的必要条件。维度生成器直接从该地图自己的 `level.dat` 读取，因此超平坦、噪声世界等模板不会共享一份写死的生成器。服务端在 `ServerAboutToStartEvent`、原版创建各个 `ServerLevel` 之前，把所有有效模板的 `region/entities/poi/data/EsConfig` 复制到当前存档，作为每张地图的首局副本。地图使用完毕后会卸载并删除该副本；后续再次选中同一地图时，才重新从只读模板复制并挂载新的 `ServerLevel`。因此每局地形破坏只存在于当前存档副本中，`EsWorld` 原件始终不变。
+`level.dat` 与至少一个非空 `region/*.mca` 是有效地图模板的必要条件。维度生成器直接从该地图自己的 `level.dat` 读取，因此超平坦、噪声世界等模板不会共享一份写死的生成器。服务端在 `ServerAboutToStartEvent`、原版创建各个 `ServerLevel` 之前，先把当前存档的整个 `dimensions/espetro` namespace 安全隔离到 `.espetro-reset-trash`。成功后才校验 `EsDimensions` / `EsWorld` 并填充可投票地图列表。**不会**在启动时复制全部约 1.7GB 模板；投票胜出后才从只读 `EsWorld/<map>` 懒复制胜出目录。若启动重置无法安全隔离，主城仍可启动，但本次会话全部战场禁用。`EsWorld` 原件始终不变。
 
 首次启动会从 JAR 导出 `test_flat` 超平坦地图、地图侧 JSON 和十份示例编制。只要 `EsFactions/` 已有任意 JSON，导出器就不会向该目录新增、覆盖或删除任何文件；只有空目录或全新安装才会生成示例编制。`/reload` 与 `/espetro reload` 明确不会重读上述文件；修改后必须完整重启。
 

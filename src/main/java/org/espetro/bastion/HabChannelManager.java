@@ -1,185 +1,40 @@
 package org.espetro.bastion;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.phys.Vec3;
-import org.espetro.Espetro;
-import org.espetro.logistics.LogisticsConfig;
 
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.UUID;
 
 /**
- * 兵站（HAB）原地读条建造：玩家在己方 Radio 建造半径内站定 10 秒，
- * 期间位移即取消；完成后在其站立坐标生成兵站并从覆盖 Radio 扣建材。
+ * Binary/source compatibility facade for the retired stationary HAB channel.
+ * HAB is now a normal JSON v2 + Structure NBT construction preview.
  */
 public final class HabChannelManager {
 
-    public static final int CHANNEL_TICKS = 200; // 10s
-
     private static final HabChannelManager INSTANCE = new HabChannelManager();
+
+    private HabChannelManager() {
+    }
 
     public static HabChannelManager getInstance() {
         return INSTANCE;
     }
 
-    private static final class Channel {
-        final UUID playerId;
-        final ServerLevel level;
-        final Vec3 anchor;
-        final BlockPos targetPos;
-        final String team;
-        int ticksLeft = CHANNEL_TICKS;
-
-        Channel(ServerPlayer player, String team) {
-            this.playerId = player.getUUID();
-            this.level = player.serverLevel();
-            this.anchor = player.position();
-            this.targetPos = player.blockPosition();
-            this.team = team;
-        }
-    }
-
-    private final Map<UUID, Channel> channels = new HashMap<>();
-
-    private HabChannelManager() {
-    }
-
-    /** Compatibility entry point; stationary channels have been retired. */
     public void start(ServerPlayer player, String team) {
-        cancel(player.getUUID(), null);
-        String error = FortificationManager.getInstance()
-            .beginPreview(player, FortificationManager.BUILTIN_HAB);
+        String error = FortificationManager.getInstance().beginPreview(
+            player, FortificationManager.BUILTIN_HAB);
         player.sendSystemMessage(Component.literal(error == null
             ? "§e左键确认兵站施工范围，右键取消。" : error));
     }
 
     public void cancel(UUID playerId, @Nullable String reason) {
-        Channel channel = channels.remove(playerId);
-        if (channel != null && reason != null) {
-            ServerPlayer player = playerOf(channel);
-            if (player != null) {
-                player.sendSystemMessage(Component.literal(reason));
-            }
-        }
+        // No channel state remains. Preview cancellation is token-authoritative.
     }
 
     public void reset() {
-        channels.clear();
     }
 
-    /** 每 tick 由 ServerRuntimeMaintenance 调用。 */
     public void tick() {
-        if (channels.isEmpty()) {
-            return;
-        }
-        Iterator<Channel> iterator = channels.values().iterator();
-        while (iterator.hasNext()) {
-            Channel channel = iterator.next();
-            ServerPlayer player = playerOf(channel);
-            if (player == null || !player.isAlive() || player.serverLevel() != channel.level) {
-                iterator.remove();
-                continue;
-            }
-            if (player.position().distanceToSqr(channel.anchor) > 0.01D) {
-                iterator.remove();
-                player.sendSystemMessage(Component.literal("§c你移动了，兵站建造已取消。"));
-                continue;
-            }
-
-            channel.ticksLeft--;
-            if (channel.ticksLeft <= 0) {
-                iterator.remove();
-                complete(player, channel);
-                continue;
-            }
-            if (channel.ticksLeft % 20 == 0) {
-                player.displayClientMessage(Component.literal(
-                    "§e建造兵站中… §f" + (channel.ticksLeft / 20 + 1) + "s"), true);
-            }
-        }
-    }
-
-    private void complete(ServerPlayer player, Channel channel) {
-        BastionManager manager = BastionManager.getInstance();
-        int cost = manager.getHabConstructionCost();
-
-        // 战局已结束 / 清理后不再生成 HAB（destroyAll 会 reset channels，但 tick 竞态下仍可能走到这里）
-        org.espetro.team.GamePhase phase = org.espetro.team.GameStateManager.getInstance().getCurrentPhase();
-        if (phase != org.espetro.team.GamePhase.DEPLOYING && phase != org.espetro.team.GamePhase.BATTLE) {
-            player.sendSystemMessage(Component.literal("§c当前阶段无法建成兵站，建造已取消。"));
-            return;
-        }
-
-        if (!manager.isInsideFriendlyRadioBuildRadius(channel.level, channel.targetPos, channel.team)) {
-            player.sendSystemMessage(Component.literal("§c覆盖此处的己方 Radio 已失效，建造取消。"));
-            return;
-        }
-        // Completion-time recheck prevents two simultaneous channels exceeding the Radio limit.
-        String limitError = DeployActions.checkHabPerRadioLimit(player, channel.team);
-        if (limitError != null) {
-            player.sendSystemMessage(Component.literal(limitError));
-            return;
-        }
-        if (cost > 0
-            && !manager.tryDebitConstructionFromCoveringRadios(
-                channel.level, channel.targetPos, channel.team, cost)) {
-            player.sendSystemMessage(Component.literal("§c覆盖 Radio 建材不足，建造取消。"));
-            return;
-        }
-
-        String habName = generateHabName(channel.team);
-        BastionData hab = manager.createHab(channel.level, channel.targetPos, channel.team, habName);
-        if (hab == null) {
-            if (cost > 0) {
-                var covering = manager.findCoveringRadios(channel.level, channel.targetPos, channel.team);
-                if (!covering.isEmpty()) {
-                    covering.get(0).addConstructionSupplies(cost, LogisticsConfig.get().maxConstruction);
-                }
-            }
-            player.sendSystemMessage(Component.literal("§c兵站创建失败！"));
-            return;
-        }
-
-        // 建筑中心列不放方块（墙在四周、屋顶在 y+2），玩家原地即安全，无需传送
-        DeployActions.buildHabStructure(channel.level, channel.targetPos, channel.team);
-
-        channel.level.playSound(null, channel.targetPos, SoundEvents.EXPERIENCE_ORB_PICKUP,
-            SoundSource.PLAYERS, 1.0f, 1.2f);
-        int activation = LogisticsConfig.get().habActivationSeconds;
-        player.sendSystemMessage(Component.literal("§a兵站 §e" + habName + " §a已建成！位置: "
-            + channel.targetPos.getX() + ", " + channel.targetPos.getY() + ", " + channel.targetPos.getZ()));
-        if (activation > 0) {
-            player.sendSystemMessage(Component.literal("§7启用倒计时 " + activation + " 秒。"));
-        }
-        if (cost > 0) {
-            player.sendSystemMessage(Component.literal("§7已从覆盖 Radio 扣除 " + cost + " 点建材。"));
-        }
-        Espetro.broadcastToTeam(channel.team, "§6[兵站] §a" + player.getName().getString()
-            + " §a建成了兵站 §b" + habName);
-    }
-
-    private static String generateHabName(String team) {
-        int number = 1;
-        for (BastionData bastion : BastionManager.getInstance().getAllBastions()) {
-            if (bastion.isActive() && team.equals(bastion.getTeam()) && bastion.isHab()) {
-                number++;
-            }
-        }
-        return "ATTACK".equals(team) ? "进攻兵站-" + number : "防守兵站-" + number;
-    }
-
-    @Nullable
-    private static ServerPlayer playerOf(Channel channel) {
-        MinecraftServer server = Espetro.getServer();
-        return server == null ? null : server.getPlayerList().getPlayer(channel.playerId);
     }
 }

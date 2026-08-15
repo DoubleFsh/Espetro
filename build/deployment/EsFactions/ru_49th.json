@@ -1,0 +1,1562 @@
+{
+  "faction": {
+    "name": "第49联合兵种军",
+    "description": "合成化部队",
+    "icon": "⭐",
+    "selection_image": "ru_49th.png",
+    "show_name": "俄罗斯陆军",
+    "team": "DEFEND",
+    "color": "5555AA",
+    "faction_id": "RUA",
+    "audio_pack": "elb"
+  },
+  "VehTypes": [
+    "mbt",
+    "ifv",
+    "acv",
+    "car",
+    "transport_helicopter"
+  ],
+  "vehicles": {
+    "mbt": {
+      "display_name": "T-90M 主战坦克",
+      "entity": [
+        "dragonrise_reforge:t90mh"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100,
+      "initial_deploy_delay_seconds": {
+        "attack": 0,
+        "defend": 600
+      }
+    },
+    "ifv": {
+      "display_name": "BMP-2 步兵战车",
+      "entity": [
+        "fcp:bmp2d"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100,
+      "initial_deploy_delay_seconds": {
+        "attack": 0,
+        "defend": 300
+      }
+    },
+    "acv": {
+      "display_name": "BTR-82 轮式步兵战车",
+      "entity": [
+        "fcp:btr82"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "troop_value": 5,
+      "max": 100,
+      "initial_deploy_delay_seconds": {
+        "attack": 0,
+        "defend": 300
+      }
+    },
+    "transport_helicopter": {
+      "display_name": "MI-8 通用直升机",
+      "entity": [
+        "vvp:mi_8"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 10,
+      "supplyveh": true,
+      "troop_value": 5,
+      "max": 100,
+      "capacity": 1600,
+      "initial_deploy_delay_seconds": {
+        "attack": 600,
+        "defend": 600
+      }
+    },
+    "car": {
+      "display_name": "虎式 高机动载具补给型",
+      "entity": [
+        "fcp:gaz_tigr_rws",
+        "fcp:gaz_tigr_rws"
+      ],
+      "per_max_count": 1,
+      "respawn_minutes": 3,
+      "supplyveh": true,
+      "troop_value": 5,
+      "capacity": 1200,
+      "max": 1
+    }
+  },
+  "classes": {
+    "RU_R1_COMMANDER": {
+      "strict_count": false,
+      "name": "队长",
+      "icon": "leader",
+      "description": "指挥全队作战",
+      "role": "指挥",
+      "maxPlayers": 1,
+      "team_count": true,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "row": 1,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 0,
+      "leader_only": true,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "AK74m",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "倍镜队长",
+          "description": "AK74M + 1p78(少1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "机瞄": {
+          "name": "机瞄队长",
+          "description": "AK74M 机瞄",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/leader.png"
+    },
+    "RU_R1_CREW": {
+      "strict_count": false,
+      "name": "载具组员",
+      "icon": "crewman",
+      "description": "装甲载具驾驶员与炮手",
+      "role": "载具操作",
+      "maxPlayers": 8,
+      "team_count": false,
+      "max_per_squad": 2,
+      "troopValue": 2,
+      "row": 1,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 2,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "AKS-74U (2 mags) 装甲载具驾驶员与炮手",
+          "maxPlayers": 8,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"suffuse:aks74u\",HasBulletInBarrel:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:30,AmmoId:\"suffuse:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:tsh_4helmet_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"suffuse:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 2"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"suffuse:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 2,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/crewman.png"
+    },
+    "RU_R1_MEDIC": {
+      "strict_count": false,
+      "name": "医护兵",
+      "icon": "medic",
+      "description": "负责小队医疗救治，携带更多医疗物资",
+      "role": "医疗支援",
+      "maxPlayers": 18,
+      "team_count": false,
+      "max_per_squad": 2,
+      "troopValue": 2,
+      "row": 1,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 0,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "AK74M + 红点 + 医疗包 (6 mags)",
+          "maxPlayers": 2,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 9",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 9,
+                "max": 9,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "倍镜医护兵",
+          "description": "AK74M + 1P78 + 医疗包 (6 mags)",
+          "maxPlayers": 2,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 9",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 6",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 9,
+                "max": 9,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    "RU_R1_RIFLEMAN": {
+      "strict_count": false,
+      "name": "步枪兵",
+      "icon": "rifleman",
+      "description": "通用步兵",
+      "role": "步兵",
+      "maxPlayers": 100,
+      "team_count": false,
+      "max_per_squad": -1,
+      "troopValue": 1,
+      "row": 2,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 0,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "AK74M + 红点",
+          "maxPlayers": 100,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p68\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "倍镜步枪兵",
+          "description": "AK74M + 1P78",
+          "maxPlayers": 100,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "机瞄": {
+          "name": "机瞄步枪兵",
+          "description": "AK74M (机瞄)",
+          "maxPlayers": 100,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p68\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    "RU_R1_SQUADMG": {
+      "strict_count": false,
+      "name": "班组机枪",
+      "icon": "automatic_rifleman",
+      "description": "班组压制火力",
+      "role": "火力压制",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "row": 2,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 3,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "机枪手(机瞄)",
+          "description": "RPK74M 机瞄 (10 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:45,GunFireMode:\"AUTO\",GunId:\"ccrp:rpk74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45} 10",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 3"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45}",
+                "count": 1,
+                "max": 10,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/automatic_rifleman.png"
+    },
+    "RU_R1_BIG_SQUADMG": {
+      "strict_count": false,
+      "name": "班组机枪",
+      "icon": "automatic_rifleman",
+      "description": "班组压制火力",
+      "role": "火力压制",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "row": 3,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "光瞄": {
+          "name": "机枪手(光瞄)",
+          "description": "RPK74M + 1P78 (10 mags, 1雷)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:45,GunFireMode:\"AUTO\",GunId:\"ccrp:rpk74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45} 10",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 3"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:45,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_45\",MaxCapacity:45}",
+                "count": 1,
+                "max": 10,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/automatic_rifleman.png"
+    },
+    "RU_R1_GRENADIER": {
+      "strict_count": true,
+      "name": "榴弹兵",
+      "icon": "grenadier",
+      "description": "榴弹远程压制",
+      "role": "榴弹支援",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 0,
+      "troopValue": 3,
+      "row": 3,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 3,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "榴弹兵(红点)",
+          "description": "AK74M + 1p68 + gp25 (10发40mm, 7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"ts:weapon_gp25\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p68\"}},Extras:{UnderBarrelRoot:{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\"},RUingUnderBarrel:0b},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7",
+            "tacz:ammo{AmmoId:\"ts:40mm_vog25\"} 10"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 5,
+                "max": 10,
+                "nbt": "{AmmoId:\"ts:40mm_vog25\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "榴弹兵(倍镜)",
+          "description": "AK74M + 1p78 + gp25 (10发40mm, 7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentGRIP:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"ts:weapon_gp25\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},Extras:{UnderBarrelRoot:{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\"},RUingUnderBarrel:0b},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7",
+            "tacz:ammo{AmmoId:\"ts:40mm_vog25\"} 10"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 5,
+                "max": 10,
+                "nbt": "{AmmoId:\"ts:40mm_vog25\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/grenadier.png"
+    },
+    "RU_R1_ANTITANK": {
+      "strict_count": false,
+      "name": "轻型反坦克兵",
+      "icon": "light_at",
+      "description": "反装甲作战",
+      "role": "反装甲",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "row": 3,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 3,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "轻筒(机瞄)",
+          "description": "AK74M 机瞄 + rpg-7 (7 mags, 2雷)",
+          "maxPlayers": 2,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"murasamet:scope_pgo_7\"}},GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"murasamet:rpg7_pg7heat\",HasBulletInBarrel:1b,OverHeated:1b}",
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"murasamet:scope_pgo_7\"}},GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"murasamet:rpg7_og7he\",HasBulletInBarrel:1b,OverHeated:1b}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "tacz:ammo{AmmoId:\"murasamet:pg7heat\"}",
+            "tacz:ammo{AmmoId:\"murasamet:og7he\"}",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 6"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 1,
+                "max": 1,
+                "nbt": "{AmmoId:\"murasamet:pg7heat\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 1,
+                "max": 1,
+                "nbt": "{AmmoId:\"murasamet:og7he\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "倍镜": {
+          "name": "轻筒(倍镜)",
+          "description": "AK74M + 1P78 + RPG26(AT4临时) (6 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"ts:at4\",HasBulletInBarrel:1b}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 5"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:modern_kinetic_gun",
+                "count": 1,
+                "max": 1,
+                "nbt": "{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"ts:at4\",HasBulletInBarrel:1b}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/lightAT.png"
+    },
+    "RU_R1_HEAVYANTITANK": {
+      "strict_count": false,
+      "name": "重型反坦克兵",
+      "icon": "heavy_at",
+      "description": "重型火力支援",
+      "role": "重型火力",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 5,
+      "row": 4,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "重筒(机瞄)",
+          "description": "AK74M 机瞄 + RPG-7(pg7vr) (4 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"murasamet:rpg7_og7he\",HasBulletInBarrel:1b,OverHeated:1b}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"murasamet:rpg7_pg7heat\",HasBulletInBarrel:1b,OverHeated:1b}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"murasamet:rpg7_pg7vr_tandem_heat\",HasBulletInBarrel:1b,OverHeated:1b}",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 4",
+            "tacz:ammo{AmmoId:\"murasamet:pg7heat\"} 1"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 1,
+                "max": 1,
+                "nbt": "{AmmoId:\"murasamet:pg7heat\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "tacz:ammo",
+                "count": 1,
+                "max": 1,
+                "nbt": "{AmmoId:\"murasamet:pg7vr_tandem_heat\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/HeavyAT.png"
+    },
+    "RU_R1_MARKSMAN": {
+      "strict_count": false,
+      "name": "精确射手",
+      "icon": "marksman",
+      "description": "远程精确打击",
+      "role": "精确射击",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 3,
+      "row": 3,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "精确射手",
+          "description": "SVD + PSO-1 (6 mags) + TT33",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:pso1e\"}},GunCurrentAmmoCount:10,GunFireMode:\"SEMI\",GunId:\"cib:svd\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:10,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_10\",MaxCapacity:10}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:10,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_10\",MaxCapacity:10} 6",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 4"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:10,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_10\",MaxCapacity:10}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/marksman.png"
+    },
+    "RU_R1_SCOUT": {
+      "strict_count": false,
+      "name": "侦察兵",
+      "icon": "marksman",
+      "description": "前线侦察与目标标记",
+      "role": "侦察",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "row": 3,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "侦察兵",
+          "description": "AK74M + 侦察无人机 (7 mags)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "superbwarfare:monitor 1",
+            "superbwarfare:drone 1",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 7"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:drone",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/marksman.png"
+    },
+    "RU_R1_MMG": {
+      "strict_count": true,
+      "name": "通用机枪手",
+      "icon": "machine_gunner",
+      "description": "中口径通用机枪火力支援",
+      "role": "机枪手",
+      "maxPlayers": 2,
+      "team_count": false,
+      "max_per_squad": 1,
+      "troopValue": 4,
+      "row": 4,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "机瞄": {
+          "name": "机枪手(机瞄)",
+          "description": "PKP 机瞄 (5×100发)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"tacz:extended_mag_1\"}},GunCurrentAmmoCount:100,GunFireMode:\"AUTO\",GunId:\"cib:pkp\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100} 5",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 3"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        },
+        "光瞄": {
+          "name": "机枪手(光瞄)",
+          "description": "PKP + 1P78 (5×100发)",
+          "maxPlayers": 1,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"tacz:extended_mag_1\"}},AttachmentSCOPE:{Count:1b,id:\"tacz:attachment\",tag:{AttachmentId:\"huinuo:1p78\"}},GunCurrentAmmoCount:100,GunFireMode:\"AUTO\",GunId:\"cib:pkp\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100}}}",
+            "tacz:modern_kinetic_gun{GunCurrentAmmoCount:7,GunFireMode:\"SEMI\",GunId:\"suffuse:tt33\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}}}",
+            "superbwarfare:hand_grenade 1",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "taczmagazines:magazine{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100} 5",
+            "taczmagazines:magazine{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7} 3"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 1,
+                "max": 1,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:100,AmmoId:\"tacz:762x54\",MagazineFamily:\"762x54_100_ext1\",MaxCapacity:100}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:7,AmmoId:\"tacz:762x25\",MagazineFamily:\"762x25_7\",MaxCapacity:7}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      },
+      "IconImage": "/home/shu/图片/Icon/machine_gunner.png"
+    },
+    "RU_R1_ENGINEER": {
+      "strict_count": true,
+      "name": "战斗工兵",
+      "icon": "sapper",
+      "description": "拆建防御工事，布设地雷与炸药",
+      "role": "工兵",
+      "maxPlayers": 2,
+      "team_count": true,
+      "max_per_squad": 1,
+      "troopValue": 2,
+      "row": 4,
+      "unlock_per_n": 0,
+      "unlock_min_squad": 6,
+      "leader_only": false,
+      "variants": {
+        "default": {
+          "name": "默认装备",
+          "description": "AK74M + 红点 + C4 + 地雷 (4 mags)",
+          "maxPlayers": 2,
+          "commands": [
+            "tacz:modern_kinetic_gun{AttachmentEXTENDED_MAG:{Count:0b,id:\"minecraft:air\",tag:{}},GunCurrentAmmoCount:30,GunFireMode:\"AUTO\",GunId:\"ccrp:ak74m\",HasBulletInBarrel:1b,TaCZMag_CreativeReload:1b,TaCZMag_StoredMagazine:{Count:1b,id:\"taczmagazines:magazine\",tag:{AmmoCount:29,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}}}",
+            "superbwarfare:hand_grenade 2",
+            "superbwarfare:m18_smoke_grenade 2",
+            "mm_armor:helmet_6b_47emrgoggles_helmet",
+            "mm_armor:chestplateemrvest_6b_45upgraded_chestplate",
+            "mm_armor:emruniform_leggings",
+            "mm_armor:blackboots_boots",
+            "superbwarfare:medical_kit 2",
+            "minecraft:bread 20",
+            "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30} 4",
+            "minecraft:iron_shovel{Damage:0,RepairCost:0,display:{Name:'{\"text\":\"铁锹(左键建造，右键拆除)\"}'}} 1",
+            "superbwarfare:tm_62 3",
+            "superbwarfare:c4_bomb 1"
+          ],
+          "resupply": {
+            "items": [
+              {
+                "id": "superbwarfare:medical_kit",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "minecraft:bread",
+                "count": 20,
+                "max": 20,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:hand_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "superbwarfare:m18_smoke_grenade",
+                "count": 2,
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:545x39\",MagazineFamily:\"545x39_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

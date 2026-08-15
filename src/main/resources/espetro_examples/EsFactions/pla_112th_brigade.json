@@ -88,32 +88,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 3
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 210,
-                "max": 210
+                "max": 3,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }
@@ -136,32 +148,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 3
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 3,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }
@@ -183,27 +207,38 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 3
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 150,
-                "max": 150
+                "max": 3,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }
@@ -226,32 +261,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 3
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 210,
-                "max": 210
+                "max": 3,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 7,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }
@@ -288,27 +335,38 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 4"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 3
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 3,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
               }
             ]
           }
@@ -343,32 +401,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -389,32 +452,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -435,32 +503,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 150,
-                "max": 150
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
               }
             ]
           }
@@ -481,32 +554,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -527,32 +605,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -573,32 +656,37 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
           ],
           "resupply": {
-            "ammo_cost": 30,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 150,
-                "max": 150
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
               }
             ]
           }
@@ -635,32 +723,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30_ext3\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
               }
             ]
           }
@@ -682,27 +782,38 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
           ],
           "resupply": {
-            "ammo_cost": 40,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 120,
-                "max": 120
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30_ext3\",MaxCapacity:30}",
+                "count": 1,
+                "max": 4,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
               }
             ]
           }
@@ -739,32 +850,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
           ],
           "resupply": {
-            "ammo_cost": 60,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 750,
-                "max": 750
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
               }
             ]
           }
@@ -787,32 +910,44 @@
             "taczmagazines:magazine{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20} 3"
           ],
           "resupply": {
-            "ammo_cost": 60,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 750,
-                "max": 750
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:150,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_150_ext3\",MaxCapacity:150}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:20,AmmoId:\"cib:58x21\",MagazineFamily:\"58x21_20\",MaxCapacity:20}",
+                "count": 1,
+                "max": 3,
+                "ammo_cost": 1
               }
             ]
           }
@@ -848,32 +983,38 @@
             "tacz:ammo{AmmoId:\"suffuse:120mm\"} 4"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:ammo{AmmoId:\"suffuse:120mm\"}",
+                "id": "tacz:ammo",
                 "count": 2,
-                "max": 4
+                "max": 4,
+                "nbt": "{AmmoId:\"suffuse:120mm\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -895,32 +1036,38 @@
             "tacz:ammo{AmmoId:\"suffuse:120mm\"} 2"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:ammo{AmmoId:\"suffuse:120mm\"}",
+                "id": "tacz:ammo",
                 "count": 1,
-                "max": 2
+                "max": 2,
+                "nbt": "{AmmoId:\"suffuse:120mm\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -956,32 +1103,45 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:ammo{AmmoId:\"suffuse:35x32mm\"}",
+                "id": "tacz:ammo",
                 "count": 6,
-                "max": 18
+                "max": 18,
+                "nbt": "{AmmoId:\"suffuse:35x32mm\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:3,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -1003,32 +1163,45 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
           ],
           "resupply": {
-            "ammo_cost": 80,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 150,
-                "max": 150
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:ammo{AmmoId:\"suffuse:35x32mm\"}",
+                "id": "tacz:ammo",
                 "count": 6,
-                "max": 18
+                "max": 18,
+                "nbt": "{AmmoId:\"suffuse:35x32mm\"}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:3,AmmoId:\"cib:35mm\",MagazineFamily:\"35mm_3\",MaxCapacity:3}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
               }
             ]
           }
@@ -1064,37 +1237,44 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 100,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "id": "tacz:modern_kinetic_gun",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "nbt": "{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -1116,37 +1296,44 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 6"
           ],
           "resupply": {
-            "ammo_cost": 100,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 180,
-                "max": 180
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:hand_grenade",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "id": "tacz:modern_kinetic_gun",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "nbt": "{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 6,
+                "ammo_cost": 1
               }
             ]
           }
@@ -1167,32 +1354,38 @@
             "taczmagazines:magazine{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30} 5"
           ],
           "resupply": {
-            "ammo_cost": 100,
             "items": [
               {
                 "id": "superbwarfare:medical_kit",
                 "count": 2,
-                "max": 2
-              },
-              {
-                "id": "tacz:ammo{AmmoId:\"tacz:58x42\"}",
-                "count": 150,
-                "max": 150
+                "max": 2,
+                "ammo_cost": 1
               },
               {
                 "id": "minecraft:bread",
                 "count": 20,
-                "max": 20
+                "max": 20,
+                "ammo_cost": 1
               },
               {
                 "id": "superbwarfare:m18_smoke_grenade",
                 "count": 2,
-                "max": 2
+                "max": 2,
+                "ammo_cost": 1
               },
               {
-                "id": "tacz:modern_kinetic_gun{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "id": "tacz:modern_kinetic_gun",
                 "count": 1,
-                "max": 1
+                "max": 1,
+                "nbt": "{GunCurrentAmmoCount:1,GunFireMode:\"SEMI\",GunId:\"cib:dzj08\",HasBulletInBarrel:1b}",
+                "ammo_cost": 1
+              },
+              {
+                "id": "taczmagazines:magazine",
+                "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+                "count": 1,
+                "max": 5,
+                "ammo_cost": 1
               }
             ]
           }

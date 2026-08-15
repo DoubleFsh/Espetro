@@ -14,6 +14,7 @@ import org.espetro.mapconfig.ExternalConfigBootstrap;
 
 import javax.annotation.Nullable;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -47,9 +48,11 @@ public final class DimensionPackBootstrap {
             dimensionResources.put(path.toLowerCase(Locale.ROOT),
                 map.dimensionJson.getBytes(StandardCharsets.UTF_8));
         }
+        int registeredDimensions = dimensionResources.size();
+        dimensionResources.putAll(loadBuiltinStructures());
         // Also register rejected maps that still have unique IDs so registry is stable? Plan says
         // invalid maps refuse registration. So only usable.
-        if (dimensionResources.isEmpty()) {
+        if (registeredDimensions == 0) {
             Espetro.LOGGER.warn("无可用地图维度可注册；/espetro prestart 将不可用直到配置有效地图");
         }
 
@@ -66,13 +69,39 @@ public final class DimensionPackBootstrap {
             );
             if (pack != null) {
                 consumer.accept(pack);
-                Espetro.LOGGER.info("已添加内存 SERVER_DATA 包: {} ({} 个维度)", PACK_ID, dimensionResources.size());
+                Espetro.LOGGER.info("已添加内存 SERVER_DATA 包: {} ({} 项资源)", PACK_ID, dimensionResources.size());
             } else {
                 // Forge 1.20.1 Pack.readMetaAndCreate needs pack.mcmeta via resources.
                 // MemoryDimensionPackResources provides it; if still null, log loudly.
                 Espetro.LOGGER.error("无法创建 Espetro 维度数据包（readMetaAndCreate 返回 null）");
             }
         });
+    }
+
+    /**
+     * Text SNBT lives in source control so reviews can inspect the exact shape.
+     * It is converted to the compressed vanilla Structure NBT resource consumed
+     * by StructureTemplateManager before the first datapack load completes.
+     */
+    private static Map<String, byte[]> loadBuiltinStructures() {
+        Map<String, byte[]> result = new LinkedHashMap<>();
+        for (String name : Set.of(
+            "radio", "hab_attack", "hab_defend", "ammo_crate", "sandbag_wall",
+            "vehicle_supply_station_fallback")) {
+            String source = "/data/espetro/structure_sources/fortifications/" + name + ".snbt";
+            try (InputStream input = DimensionPackBootstrap.class.getResourceAsStream(source)) {
+                if (input == null) throw new IllegalStateException("缺少 " + source);
+                String snbt = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                net.minecraft.nbt.CompoundTag tag = net.minecraft.nbt.TagParser.parseTag(snbt);
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                net.minecraft.nbt.NbtIo.writeCompressed(tag, bytes);
+                result.put("data/espetro/structures/fortifications/" + name + ".nbt",
+                    bytes.toByteArray());
+            } catch (Exception e) {
+                Espetro.LOGGER.error("无法编译内置 Structure NBT {}", source, e);
+            }
+        }
+        return result;
     }
 
     /**

@@ -5,8 +5,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import org.espetro.Espetro;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.team.GamePhase;
@@ -139,42 +137,4 @@ public final class DeployActions {
         return true;
     }
 
-    /** HAB：沿用原 FOB 建筑布局（无弹药箱；弹药在 Radio）。 */
-    static void buildHabStructure(ServerLevel level, BlockPos center, String team) {
-        boolean isAttack = "ATTACK".equals(team);
-        BlockState woolBlock = isAttack ? Blocks.RED_WOOL.defaultBlockState() : Blocks.BLUE_WOOL.defaultBlockState();
-        BlockState roofBlock = Blocks.SPRUCE_TRAPDOOR.defaultBlockState();
-
-        int x = center.getX();
-        int y = center.getY();
-        int z = center.getZ();
-
-        for (int xi = x - 1; xi <= x; xi++) {
-            for (int yi = y; yi <= y + 1; yi++) {
-                level.setBlock(new BlockPos(xi, yi, z - 1), woolBlock, 3);
-            }
-        }
-        for (int zi = z - 1; zi <= z + 2; zi++) {
-            for (int yi = y; yi <= y + 1; yi++) {
-                level.setBlock(new BlockPos(x + 1, yi, zi), woolBlock, 3);
-            }
-        }
-        for (int xi = x - 1; xi <= x + 1; xi++) {
-            for (int yi = y; yi <= y + 1; yi++) {
-                level.setBlock(new BlockPos(xi, yi, z + 2), woolBlock, 3);
-            }
-        }
-        for (int yi = y; yi <= y + 1; yi++) {
-            level.setBlock(new BlockPos(x - 3, yi, z + 2), woolBlock, 3);
-            level.setBlock(new BlockPos(x - 3, yi, z - 1), woolBlock, 3);
-        }
-
-        int roofY = y + 2;
-        for (int xi = x - 3; xi <= x + 1; xi++) {
-            for (int zi = z - 1; zi <= z + 2; zi++) {
-                level.setBlock(new BlockPos(xi, roofY, zi), roofBlock, 3);
-            }
-        }
-        level.setBlock(new BlockPos(x, y + 1, z + 1), Blocks.LANTERN.defaultBlockState(), 3);
-    }
 }

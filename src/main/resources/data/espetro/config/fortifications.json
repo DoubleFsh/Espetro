@@ -1,76 +1,170 @@
 {
+  "schema_version": 2,
+  "limits": {
+    "max_template_blocks": 4096,
+    "max_template_entities": 32,
+    "max_template_axis": 64,
+    "max_template_nbt_bytes": 2097152,
+    "max_passenger_depth": 4
+  },
   "vehicle_service": {
     "main_base_radius": 40.0,
     "station_radius": 20.0,
     "transfer_amount": 100,
     "transfer_interval_ticks": 20
   },
-  "builtin_construction": {
-    "radio": {
-      "required_progress": 600,
-      "build_per_hit": 30,
-      "remove_per_hit": 5
-    },
-    "hab": {
-      "required_progress": 200,
-      "build_per_hit": 5,
-      "remove_per_hit": 5
-    }
-  },
-  "damage": {
-    "explosion_damage_ratio": 0.1,
-    "projectile_hit_damage_ratio": 0.1
-  },
   "fortifications": [
     {
-      "id": "ammo_crate",
+      "id": "espetro:radio",
+      "legacy_ids": ["builtin_radio"],
+      "display_name": "电台",
+      "icon": {"texture": "espetro:textures/gui/squad/radio.png"},
+      "behavior": "radio",
+      "placement": {
+        "type": "structure",
+        "template": "espetro:fortifications/radio",
+        "origin_offset": [0, 0, 0],
+        "pivot": [0, 0, 0],
+        "rotation": "player_facing",
+        "mirror": "none",
+        "air_policy": "reject_non_replaceable",
+        "include_entities": true,
+        "palette_index": 0
+      },
+      "cost": {"construction": 0, "ammunition": 0},
+      "construction": {"required_progress": 600, "build_per_hit": 30, "remove_per_hit": 5},
+      "durability": {
+        "structural_value": 600,
+        "repair_per_hit": 30,
+        "damageable_structure_entities": [],
+        "damage_reduction": {"explosion": 0.9, "projectile": 0.9, "direct_break": 0.0}
+      },
+      "requirements": {
+        "require_radio_range": false,
+        "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      }
+    },
+    {
+      "id": "espetro:hab",
+      "legacy_ids": ["builtin_hab"],
+      "display_name": "兵站",
+      "icon": {"texture": "espetro:textures/gui/squad/hab.png"},
+      "behavior": "hab",
+      "placement": {
+        "type": "structure",
+        "template": "espetro:fortifications/hab_attack",
+        "template_by_team": {
+          "attack": "espetro:fortifications/hab_attack",
+          "defend": "espetro:fortifications/hab_defend"
+        },
+        "origin_offset": [0, 0, 0],
+        "pivot": [3, 0, 1],
+        "rotation": "player_facing",
+        "mirror": "none",
+        "air_policy": "reject_non_replaceable",
+        "include_entities": true,
+        "palette_index": 0
+      },
+      "cost": {"construction": 500, "ammunition": 0},
+      "construction": {"required_progress": 200, "build_per_hit": 5, "remove_per_hit": 5},
+      "durability": {
+        "structural_value": 200,
+        "repair_per_hit": 5,
+        "damageable_structure_entities": [],
+        "damage_reduction": {"explosion": 0.9, "projectile": 0.9, "direct_break": 0.0}
+      },
+      "requirements": {
+        "require_radio_range": true,
+        "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      }
+    },
+    {
+      "id": "espetro:ammo_crate",
+      "legacy_ids": ["ammo_crate"],
       "display_name": "弹药箱",
-      "icon": "espetro:textures/gui/squad/ammo_crate.png",
-      "place_type": "block",
-      "block_id": "minecraft:shulker_box",
-      "construction_cost": 100,
-      "ammunition_cost": 0,
-      "required_progress": 100,
-      "build_per_hit": 5,
-      "remove_per_hit": 5,
-      "require_radio_range": true,
-      "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      "icon": {"texture": "espetro:textures/gui/squad/ammo_crate.png"},
+      "behavior": "ammo_crate",
+      "placement": {
+        "type": "structure",
+        "template": "espetro:fortifications/ammo_crate",
+        "origin_offset": [0, 0, 0],
+        "pivot": [0, 0, 0],
+        "rotation": "player_facing",
+        "mirror": "none",
+        "air_policy": "reject_non_replaceable",
+        "include_entities": true,
+        "palette_index": 0
+      },
+      "cost": {"construction": 100, "ammunition": 0},
+      "construction": {"required_progress": 100, "build_per_hit": 5, "remove_per_hit": 5},
+      "durability": {
+        "structural_value": 100,
+        "repair_per_hit": 5,
+        "damageable_structure_entities": [],
+        "damage_reduction": {"explosion": 0.9, "projectile": 0.9, "direct_break": 0.0}
+      },
+      "requirements": {
+        "require_radio_range": true,
+        "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      }
     },
     {
-      "id": "vehicle_supply_station",
+      "id": "espetro:vehicle_supply_station",
+      "legacy_ids": ["vehicle_supply_station"],
       "display_name": "载具补给站",
-      "icon": "espetro:textures/gui/commander_skills/vehicle_supply_station.png",
-      "place_type": "entity",
-      "entity_id": "dragonrise_reforge:ammo_supply_station",
-      "fallback_block_id": "minecraft:barrel",
-      "construction_cost": 200,
-      "ammunition_cost": 0,
-      "required_progress": 100,
-      "build_per_hit": 5,
-      "remove_per_hit": 5,
-      "require_radio_range": true,
-      "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      "icon": {"texture": "espetro:textures/gui/commander_skills/vehicle_supply_station.png"},
+      "behavior": "vehicle_supply_station",
+      "placement": {
+        "type": "entity",
+        "entity_type": "dragonrise_reforge:ammo_supply_station",
+        "fallback_template": "espetro:fortifications/vehicle_supply_station_fallback",
+        "spawn_offset": [0.5, 0.0, 0.5],
+        "yaw": "player_facing",
+        "virtual_damageable_part": true,
+        "entity_nbt": {}
+      },
+      "cost": {"construction": 200, "ammunition": 0},
+      "construction": {"required_progress": 100, "build_per_hit": 5, "remove_per_hit": 5},
+      "durability": {
+        "structural_value": 100,
+        "repair_per_hit": 5,
+        "damageable_structure_entities": [],
+        "damage_reduction": {"explosion": 0.9, "projectile": 0.9, "direct_break": 0.0}
+      },
+      "requirements": {
+        "require_radio_range": true,
+        "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      }
     },
     {
-      "id": "sandbag_wall",
+      "id": "espetro:sandbag_wall",
+      "legacy_ids": ["sandbag_wall"],
       "display_name": "沙袋掩体墙",
-      "icon": "superbwarfare:textures/block/sandbag.png",
-      "place_type": "structure",
-      "construction_cost": 100,
-      "ammunition_cost": 0,
-      "required_progress": 100,
-      "build_per_hit": 5,
-      "remove_per_hit": 5,
-      "require_radio_range": true,
-      "usable_by": ["commander", "squad_leader", "fireteam_leader"],
-      "blocks": [
-        {"offset": [-1, 0, 0], "block_id": "superbwarfare:sandbag"},
-        {"offset": [0, 0, 0], "block_id": "superbwarfare:sandbag"},
-        {"offset": [1, 0, 0], "block_id": "superbwarfare:sandbag"},
-        {"offset": [-1, 1, 0], "block_id": "superbwarfare:sandbag"},
-        {"offset": [0, 1, 0], "block_id": "superbwarfare:sandbag"},
-        {"offset": [1, 1, 0], "block_id": "superbwarfare:sandbag"}
-      ]
+      "icon": {"texture": "superbwarfare:textures/block/sandbag.png"},
+      "behavior": "generic",
+      "placement": {
+        "type": "structure",
+        "template": "espetro:fortifications/sandbag_wall",
+        "origin_offset": [0, 0, 0],
+        "pivot": [1, 0, 0],
+        "rotation": "player_facing",
+        "mirror": "none",
+        "air_policy": "reject_non_replaceable",
+        "include_entities": true,
+        "palette_index": 0
+      },
+      "cost": {"construction": 100, "ammunition": 0},
+      "construction": {"required_progress": 100, "build_per_hit": 5, "remove_per_hit": 5},
+      "durability": {
+        "structural_value": 100,
+        "repair_per_hit": 5,
+        "damageable_structure_entities": [],
+        "damage_reduction": {"explosion": 0.9, "projectile": 0.9, "direct_break": 0.0}
+      },
+      "requirements": {
+        "require_radio_range": true,
+        "usable_by": ["commander", "squad_leader", "fireteam_leader"]
+      }
     }
   ]
 }

@@ -17,7 +17,7 @@ license = "All Rights Reserved"
 # The modid of the mod
 modId = "espetro" #mandatory
 # The version number of the mod
-version = "1.1.3-h" #mandatory
+version = "1.1.3-i" #mandatory
 # A display name for the mod
 displayName = "Espetro" #mandatory
 # A URL to query for updates for this mod. See the JSON update specification https://docs.minecraftforge.net/en/latest/misc/updatechecker/
@@ -87,7 +87,21 @@ side = "BOTH"
 [[dependencies."espetro"]]
 modId = "auratip"
 mandatory = true
-versionRange = "[1.1.1-beta,)"
+versionRange = "[1.1.3-beta-espetro.1]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."espetro"]]
+modId = "tetrachordlib"
+mandatory = true
+versionRange = "[1.20+1.0.3]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."espetro"]]
+modId = "taczmagazines"
+mandatory = false
+versionRange = "[0.1.6,0.3.0)"
 ordering = "AFTER"
 side = "BOTH"
 
@@ -116,7 +130,7 @@ side = "BOTH"
 [[dependencies."espetro"]]
 modId = "espoints"
 mandatory = false
-versionRange = "[1.1.0-final,)"
+versionRange = "[1.1.1b,)"
 ordering = "NONE"
 side = "BOTH"
 

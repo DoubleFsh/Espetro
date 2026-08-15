@@ -7,6 +7,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.event.entity.ProjectileImpactEvent;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.level.BlockEvent;
@@ -52,14 +53,9 @@ public final class FortificationEventHandler {
             }
             radius += 1.5D;
         }
-        FortificationManager.getInstance().damageNearby(level,
-            explosion.getPosition(), (float) radius,
+        FortificationManager.getInstance().damageExplosion(level,
+            explosion.getPosition(), (float) radius, affected,
             explosion.getIndirectSourceEntity());
-        for (var pos : affected) {
-            FortificationManager.getInstance().damageAt(level, pos,
-                event.getExplosion().getIndirectSourceEntity(),
-                FortificationConfig.explosionDamageRatio());
-        }
     }
 
     /** 炮弹/导弹等投射物直接命中工事方块或工事实体时扣除完整度。 */
@@ -79,10 +75,18 @@ public final class FortificationEventHandler {
             ? p.getOwner() : null;
         if (ray instanceof BlockHitResult blockHit) {
             FortificationManager.getInstance().damageAt(level, blockHit.getBlockPos(), attacker,
-                FortificationConfig.projectileHitDamageRatio());
+                FortificationManager.DamageKind.PROJECTILE);
         } else if (ray instanceof EntityHitResult entityHit) {
             FortificationManager.getInstance().damageEntity(
                 level, entityHit.getEntity().getUUID(), attacker);
+        }
+    }
+
+    /** Missing/dead virtual entity parts settle once; manager-side removal is idempotent. */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onEntityLeave(EntityLeaveLevelEvent event) {
+        if (!event.getLevel().isClientSide()) {
+            FortificationManager.getInstance().removeEntity(event.getEntity().getUUID());
         }
     }
 

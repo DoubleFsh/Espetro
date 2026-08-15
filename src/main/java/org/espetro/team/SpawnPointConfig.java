@@ -8,6 +8,7 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.espetro.Espetro;
+import org.espetro.api.EspetroAPI;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -68,9 +69,7 @@ public class SpawnPointConfig {
      * 重置为默认复活点
      */
     private static void applyDefaults() {
-        SPAWN_POINTS.clear();
-        SPAWN_POINTS.put("ATTACK", new SpawnPoint(100.5, 65, 0.5, 0));
-        SPAWN_POINTS.put("DEFEND", new SpawnPoint(-100.5, 65, 0.5, 180));
+        replaceSpawnPoints(defaultSpawnPoints());
     }
 
     /**
@@ -81,10 +80,10 @@ public class SpawnPointConfig {
         
         if (root.has("spawnPoints")) {
             JsonObject spawnPoints = root.getAsJsonObject("spawnPoints");
-            
+
             // 先重置为默认值，再覆盖（防止重载时部分字段残留旧值）
-            applyDefaults();
-            
+            Map<String, SpawnPoint> updatedSpawnPoints = defaultSpawnPoints();
+
             for (String team : new String[]{"ATTACK", "DEFEND"}) {
                 if (spawnPoints.has(team)) {
                     JsonObject point = spawnPoints.getAsJsonObject(team);
@@ -94,11 +93,12 @@ public class SpawnPointConfig {
                     spawn.z = getDouble(point, "z", 0);
                     spawn.yaw = (float) getDouble(point, "yaw", team.equals("ATTACK") ? 0 : 180);
                     
-                    SPAWN_POINTS.put(team, spawn);
+                    updatedSpawnPoints.put(team, spawn);
                     Espetro.LOGGER.info("加载 {} 复活点: ({}, {}, {}), yaw: {}", 
                         team, spawn.x, spawn.y, spawn.z, spawn.yaw);
                 }
             }
+            replaceSpawnPoints(updatedSpawnPoints);
         }
     }
 
@@ -124,7 +124,12 @@ public class SpawnPointConfig {
      * 动态设置复活点
      */
     public static void setSpawnPoint(String team, double x, double y, double z, float yaw) {
-        SPAWN_POINTS.put(team, new SpawnPoint(x, y, z, yaw));
+        SpawnPoint updated = new SpawnPoint(x, y, z, yaw);
+        if (sameSpawnPoint(SPAWN_POINTS.get(team), updated)) {
+            return;
+        }
+        SPAWN_POINTS.put(team, updated);
+        EspetroAPI.markTacticalMapStateDirty();
         Espetro.LOGGER.info("动态设置 {} 复活点: ({}, {}, {}), yaw: {}", team, x, y, z, yaw);
     }
 
@@ -133,5 +138,45 @@ public class SpawnPointConfig {
      */
     public static Map<String, SpawnPoint> getAllSpawnPoints() {
         return new HashMap<>(SPAWN_POINTS);
+    }
+
+    private static Map<String, SpawnPoint> defaultSpawnPoints() {
+        Map<String, SpawnPoint> defaults = new HashMap<>();
+        defaults.put("ATTACK", new SpawnPoint(100.5, 65, 0.5, 0));
+        defaults.put("DEFEND", new SpawnPoint(-100.5, 65, 0.5, 180));
+        return defaults;
+    }
+
+    private static void replaceSpawnPoints(Map<String, SpawnPoint> updatedSpawnPoints) {
+        if (sameSpawnPoints(SPAWN_POINTS, updatedSpawnPoints)) {
+            return;
+        }
+        SPAWN_POINTS.clear();
+        SPAWN_POINTS.putAll(updatedSpawnPoints);
+        EspetroAPI.markTacticalMapStateDirty();
+    }
+
+    private static boolean sameSpawnPoints(Map<String, SpawnPoint> first,
+                                           Map<String, SpawnPoint> second) {
+        if (!first.keySet().equals(second.keySet())) {
+            return false;
+        }
+        for (Map.Entry<String, SpawnPoint> entry : first.entrySet()) {
+            if (!sameSpawnPoint(entry.getValue(), second.get(entry.getKey()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sameSpawnPoint(SpawnPoint first, SpawnPoint second) {
+        if (first == second) {
+            return true;
+        }
+        return first != null && second != null
+            && Double.compare(first.x, second.x) == 0
+            && Double.compare(first.y, second.y) == 0
+            && Double.compare(first.z, second.z) == 0
+            && Float.compare(first.yaw, second.yaw) == 0;
     }
 }

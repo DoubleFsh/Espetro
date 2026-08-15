@@ -87,7 +87,21 @@ side = "BOTH"
 [[dependencies."${mod_id}"]]
 modId = "auratip"
 mandatory = true
-versionRange = "[${auratip_version},)"
+versionRange = "[${auratip_version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "tetrachordlib"
+mandatory = true
+versionRange = "[${tetrachord_version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "taczmagazines"
+mandatory = false
+versionRange = "${taczmagazines_version_range}"
 ordering = "AFTER"
 side = "BOTH"
 

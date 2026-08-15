@@ -46,7 +46,9 @@ public class BastionData {
     }
 
     public void setHabCoveredCache(boolean habCoveredCache) {
+        if (this.habCoveredCache == habCoveredCache) return;
         this.habCoveredCache = habCoveredCache;
+        markTacticalDirty();
     }
 
     public BastionData(String team, String name, BlockPos position, ServerLevel level) {
@@ -82,7 +84,10 @@ public class BastionData {
     }
 
     public void setKind(StructureKind kind) {
-        this.kind = kind == null ? StructureKind.RADIO : kind;
+        StructureKind resolved = kind == null ? StructureKind.RADIO : kind;
+        if (this.kind == resolved) return;
+        this.kind = resolved;
+        markTacticalDirty();
     }
 
     public boolean isRadio() {
@@ -114,7 +119,9 @@ public class BastionData {
     }
 
     public void setName(String name) {
+        if (java.util.Objects.equals(this.name, name)) return;
         this.name = name;
+        markTacticalDirty();
     }
 
     public BlockPos getPosition() {
@@ -180,7 +187,9 @@ public class BastionData {
     }
 
     public void setActive(boolean active) {
+        if (this.active == active) return;
         this.active = active;
+        markTacticalDirty();
     }
 
     public int getConstructionSupplies() {
@@ -192,18 +201,26 @@ public class BastionData {
     }
 
     public void addConstructionSupplies(int amount, int maximum) {
-        constructionSupplies = Math.max(0, Math.min(maximum, constructionSupplies + amount));
+        int updated = Math.max(0, Math.min(maximum, constructionSupplies + amount));
+        if (updated == constructionSupplies) return;
+        constructionSupplies = updated;
+        markTacticalDirty();
     }
 
     public void addAmmunitionSupplies(int amount, int maximum) {
-        ammunitionSupplies = Math.max(0, Math.min(maximum, ammunitionSupplies + amount));
+        int updated = Math.max(0, Math.min(maximum, ammunitionSupplies + amount));
+        if (updated == ammunitionSupplies) return;
+        ammunitionSupplies = updated;
+        markTacticalDirty();
     }
 
     public boolean consumeConstructionSupplies(int amount) {
         if (amount < 0 || constructionSupplies < amount) {
             return false;
         }
+        if (amount == 0) return true;
         constructionSupplies -= amount;
+        markTacticalDirty();
         return true;
     }
 
@@ -211,7 +228,9 @@ public class BastionData {
         if (amount < 0 || ammunitionSupplies < amount) {
             return false;
         }
+        if (amount == 0) return true;
         ammunitionSupplies -= amount;
+        markTacticalDirty();
         return true;
     }
 
@@ -220,7 +239,9 @@ public class BastionData {
     }
 
     public void setHabBuilt(boolean habBuilt) {
+        if (this.habBuilt == habBuilt) return;
         this.habBuilt = habBuilt;
+        markTacticalDirty();
     }
 
     public boolean isAmmoCrateBuilt() {
@@ -228,7 +249,9 @@ public class BastionData {
     }
 
     public void setAmmoCrateBuilt(boolean ammoCrateBuilt) {
+        if (this.ammoCrateBuilt == ammoCrateBuilt) return;
         this.ammoCrateBuilt = ammoCrateBuilt;
+        markTacticalDirty();
     }
 
     public long getHabAvailableAt() {
@@ -236,7 +259,9 @@ public class BastionData {
     }
 
     public void setHabAvailableAt(long habAvailableAt) {
+        if (this.habAvailableAt == habAvailableAt) return;
         this.habAvailableAt = habAvailableAt;
+        markTacticalDirty();
     }
 
     public long getHabDisabledUntil() {
@@ -244,7 +269,13 @@ public class BastionData {
     }
 
     public void setHabDisabledUntil(long habDisabledUntil) {
+        if (this.habDisabledUntil == habDisabledUntil) return;
         this.habDisabledUntil = habDisabledUntil;
+        markTacticalDirty();
+    }
+
+    private static void markTacticalDirty() {
+        org.espetro.api.EspetroAPI.markTacticalMapStateDirty();
     }
 
     /**

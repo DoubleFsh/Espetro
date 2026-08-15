@@ -4,6 +4,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,12 +17,14 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 import org.espetro.Espetro;
+import org.espetro.dimension.BattlefieldWorldManager;
 import org.espetro.logistics.LogisticsConfig;
 import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.network.FortificationPreviewPacket;
@@ -35,6 +39,7 @@ import org.espetro.vehicle.VehicleManager;
 import javax.annotation.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,6 +52,7 @@ import java.util.UUID;
 
 /** Server-authoritative preview, construction, damage and repair state. */
 public final class FortificationManager {
+    /** Legacy action ids remain aliases; the definitions themselves are JSON v2 entries. */
     public static final String BUILTIN_RADIO = "builtin_radio";
     public static final String BUILTIN_HAB = "builtin_hab";
     private static final double PLACE_REACH = 6.0D;
@@ -59,8 +65,10 @@ public final class FortificationManager {
     private final Map<String, PlacedFort> placed = new HashMap<>();
     private final Map<UUID, UUID> entityIndex = new HashMap<>();
     private final Map<UUID, UUID> bastionIndex = new HashMap<>();
+    private final Map<UUID, Boolean> damageableEntityIndex = new HashMap<>();
     private final Map<UUID, PreviewSession> previews = new HashMap<>();
     private final Map<UUID, Long> lastWorkTick = new HashMap<>();
+    private final FortificationSpatialIndex spatialIndex = new FortificationSpatialIndex();
 
     private FortificationManager() {
     }
@@ -77,15 +85,20 @@ public final class FortificationManager {
     public record RadioConstructionProgress(int progress, int required) {
     }
 
-    private enum Kind { CONFIG_BLOCKS, CONFIG_ENTITY, RADIO, HAB }
+    public enum DamageKind { EXPLOSION, PROJECTILE, DIRECT_BREAK }
 
-    private record Slot(BlockPos offset, @Nullable BlockState state) {
+    private enum Kind { STRUCTURE, ENTITY }
+
+    private record Slot(int templateIndex, BlockPos offset, @Nullable BlockState state,
+                        @Nullable CompoundTag blockEntityNbt,
+                        FortificationTemplateCompiler.Touch touch) {
     }
 
     private record Blueprint(Kind kind, String id, String displayName,
                              FortificationConfig.ConstructionProfile profile,
                              List<Slot> slots,
-                             @Nullable FortificationConfig.FortificationDef definition) {
+                             FortificationConfig.FortificationDef definition,
+                             @Nullable FortificationTemplateCompiler.CompiledTemplate template) {
     }
 
     private record PreviewSession(UUID token, String dimension, Blueprint blueprint,
@@ -102,10 +115,14 @@ public final class FortificationManager {
         final List<WorldSlot> finalSlots;
         final List<BlockPos> footprint;
         final Set<BlockPos> missing = new HashSet<>();
+        final Set<UUID> spawnedEntities = new HashSet<>();
+        final Set<UUID> settledEntityParts = new HashSet<>();
         final UUID radioId;
         final UUID mapId;
         int progress;
+        int structuralValue;
         boolean complete;
+        boolean fallbackMode;
         UUID entityId;
         UUID bastionId;
 
@@ -126,7 +143,9 @@ public final class FortificationManager {
         int required() { return blueprint.profile.requiredProgress; }
     }
 
-    private record WorldSlot(BlockPos pos, @Nullable BlockState state) {
+    private record WorldSlot(int templateIndex, BlockPos pos, @Nullable BlockState state,
+                             @Nullable CompoundTag blockEntityNbt,
+                             FortificationTemplateCompiler.Touch touch) {
     }
 
     public void reset() {
@@ -137,9 +156,11 @@ public final class FortificationManager {
         positionIndex.clear();
         placed.clear();
         entityIndex.clear();
+        damageableEntityIndex.clear();
         bastionIndex.clear();
         previews.clear();
         lastWorkTick.clear();
+        spatialIndex.clear();
     }
 
     /** Drop bounded per-player transient state without scanning world data. */
@@ -265,7 +286,19 @@ public final class FortificationManager {
         if (now - previous < WORK_INTERVAL_TICKS) return;
         lastWorkTick.put(player.getUUID(), now);
 
-        if (build) {
+        if (construction.complete) {
+            if (build) {
+                construction.structuralValue = Math.min(
+                    construction.blueprint.definition.durability.structuralValue,
+                    construction.structuralValue
+                        + construction.blueprint.definition.durability.repairPerHit);
+                restoreProportional(level, construction);
+            } else {
+                construction.structuralValue = Math.max(0, construction.structuralValue
+                    - construction.blueprint.profile.removePerHit);
+                if (construction.structuralValue == 0) destroy(level, construction, player, true);
+            }
+        } else if (build) {
             int old = construction.progress;
             construction.progress = Math.min(construction.required(), old
                 + construction.blueprint.profile.buildPerHit);
@@ -287,7 +320,8 @@ public final class FortificationManager {
         else NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
             new FortificationProgressPacket(construction.blueprint.displayName, 0,
                 construction.required(), build));
-        if (construction.blueprint.kind == Kind.RADIO && constructions.containsKey(construction.id)) {
+        if (construction.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+            && constructions.containsKey(construction.id)) {
             FobSupplyTracker.notifyConstructionProgressChanged(level, construction.anchor, construction.team);
         }
     }
@@ -301,35 +335,86 @@ public final class FortificationManager {
     public void damageNearby(ServerLevel level, net.minecraft.world.phys.Vec3 center,
                              float radius, @Nullable Entity attacker) {
         if (level == null || center == null) return;
-        double checkRadius = radius + 1.5D;
-        double checkRadiusSq = checkRadius * checkRadius;
+        double checkRadius = Math.max(0.0D, radius) + 1.5D;
+        double radiusSq = Math.max(0.0D, radius) * Math.max(0.0D, radius);
+        damageExplosionParts(level, center, checkRadius, attacker,
+            pos -> Vec3.atCenterOf(pos).distanceToSqr(center) <= radiusSq);
+    }
+
+    /**
+     * Forge's detonation list is the exact set of block cells selected by the
+     * vanilla/modded explosion.  The spatial index supplies the broad phase;
+     * every intersecting damageable part is then settled independently.
+     */
+    public void damageExplosion(ServerLevel level, Vec3 center, float radius,
+                                Collection<BlockPos> affectedBlocks,
+                                @Nullable Entity attacker) {
+        if (level == null || center == null || affectedBlocks == null
+            || affectedBlocks.isEmpty()) return;
+        Set<BlockPos> affected = new HashSet<>();
+        for (BlockPos pos : affectedBlocks) {
+            if (pos != null) affected.add(pos.immutable());
+        }
+        if (affected.isEmpty()) return;
+        damageExplosionParts(level, center, Math.max(0.0D, radius) + 1.5D,
+            attacker, affected::contains);
+    }
+
+    private void damageExplosionParts(ServerLevel level, Vec3 center, double checkRadius,
+                                      @Nullable Entity attacker,
+                                      java.util.function.Predicate<BlockPos> hitPart) {
         String dimension = level.dimension().location().toString();
-        for (Construction c : new ArrayList<>(constructions.values())) {
-            if (!dimension.equals(c.dimension) || c.finalSlots.isEmpty()) continue;
-            BlockPos probe = c.finalSlots.get(0).pos;
-            if (probe.distToCenterSqr(center.x, center.y, center.z) > checkRadiusSq) continue;
-            damageAt(level, probe, attacker, FortificationConfig.explosionDamageRatio());
+        AABB query = new AABB(center.x - checkRadius, center.y - checkRadius,
+            center.z - checkRadius, center.x + checkRadius, center.y + checkRadius,
+            center.z + checkRadius);
+        for (UUID id : spatialIndex.query(dimension, query)) {
+            Construction construction = constructions.get(id);
+            if (construction == null) continue;
+            List<BlockPos> parts = construction.complete
+                ? construction.finalSlots.stream()
+                    .filter(slot -> slot.touch == FortificationTemplateCompiler.Touch.BLOCK)
+                    .map(WorldSlot::pos).toList()
+                : construction.footprint;
+            boolean changed = false;
+            for (BlockPos pos : parts) {
+                if (!hitPart.test(pos) || !construction.missing.add(pos.immutable())) continue;
+                changed = true;
+                damageConstruction(level, construction, pos, attacker, DamageKind.EXPLOSION);
+                if (!constructions.containsKey(construction.id)) break;
+            }
+            if (changed
+                && construction.blueprint.definition.behaviorType
+                    == FortificationConfig.Behavior.RADIO
+                && constructions.containsKey(construction.id)) {
+                FobSupplyTracker.notifyConstructionProgressChanged(
+                    level, construction.anchor, construction.team);
+            }
         }
     }
 
     public void damageAt(ServerLevel level, BlockPos pos, @Nullable Entity attacker) {
-        damageAt(level, pos, attacker, 1.0f);
+        damageAt(level, pos, attacker, DamageKind.DIRECT_BREAK);
     }
 
     public void damageAt(ServerLevel level, BlockPos pos, @Nullable Entity attacker,
                          float damageRatio) {
+        damageAt(level, pos, attacker,
+            damageRatio <= 0.2F ? DamageKind.EXPLOSION : DamageKind.DIRECT_BREAK);
+    }
+
+    public void damageAt(ServerLevel level, BlockPos pos, @Nullable Entity attacker,
+                         DamageKind kind) {
         UUID id = positionIndex.get(posKey(level, pos));
         Construction construction = id == null ? null : constructions.get(id);
-        if (construction == null || !construction.missing.add(pos.immutable())) return;
-        int parts = construction.complete ? construction.finalSlots.size() : construction.footprint.size();
-        int baseDamage = FortificationProgressPolicy.damagePerPart(construction.required(), parts);
-        int damage = damageRatio >= 1.0f
-            ? baseDamage
-            : Math.max(0, Math.round(baseDamage * damageRatio));
-        construction.progress = Math.max(0, construction.progress - damage);
-        if (construction.progress == 0) destroy(level, construction, attacker, true);
-        else if (!construction.complete) updateFoundationStage(level, construction);
-        if (construction.blueprint.kind == Kind.RADIO && constructions.containsKey(construction.id)) {
+        if (construction == null) return;
+        WorldSlot part = construction.finalSlots.stream()
+            .filter(slot -> slot.pos.equals(pos)
+                && slot.touch == FortificationTemplateCompiler.Touch.BLOCK)
+            .findFirst().orElse(null);
+        if (part == null || !construction.missing.add(pos.immutable())) return;
+        damageConstruction(level, construction, pos, attacker, kind);
+        if (construction.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+            && constructions.containsKey(construction.id)) {
             FobSupplyTracker.notifyConstructionProgressChanged(level, construction.anchor, construction.team);
         }
     }
@@ -339,19 +424,61 @@ public final class FortificationManager {
         if (level == null || entityId == null) return;
         UUID constructionId = entityIndex.get(entityId);
         Construction construction = constructionId == null ? null : constructions.get(constructionId);
-        if (construction == null || construction.finalSlots.isEmpty()) return;
-        damageAt(level, construction.finalSlots.get(0).pos, attacker,
-            FortificationConfig.projectileHitDamageRatio());
+        if (construction == null || !Boolean.TRUE.equals(damageableEntityIndex.get(entityId))
+            || construction.blueprint.kind == Kind.ENTITY
+            || !construction.settledEntityParts.add(entityId)) return;
+        damageConstruction(level, construction, null, attacker, DamageKind.PROJECTILE);
     }
 
     /** Entity fortifications are a single integrity part. */
     public void removeEntity(UUID entityId) {
-        UUID id = entityIndex.remove(entityId);
+        UUID id = entityIndex.get(entityId);
         Construction construction = id == null ? null : constructions.get(id);
         if (construction == null) return;
         ServerLevel level = levelFor(construction);
-        if (level != null) destroy(level, construction, null, true);
-        else unregisterConstruction(construction);
+        if (!Boolean.TRUE.equals(damageableEntityIndex.get(entityId))) {
+            entityIndex.remove(entityId);
+            construction.spawnedEntities.remove(entityId);
+            return;
+        }
+        if (!construction.settledEntityParts.add(entityId)) return;
+        if (level == null) {
+            unregisterConstruction(construction);
+        } else if (construction.blueprint.kind == Kind.ENTITY && !construction.fallbackMode) {
+            construction.structuralValue = 0;
+            destroy(level, construction, null, true);
+        } else {
+            damageConstruction(level, construction, null, null, DamageKind.DIRECT_BREAK);
+        }
+    }
+
+    private void damageConstruction(ServerLevel level, Construction construction,
+                                    @Nullable BlockPos part, @Nullable Entity attacker,
+                                    DamageKind kind) {
+        int maximum = construction.complete
+            ? construction.blueprint.definition.durability.structuralValue
+            : construction.required();
+        int parts = construction.complete ? damageablePartCount(construction)
+            : Math.max(1, construction.footprint.size());
+        int baseDamage = Math.max(1, (int) Math.ceil((double) maximum / parts));
+        double reduction = construction.blueprint.definition.durability.damageReduction.forKind(kind);
+        int damage = reduction >= 1.0 ? 0
+            : Math.max(1, (int) Math.ceil(baseDamage * (1.0 - reduction)));
+        if (damage <= 0) return;
+        if (construction.complete) {
+            construction.structuralValue = Math.max(0, construction.structuralValue - damage);
+            if (construction.structuralValue == 0) destroy(level, construction, attacker, true);
+        } else {
+            construction.progress = Math.max(0, construction.progress - damage);
+            if (construction.progress == 0) destroy(level, construction, attacker, true);
+            else updateFoundationStage(level, construction);
+        }
+    }
+
+    private static int damageablePartCount(Construction construction) {
+        if (construction.blueprint.kind == Kind.ENTITY && !construction.fallbackMode) return 1;
+        return construction.blueprint.template == null ? 1
+            : Math.max(1, construction.blueprint.template.damageablePartCount());
     }
 
     public boolean contains(ServerLevel level, BlockPos pos) {
@@ -370,7 +497,9 @@ public final class FortificationManager {
 
     public boolean isAmmoCrateAt(ServerLevel level, BlockPos pos, String team) {
         PlacedFort fort = placed.get(posKey(level, pos));
-        if (fort != null) return "ammo_crate".equals(fort.fortId()) && team != null && team.equals(fort.team());
+        if (fort != null) return behaviorOf(level, fort.fortId())
+            == FortificationConfig.Behavior.AMMO_CRATE
+            && team != null && team.equals(fort.team());
         BastionData radio = BastionManager.getInstance().findBastionByShulkerPos(pos);
         return radio != null && team != null && team.equals(radio.getTeam()) && radio.isAmmoCrateBuilt();
     }
@@ -378,7 +507,9 @@ public final class FortificationManager {
     @Nullable
     public BastionData findRadioForAmmoCrate(ServerLevel level, BlockPos cratePos, String team) {
         PlacedFort fort = placed.get(posKey(level, cratePos));
-        if (fort != null && "ammo_crate".equals(fort.fortId()) && team != null && team.equals(fort.team())) {
+        if (fort != null && behaviorOf(level, fort.fortId())
+            == FortificationConfig.Behavior.AMMO_CRATE
+            && team != null && team.equals(fort.team())) {
             BastionData radio = fort.radioId() == null ? null : BastionManager.getInstance().getBastion(fort.radioId());
             if (radio != null && radio.isActive() && radio.isRadio()) return radio;
         }
@@ -389,7 +520,8 @@ public final class FortificationManager {
     public BastionData findVehicleServiceRadio(ServerLevel level, BlockPos vehiclePos, String team) {
         double radiusSq = Math.pow(FortificationConfig.vehicleService().stationRadius, 2);
         for (PlacedFort fort : placed.values()) {
-            if (!"vehicle_supply_station".equals(fort.fortId())
+            if (behaviorOf(level, fort.fortId())
+                    != FortificationConfig.Behavior.VEHICLE_SUPPLY_STATION
                 || !fort.dimension().equals(level.dimension().location().toString())
                 || !fort.team().equals(team) || fort.pos().distSqr(vehiclePos) > radiusSq) continue;
             BastionData radio = fort.radioId() == null ? null : BastionManager.getInstance().getBastion(fort.radioId());
@@ -397,6 +529,13 @@ public final class FortificationManager {
                 && radio.getLevel() == level) return radio;
         }
         return null;
+    }
+
+    @Nullable
+    private static FortificationConfig.Behavior behaviorOf(ServerLevel level, String id) {
+        FortificationConfig.FortificationDef def = FortificationConfig.get(
+            level.dimension().location(), id);
+        return def == null ? null : def.behaviorType;
     }
 
     /** Compatibility entry point; selection now starts a preview instead of placing. */
@@ -431,7 +570,7 @@ public final class FortificationManager {
         Construction best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Construction c : constructions.values()) {
-            if (c.blueprint.kind != Kind.RADIO
+            if (c.blueprint.definition.behaviorType != FortificationConfig.Behavior.RADIO
                 || !team.equals(c.team)
                 || !dimension.equals(c.dimension)) {
                 continue;
@@ -447,65 +586,39 @@ public final class FortificationManager {
     }
 
     private Blueprint createBlueprint(String id, String team) {
-        if (BUILTIN_RADIO.equals(id)) {
-            if (BastionItems.RADIO_BLOCK == null) return null;
-            return new Blueprint(Kind.RADIO, id, "Radio", FortificationConfig.radioConstruction(),
-                List.of(new Slot(BlockPos.ZERO, BastionItems.RADIO_BLOCK.defaultBlockState())), null);
-        }
-        if (BUILTIN_HAB.equals(id)) {
-            return new Blueprint(Kind.HAB, id, "兵站", FortificationConfig.habConstruction(),
-                habSlots(team), null);
-        }
-        FortificationConfig.FortificationDef def = FortificationConfig.get(id);
+        ResourceLocation dimension = BattlefieldContext.getActiveDimensionKey()
+            .map(net.minecraft.resources.ResourceKey::location).orElse(null);
+        FortificationConfig.FortificationDef def = dimension == null
+            ? FortificationConfig.get(id) : FortificationConfig.get(dimension, id);
         if (def == null) return null;
+        FortificationTemplateCompiler.CompiledTemplate template = def.templateFor(team);
         List<Slot> slots = new ArrayList<>();
-        Kind kind;
-        if ("structure".equals(def.placeType)) {
-            kind = Kind.CONFIG_BLOCKS;
-            for (FortificationConfig.StructureBlockDef raw : def.blocks) {
-                BlockState state = resolveBlock(raw.blockId);
-                if (state == null) return null;
-                slots.add(new Slot(new BlockPos(raw.offset.get(0), raw.offset.get(1), raw.offset.get(2)), state));
+        if (template != null) {
+            for (FortificationTemplateCompiler.OrientedBlock block
+                : template.oriented(Direction.NORTH).blocks()) {
+                slots.add(new Slot(block.templateIndex(), block.relativePos(), block.state(),
+                    block.blockEntityNbt(), block.touch()));
             }
-        } else if ("entity".equals(def.placeType)) {
-            kind = Kind.CONFIG_ENTITY;
-            BlockState fallback = resolveBlock(def.fallbackBlockId);
-            ResourceLocation entityId = ResourceLocation.tryParse(def.entityId);
-            if ((entityId == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(entityId)) && fallback == null) return null;
-            slots.add(new Slot(BlockPos.ZERO, fallback));
-        } else {
-            kind = Kind.CONFIG_BLOCKS;
-            BlockState state = resolveBlock(def.blockId);
-            if (state == null) return null;
-            slots.add(new Slot(BlockPos.ZERO, state));
         }
-        return new Blueprint(kind, def.id, def.displayName,
-            new FortificationConfig.ConstructionProfile(def.requiredProgress, def.buildPerHit, def.removePerHit),
-            List.copyOf(slots), def);
-    }
-
-    private static List<Slot> habSlots(String team) {
-        BlockState wall = "ATTACK".equals(team) ? Blocks.RED_WOOL.defaultBlockState() : Blocks.BLUE_WOOL.defaultBlockState();
-        BlockState roof = Blocks.SPRUCE_TRAPDOOR.defaultBlockState();
-        Map<BlockPos, BlockState> slots = new HashMap<>();
-        for (int x = -1; x <= 0; x++) for (int y = 0; y <= 1; y++) slots.put(new BlockPos(x, y, -1), wall);
-        for (int z = -1; z <= 2; z++) for (int y = 0; y <= 1; y++) slots.put(new BlockPos(1, y, z), wall);
-        for (int x = -1; x <= 1; x++) for (int y = 0; y <= 1; y++) slots.put(new BlockPos(x, y, 2), wall);
-        for (int y = 0; y <= 1; y++) {
-            slots.put(new BlockPos(-3, y, 2), wall);
-            slots.put(new BlockPos(-3, y, -1), wall);
+        if (slots.isEmpty() && "structure".equals(def.placement.type)) return null;
+        if (slots.isEmpty()) {
+            slots.add(new Slot(-1, BlockPos.ZERO, null, null,
+                FortificationTemplateCompiler.Touch.EXPLICIT_AIR));
         }
-        for (int x = -3; x <= 1; x++) for (int z = -1; z <= 2; z++) slots.put(new BlockPos(x, 2, z), roof);
-        slots.put(new BlockPos(0, 1, 1), Blocks.LANTERN.defaultBlockState());
-        Comparator<BlockPos> order = Comparator.comparingInt((BlockPos pos) -> pos.getY())
-            .thenComparingInt(pos -> pos.getX()).thenComparingInt(pos -> pos.getZ());
-        return slots.entrySet().stream().sorted(Map.Entry.comparingByKey(order))
-            .map(entry -> new Slot(entry.getKey(), entry.getValue())).toList();
+        return new Blueprint("entity".equals(def.placement.type) ? Kind.ENTITY : Kind.STRUCTURE,
+            def.id, def.displayName,
+            new FortificationConfig.ConstructionProfile(def.construction.requiredProgress,
+                def.construction.buildPerHit, def.construction.removePerHit),
+            List.copyOf(slots), def, template);
     }
 
     @Nullable
     private String validateCommon(ServerPlayer player) {
         if (player == null || player.isSpectator() || !player.isAlive()) return "§c当前状态无法建造。";
+        if (!BattlefieldWorldManager.getInstance().isStartupReady()
+            || !FortificationConfig.isFrozenReady()) {
+            return "§c战场启动门禁未就绪，本次会话无法建造工事。";
+        }
         GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
         if (phase != GamePhase.DEPLOYING && phase != GamePhase.BATTLE) return "§c当前阶段无法建造工事。";
         if (!(player.level() instanceof ServerLevel level) || !BattlefieldContext.isActiveBattlefield(level)) {
@@ -516,16 +629,7 @@ public final class FortificationManager {
 
     @Nullable
     private String validateSelectionRole(ServerPlayer player, Blueprint blueprint) {
-        if (blueprint.kind == Kind.CONFIG_BLOCKS || blueprint.kind == Kind.CONFIG_ENTITY) {
-            return canUse(player, blueprint.definition) ? null : "§c你没有权限建造该工事。";
-        }
-        boolean commander = VoteManager.getInstance().isCommander(player.getUUID());
-        boolean leader = SquadManager.getInstance().isSquadLeader(player.getUUID());
-        boolean fireteamLeader = SquadManager.getInstance().isFireteamLeader(player.getUUID());
-        if (!commander && !leader && !fireteamLeader) {
-            return "§c只有指挥官、小队长或火力组长可以选择该工事。";
-        }
-        return null;
+        return canUse(player, blueprint.definition) ? null : "§c你没有权限建造该工事。";
     }
 
     private record PlacementBacking(@Nullable BastionData radio, @Nullable UUID radioId,
@@ -535,14 +639,17 @@ public final class FortificationManager {
     private PlacementBacking validateBacking(ServerPlayer player, PreviewSession preview, BlockPos anchor) {
         Blueprint blueprint = preview.blueprint;
         ServerLevel level = player.serverLevel();
-        if (blueprint.kind == Kind.RADIO) {
+        FortificationConfig.Behavior behavior = blueprint.definition.behaviorType;
+        if (behavior == FortificationConfig.Behavior.RADIO) {
             LogisticsConfig.RadioPlacementSettings cfg = LogisticsConfig.get().getRadio();
             GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
             if (!cfg.allowsPhase(phase.name())) return new PlacementBacking(null, null, "§c当前阶段不能部署 Radio。" );
             BastionManager manager = BastionManager.getInstance();
             String cooldown = manager.canBuildBastion(player.getUUID(), manager.getEffectiveRadioCooldownSeconds());
             if (cooldown != null) return new PlacementBacking(null, null, cooldown);
-            long pending = constructions.values().stream().filter(c -> c.blueprint.kind == Kind.RADIO && c.team.equals(preview.team)).count();
+            long pending = constructions.values().stream().filter(c ->
+                c.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+                    && c.team.equals(preview.team)).count();
             if (manager.getActiveBastionCount(preview.team) + pending >= manager.getBastionLimitPerTeam()) {
                 return new PlacementBacking(null, null, "§c本方 Radio 数量已达到上限。" );
             }
@@ -555,7 +662,7 @@ public final class FortificationManager {
             }
             return new PlacementBacking(null, null, null);
         }
-        if (blueprint.kind == Kind.HAB) {
+        if (behavior == FortificationConfig.Behavior.HAB) {
             List<BastionData> radios = BastionManager.getInstance().findCoveringRadios(level, anchor, preview.team);
             if (radios.isEmpty()) return new PlacementBacking(null, null, "§c兵站必须位于己方 Radio 范围内。" );
             BastionData radio = radios.get(0);
@@ -563,23 +670,23 @@ public final class FortificationManager {
                 return new PlacementBacking(radio, radio.getBastionId(), "§c该 Radio 范围内兵站已达到上限。" );
             }
             if (BastionManager.getInstance().sumConstructionInCoveringRadios(level, anchor, preview.team)
-                < BastionManager.getInstance().getHabConstructionCost()) {
+                < blueprint.definition.cost.construction) {
                 return new PlacementBacking(radio, radio.getBastionId(), "§c覆盖 Radio 的建材不足。" );
             }
             return new PlacementBacking(radio, radio.getBastionId(), null);
         }
         FortificationConfig.FortificationDef def = blueprint.definition;
         BastionData radio = null;
-        if (def.requireRadioRange) {
+        if (def.requirements.requireRadioRange) {
             List<BastionData> radios = BastionManager.getInstance().findCoveringRadios(level, anchor, preview.team);
             if (radios.isEmpty()) return new PlacementBacking(null, null, "§c必须在己方 Radio 范围内建造。" );
             radio = radios.get(0);
         }
-        if (radio == null && (def.constructionCost > 0 || def.ammunitionCost > 0)) {
+        if (radio == null && (def.cost.construction > 0 || def.cost.ammunition > 0)) {
             return new PlacementBacking(null, null, "§c该工事需要 Radio 库存。" );
         }
-        if (radio != null && (radio.getConstructionSupplies() < def.constructionCost
-            || radio.getAmmunitionSupplies() < def.ammunitionCost)) {
+        if (radio != null && (radio.getConstructionSupplies() < def.cost.construction
+            || radio.getAmmunitionSupplies() < def.cost.ammunition)) {
             return new PlacementBacking(radio, radio.getBastionId(), "§c建造资源不足。" );
         }
         return new PlacementBacking(radio, radio == null ? null : radio.getBastionId(), null);
@@ -587,37 +694,40 @@ public final class FortificationManager {
 
     private boolean debitBacking(ServerPlayer player, Blueprint blueprint, PlacementBacking backing,
                                  BlockPos anchor) {
-        if (blueprint.kind == Kind.RADIO) return true;
-        if (blueprint.kind == Kind.HAB) {
-            int cost = BastionManager.getInstance().getHabConstructionCost();
+        if (blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO) return true;
+        if (blueprint.definition.behaviorType == FortificationConfig.Behavior.HAB) {
+            int cost = blueprint.definition.cost.construction;
             return BastionManager.getInstance().tryDebitConstructionFromCoveringRadios(
                 player.serverLevel(), anchor, Espetro.getPlayerTeam(player), cost);
         }
-        return debit(backing.radio, blueprint.definition.constructionCost, blueprint.definition.ammunitionCost);
+        return debit(backing.radio, blueprint.definition.cost.construction,
+            blueprint.definition.cost.ammunition);
     }
 
     private void refundBacking(ServerPlayer player, Blueprint blueprint, PlacementBacking backing) {
-        if (blueprint.kind == Kind.CONFIG_BLOCKS || blueprint.kind == Kind.CONFIG_ENTITY) {
-            refund(backing.radio, blueprint.definition.constructionCost, blueprint.definition.ammunitionCost);
-        } else if (blueprint.kind == Kind.HAB && backing.radio != null) {
-            backing.radio.addConstructionSupplies(BastionManager.getInstance().getHabConstructionCost(),
+        if (blueprint.definition.behaviorType == FortificationConfig.Behavior.HAB
+            && backing.radio != null) {
+            backing.radio.addConstructionSupplies(blueprint.definition.cost.construction,
                 LogisticsConfig.get().maxConstruction);
             FobSupplyTracker.notifySupplyChanged(backing.radio);
+        } else if (blueprint.definition.behaviorType != FortificationConfig.Behavior.RADIO) {
+            refund(backing.radio, blueprint.definition.cost.construction,
+                blueprint.definition.cost.ammunition);
         }
     }
 
     private boolean complete(ServerLevel level, Construction c, @Nullable Entity actor) {
         if (!completionSpaceAvailable(level, c)) return false;
         removeFoundations(level, c);
-        boolean success;
-        if (c.blueprint.kind == Kind.CONFIG_ENTITY) success = completeEntity(level, c);
-        else success = placeFinalBlocks(level, c);
+        boolean success = c.blueprint.kind == Kind.ENTITY
+            ? completeEntity(level, c) : placeFinalBlocks(level, c);
         if (!success) {
             placeFoundations(level, c, 6);
             return false;
         }
 
-        if (c.blueprint.kind == Kind.RADIO) {
+        FortificationConfig.Behavior behavior = c.blueprint.definition.behaviorType;
+        if (behavior == FortificationConfig.Behavior.RADIO) {
             String name = nextBastionName(c.team, true);
             BastionData radio = BastionManager.getInstance().createRadio(level, c.anchor, c.team, name);
             if (radio == null) {
@@ -629,7 +739,7 @@ public final class FortificationManager {
             bastionIndex.put(c.bastionId, c.id);
             BastionManager.getInstance().setBastionCooldown(actor instanceof ServerPlayer p ? p.getUUID() : UUID.randomUUID());
             Espetro.broadcastToTeam(c.team, "§6[Radio] §a" + name + " §a已建成。");
-        } else if (c.blueprint.kind == Kind.HAB) {
+        } else if (behavior == FortificationConfig.Behavior.HAB) {
             String name = nextBastionName(c.team, false);
             BastionData hab = BastionManager.getInstance().createHab(level, c.anchor, c.team, name);
             if (hab == null) {
@@ -644,6 +754,7 @@ public final class FortificationManager {
             registerCompletedConfig(c);
         }
         c.complete = true;
+        c.structuralValue = c.blueprint.definition.durability.structuralValue;
         c.missing.clear();
         return true;
     }
@@ -655,11 +766,11 @@ public final class FortificationManager {
         placed.put(posKey(c.dimension, c.anchor), fort);
         if (c.entityId != null) entityIndex.put(c.entityId, c.id);
         BastionData radio = c.radioId == null ? null : BastionManager.getInstance().getBastion(c.radioId);
-        if ("ammo_crate".equals(def.id) && radio != null) {
+        if (def.behaviorType == FortificationConfig.Behavior.AMMO_CRATE && radio != null) {
             radio.setShulkerPos(c.anchor);
             radio.setAmmoCrateBuilt(true);
         }
-        if ("vehicle_supply_station".equals(def.id)) {
+        if (def.behaviorType == FortificationConfig.Behavior.VEHICLE_SUPPLY_STATION) {
             VehicleManager.getInstance().registerMappedSupplyStation(fort.mapId(), def.displayName,
                 c.team, c.dimension, c.anchor);
         }
@@ -699,7 +810,8 @@ public final class FortificationManager {
         if (destroyBastionRecord && c.bastionId != null) {
             BastionData bastion = BastionManager.getInstance().getBastion(c.bastionId);
             if (bastion != null) {
-                if (c.blueprint.kind == Kind.RADIO && actor instanceof ServerPlayer player
+                if (c.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+                    && actor instanceof ServerPlayer player
                     && c.team.equals(normalizeTeam(Espetro.getPlayerTeam(player)))) {
                     BastionManager.getInstance().destroyBastionWithManpower(
                         bastion, actor, false);
@@ -711,7 +823,9 @@ public final class FortificationManager {
         PlacedFort fort = placed.remove(posKey(c.dimension, c.anchor));
         if (fort != null) {
             VehicleManager.getInstance().unregisterMappedSupplyStation(fort.mapId());
-            if ("ammo_crate".equals(fort.fortId()) && fort.radioId() != null) {
+            FortificationConfig.FortificationDef def = FortificationConfig.get(fort.fortId());
+            if (def != null && def.behaviorType == FortificationConfig.Behavior.AMMO_CRATE
+                && fort.radioId() != null) {
                 BastionData radio = BastionManager.getInstance().getBastion(fort.radioId());
                 if (radio != null && c.anchor.equals(radio.getShulkerPos())) {
                     radio.setAmmoCrateBuilt(false);
@@ -725,38 +839,56 @@ public final class FortificationManager {
     private void registerConstruction(ServerLevel level, Construction c) {
         constructions.put(c.id, c);
         for (WorldSlot slot : c.finalSlots) positionIndex.put(posKey(level, slot.pos), c.id);
+        AABB bounds = boundsOf(c.finalSlots, c.anchor);
+        spatialIndex.put(c.id, c.dimension, bounds);
     }
 
     private void unregisterConstruction(Construction c) {
         constructions.remove(c.id);
         for (WorldSlot slot : c.finalSlots) positionIndex.remove(posKey(c.dimension, slot.pos), c.id);
-        if (c.entityId != null) entityIndex.remove(c.entityId);
+        for (UUID entityId : c.spawnedEntities) {
+            entityIndex.remove(entityId);
+            damageableEntityIndex.remove(entityId);
+        }
+        if (c.entityId != null) {
+            entityIndex.remove(c.entityId);
+            damageableEntityIndex.remove(c.entityId);
+        }
         if (c.bastionId != null) bastionIndex.remove(c.bastionId, c.id);
+        spatialIndex.remove(c.id);
     }
 
     private static List<WorldSlot> transform(List<Slot> slots, BlockPos anchor, Direction facing) {
-        Direction right = facing.getClockWise();
         List<WorldSlot> result = new ArrayList<>(slots.size());
         for (Slot slot : slots) {
-            BlockPos o = slot.offset;
-            int dx = right.getStepX() * o.getX() + facing.getStepX() * o.getZ();
-            int dz = right.getStepZ() * o.getX() + facing.getStepZ() * o.getZ();
-            result.add(new WorldSlot(anchor.offset(dx, o.getY(), dz), slot.state));
+            BlockPos relative = FortificationTransform.rotate(slot.offset, facing);
+            BlockState state = slot.state == null ? null
+                : slot.state.rotate(FortificationTransform.rotation(facing));
+            result.add(new WorldSlot(slot.templateIndex, anchor.offset(relative), state,
+                slot.blockEntityNbt == null ? null : slot.blockEntityNbt.copy(), slot.touch));
         }
         return result;
     }
 
     private static List<BlockPos> footprint(List<WorldSlot> slots) {
-        int minY = slots.stream().mapToInt(slot -> slot.pos.getY()).min().orElse(0);
+        int minY = slots.stream()
+            .filter(slot -> slot.touch == FortificationTemplateCompiler.Touch.BLOCK)
+            .mapToInt(slot -> slot.pos.getY()).min().orElse(
+                slots.stream().mapToInt(slot -> slot.pos.getY()).min().orElse(0));
         LinkedHashSet<BlockPos> result = new LinkedHashSet<>();
-        for (WorldSlot slot : slots) if (slot.pos.getY() == minY) result.add(slot.pos.immutable());
+        for (WorldSlot slot : slots) {
+            if (slot.pos.getY() == minY
+                && (slot.touch == FortificationTemplateCompiler.Touch.BLOCK || result.isEmpty())) {
+                result.add(slot.pos.immutable());
+            }
+        }
         return List.copyOf(result);
     }
 
     private static boolean spaceIsClear(ServerLevel level, List<WorldSlot> slots, ServerPlayer placer) {
         for (WorldSlot slot : slots) {
             BlockState state = level.getBlockState(slot.pos);
-            if (!state.isAir() && !state.is(Blocks.SNOW)) return false;
+            if (!isReplaceable(state)) return false;
             if (!level.getEntities((Entity) null, new AABB(slot.pos), entity -> entity != placer
                 && entity instanceof LivingEntity && entity.isAlive()).isEmpty()) return false;
         }
@@ -767,33 +899,42 @@ public final class FortificationManager {
         for (WorldSlot slot : c.finalSlots) {
             BlockState state = level.getBlockState(slot.pos);
             boolean foundation = c.footprint.contains(slot.pos) && state.is(BastionItems.ON_BUILDING_BLOCK);
-            if (!foundation && !state.isAir() && !state.is(Blocks.SNOW)) return false;
+            if (!foundation && !isReplaceable(state)) return false;
             if (!level.getEntities((Entity) null, new AABB(slot.pos), entity -> entity instanceof LivingEntity
                 && entity.isAlive()).isEmpty()) return false;
         }
         return true;
     }
 
+    private static boolean isReplaceable(BlockState state) {
+        return state.isAir() || state.is(Blocks.SNOW) || state.canBeReplaced();
+    }
+
+    private static AABB boundsOf(List<WorldSlot> slots, BlockPos fallback) {
+        AABB box = null;
+        for (WorldSlot slot : slots) {
+            AABB cell = new AABB(slot.pos);
+            box = box == null ? cell : box.minmax(cell);
+        }
+        return box == null ? new AABB(fallback) : box;
+    }
+
     private static boolean placeFoundations(ServerLevel level, Construction c, int stage) {
         if (BastionItems.ON_BUILDING_BLOCK == null) return false;
-        List<BlockPos> written = new ArrayList<>();
+        List<BlockSnapshot> snapshots = new ArrayList<>();
         BlockState state = BastionItems.ON_BUILDING_BLOCK.defaultBlockState()
             .setValue(OnBuildingBlock.STAGE, Math.max(0, Math.min(6, stage)));
         for (BlockPos pos : c.footprint) {
             BlockState old = level.getBlockState(pos);
-            if (!old.isAir() && !old.is(Blocks.SNOW)) {
-                for (BlockPos rollback : written) level.setBlock(rollback, Blocks.AIR.defaultBlockState(), 3);
+            if (!isReplaceable(old)) {
+                restore(level, snapshots);
                 return false;
             }
+            snapshots.add(snapshot(level, pos));
             if (!level.setBlock(pos, state, 3)) {
-                for (BlockPos rollback : written) {
-                    if (level.getBlockState(rollback).is(BastionItems.ON_BUILDING_BLOCK)) {
-                        level.setBlock(rollback, Blocks.AIR.defaultBlockState(), 3);
-                    }
-                }
+                restore(level, snapshots);
                 return false;
             }
-            written.add(pos);
         }
         return true;
     }
@@ -812,40 +953,99 @@ public final class FortificationManager {
         }
     }
 
-    private static boolean placeFinalBlocks(ServerLevel level, Construction c) {
-        List<WorldSlot> written = new ArrayList<>();
-        for (WorldSlot slot : c.finalSlots) {
-            if (slot.state == null || !level.setBlock(slot.pos, slot.state, 3)) {
-                for (WorldSlot rollback : written) {
-                    if (level.getBlockState(rollback.pos).equals(rollback.state)) {
-                        level.setBlock(rollback.pos, Blocks.AIR.defaultBlockState(), 3);
-                    }
+    private boolean placeFinalBlocks(ServerLevel level, Construction c) {
+        List<BlockSnapshot> snapshots = new ArrayList<>();
+        List<UUID> spawned = new ArrayList<>();
+        try {
+            for (WorldSlot slot : c.finalSlots) {
+                if (slot.touch == FortificationTemplateCompiler.Touch.IGNORE) continue;
+                snapshots.add(snapshot(level, slot.pos));
+                BlockState state = slot.touch == FortificationTemplateCompiler.Touch.EXPLICIT_AIR
+                    ? Blocks.AIR.defaultBlockState() : slot.state;
+                if (state == null || !level.setBlock(slot.pos, state, 3)) {
+                    throw new IllegalStateException("setBlock 返回 false: " + slot.pos);
                 }
-                return false;
+                if (slot.blockEntityNbt != null) {
+                    BlockEntity target = level.getBlockEntity(slot.pos);
+                    if (target == null) throw new IllegalStateException("方块实体未创建: " + slot.pos);
+                    CompoundTag clean = slot.blockEntityNbt.copy();
+                    clean.putInt("x", slot.pos.getX());
+                    clean.putInt("y", slot.pos.getY());
+                    clean.putInt("z", slot.pos.getZ());
+                    target.load(clean);
+                    target.setChanged();
+                }
             }
-            written.add(slot);
+            if (c.blueprint.template != null) {
+                for (FortificationTemplateCompiler.OrientedEntity info
+                    : c.blueprint.template.oriented(c.facing).entities()) {
+                    CompoundTag tag = info.visualNbt().copy();
+                    Entity entity = EntityType.loadEntityRecursive(tag, level, loaded -> {
+                        Vec3 relative = info.relativePosition();
+                        loaded.setPos(c.anchor.getX() + relative.x,
+                            c.anchor.getY() + relative.y, c.anchor.getZ() + relative.z);
+                        loaded.setYRot(c.facing.toYRot());
+                        return loaded;
+                    });
+                    if (entity == null || !level.addFreshEntity(entity)) {
+                        throw new IllegalStateException("结构实体生成失败: " + info.type());
+                    }
+                    spawned.add(entity.getUUID());
+                    c.spawnedEntities.add(entity.getUUID());
+                    entityIndex.put(entity.getUUID(), c.id);
+                    damageableEntityIndex.put(entity.getUUID(), info.damageable());
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            Espetro.LOGGER.error("工事结构事务放置失败 {}，正在回滚", c.blueprint.id, e);
+            for (UUID id : spawned) {
+                Entity entity = level.getEntity(id);
+                if (entity != null) entity.discard();
+                c.spawnedEntities.remove(id);
+                entityIndex.remove(id);
+                damageableEntityIndex.remove(id);
+            }
+            restore(level, snapshots);
+            return false;
         }
-        return true;
     }
 
-    private static void clearFinalBlocks(ServerLevel level, Construction c) {
+    private void clearFinalBlocks(ServerLevel level, Construction c) {
         for (WorldSlot slot : c.finalSlots) {
-            if (!c.missing.contains(slot.pos) && level.hasChunkAt(slot.pos)) {
+            if (slot.touch == FortificationTemplateCompiler.Touch.BLOCK
+                && !c.missing.contains(slot.pos) && level.hasChunkAt(slot.pos)
+                && slot.state != null && level.getBlockState(slot.pos).equals(slot.state)) {
                 level.setBlock(slot.pos, Blocks.AIR.defaultBlockState(), 3);
             }
         }
+        for (UUID id : new ArrayList<>(c.spawnedEntities)) {
+            Entity entity = level.getEntity(id);
+            if (entity != null) entity.discard();
+            entityIndex.remove(id);
+            damageableEntityIndex.remove(id);
+        }
+        c.spawnedEntities.clear();
+        c.entityId = null;
     }
 
     private boolean completeEntity(ServerLevel level, Construction c) {
         FortificationConfig.FortificationDef def = c.blueprint.definition;
-        ResourceLocation id = ResourceLocation.tryParse(def.entityId);
+        ResourceLocation id = ResourceLocation.tryParse(def.placement.entityId);
         EntityType<?> type = id == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
-        Entity entity = type == null ? null : type.create(level);
+        CompoundTag tag = def.placement.sanitizedEntityNbt == null
+            ? new CompoundTag() : def.placement.sanitizedEntityNbt.copy();
+        if (id != null) tag.putString("id", id.toString());
+        Entity entity = type == null ? null : EntityType.loadEntityRecursive(tag, level, loaded -> loaded);
         if (entity != null) {
-            entity.setPos(c.anchor.getX() + 0.5D, c.anchor.getY(), c.anchor.getZ() + 0.5D);
+            double[] offset = def.placement.spawnOffset;
+            double ox = offset != null && offset.length == 3 ? offset[0] : 0.5D;
+            double oy = offset != null && offset.length == 3 ? offset[1] : 0.0D;
+            double oz = offset != null && offset.length == 3 ? offset[2] : 0.5D;
+            entity.setPos(c.anchor.getX() + ox, c.anchor.getY() + oy, c.anchor.getZ() + oz);
             entity.setYRot(c.facing.toYRot());
             entity.setCustomName(Component.literal(def.displayName));
-            if (VehicleManager.isAmmoSupplyStationEntity(entity) || "vehicle_supply_station".equals(def.id)) {
+            if (def.behaviorType == FortificationConfig.Behavior.VEHICLE_SUPPLY_STATION) {
                 VehicleManager.applySupplyStationMapTags(entity, c.team, "fort_" + entity.getUUID());
             } else {
                 entity.addTag("espetro_fortification_" + def.id);
@@ -853,27 +1053,69 @@ public final class FortificationManager {
             }
             if (level.addFreshEntity(entity)) {
                 c.entityId = entity.getUUID();
+                c.spawnedEntities.add(entity.getUUID());
+                entityIndex.put(entity.getUUID(), c.id);
+                damageableEntityIndex.put(entity.getUUID(), true);
                 return true;
             }
         }
-        BlockState fallback = resolveBlock(def.fallbackBlockId);
-        return fallback != null && level.setBlock(c.anchor, fallback, 3);
+        c.fallbackMode = true;
+        return c.blueprint.template != null && placeFinalBlocks(level, c);
+    }
+
+    private static BlockSnapshot snapshot(ServerLevel level, BlockPos pos) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        return new BlockSnapshot(pos.immutable(), level.getBlockState(pos),
+            blockEntity == null ? null : blockEntity.saveWithFullMetadata());
+    }
+
+    private static void restore(ServerLevel level, List<BlockSnapshot> snapshots) {
+        for (int i = snapshots.size() - 1; i >= 0; i--) {
+            BlockSnapshot snapshot = snapshots.get(i);
+            level.setBlock(snapshot.pos, snapshot.state, 3);
+            if (snapshot.blockEntityNbt != null) {
+                BlockEntity restored = level.getBlockEntity(snapshot.pos);
+                if (restored != null) {
+                    restored.load(snapshot.blockEntityNbt.copy());
+                    restored.setChanged();
+                }
+            }
+        }
+    }
+
+    private record BlockSnapshot(BlockPos pos, BlockState state,
+                                 @Nullable CompoundTag blockEntityNbt) {
     }
 
     private static void restoreProportional(ServerLevel level, Construction c) {
         if (c.missing.isEmpty()) return;
-        int total = c.complete ? c.finalSlots.size() : c.footprint.size();
+        int total = c.complete ? (int) c.finalSlots.stream()
+            .filter(slot -> slot.touch == FortificationTemplateCompiler.Touch.BLOCK).count()
+            : c.footprint.size();
         int desired = FortificationProgressPolicy.desiredPresentParts(
-            c.progress, c.required(), total);
+            c.complete ? c.structuralValue : c.progress,
+            c.complete ? c.blueprint.definition.durability.structuralValue : c.required(), total);
         int present = total - c.missing.size();
         if (desired <= present) return;
         if (c.complete) {
             for (WorldSlot slot : c.finalSlots) {
                 if (present >= desired) break;
                 BlockState current = level.getBlockState(slot.pos);
-                if (c.missing.contains(slot.pos) && slot.state != null
-                    && (current.isAir() || current.is(Blocks.SNOW))
+                if (slot.touch == FortificationTemplateCompiler.Touch.BLOCK
+                    && c.missing.contains(slot.pos) && slot.state != null
+                    && isReplaceable(current)
                     && level.setBlock(slot.pos, slot.state, 3)) {
+                    if (slot.blockEntityNbt != null) {
+                        BlockEntity blockEntity = level.getBlockEntity(slot.pos);
+                        if (blockEntity != null) {
+                            CompoundTag clean = slot.blockEntityNbt.copy();
+                            clean.putInt("x", slot.pos.getX());
+                            clean.putInt("y", slot.pos.getY());
+                            clean.putInt("z", slot.pos.getZ());
+                            blockEntity.load(clean);
+                            blockEntity.setChanged();
+                        }
+                    }
                     c.missing.remove(slot.pos);
                     present++;
                 }
@@ -941,7 +1183,8 @@ public final class FortificationManager {
     private boolean pendingRadioOverlap(ServerLevel level, BlockPos anchor, String team) {
         double min = BastionManager.getInstance().getMinimumRadioCenterDistance();
         String dimension = level.dimension().location().toString();
-        return constructions.values().stream().anyMatch(c -> c.blueprint.kind == Kind.RADIO
+        return constructions.values().stream().anyMatch(c ->
+            c.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
             && c.dimension.equals(dimension)
             && RadioCoveragePolicy.blocksPlacement(c.team, team, c.anchor.distSqr(anchor), min));
     }
@@ -954,7 +1197,8 @@ public final class FortificationManager {
                 && b.getPosition().distSqr(radio.getPosition()) <= radiusSq) count++;
         }
         for (Construction c : constructions.values()) {
-            if (c.blueprint.kind == Kind.HAB && radio.getBastionId().equals(c.radioId)) count++;
+            if (c.blueprint.definition.behaviorType == FortificationConfig.Behavior.HAB
+                && radio.getBastionId().equals(c.radioId)) count++;
         }
         return count;
     }
@@ -984,8 +1228,10 @@ public final class FortificationManager {
     }
 
     private static void sendProgress(ServerPlayer player, Construction c, boolean building) {
+        int value = c.complete ? c.structuralValue : c.progress;
+        int maximum = c.complete ? c.blueprint.definition.durability.structuralValue : c.required();
         NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
-            new FortificationProgressPacket(c.blueprint.displayName, c.progress, c.required(), building));
+            new FortificationProgressPacket(c.blueprint.displayName, value, maximum, building));
     }
 
     @Nullable

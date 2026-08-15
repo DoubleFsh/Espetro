@@ -2,6 +2,7 @@ package org.espetro.api;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,5 +21,22 @@ class TacticalMapStateSnapshotTest {
             () -> first.structures().clear());
         assertThrows(UnsupportedOperationException.class,
             () -> first.vehicleSupplyStations().clear());
+    }
+
+    @Test
+    void dirtyMarkRebuildsOnceAndAdvancesRevision() {
+        TacticalMapStateSnapshot before =
+            EspetroAPI.getTacticalMapStateSnapshot();
+
+        EspetroAPI.markTacticalMapStateDirty();
+
+        TacticalMapStateSnapshot rebuilt =
+            EspetroAPI.getTacticalMapStateSnapshot();
+        TacticalMapStateSnapshot unchanged =
+            EspetroAPI.getTacticalMapStateSnapshot();
+
+        assertNotSame(before, rebuilt);
+        assertTrue(rebuilt.revision() > before.revision());
+        assertSame(rebuilt, unchanged);
     }
 }

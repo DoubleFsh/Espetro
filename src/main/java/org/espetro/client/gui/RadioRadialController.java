@@ -5,7 +5,6 @@ import cc.sighs.auratip.api.client.RadialMenuClientApi;
 import cc.sighs.auratip.api.radiamenu.RadialMenuBuilder;
 import cc.sighs.auratip.api.radiamenu.RadialMenuRegistry;
 import cc.sighs.auratip.api.radiamenu.icon.IRadialIcon;
-import cc.sighs.auratip.client.render.RadialMenuOverlay;
 import com.mojang.serialization.Codec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,7 +12,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.NetworkManager;
-import org.espetro.network.RadialActionPacket;
 import org.espetro.network.RadioRadialPacket;
 
 import java.util.ArrayList;
@@ -47,10 +45,6 @@ public final class RadioRadialController {
     private static BlockPos lastRadioPos = BlockPos.ZERO;
     private static java.util.UUID pendingVehicleId; // 车辆换职业时非 null
     private static List<RadioRadialPacket.ClassEntry> cachedClasses = List.of();
-    /** AuraTip 的 open() 在当前轮盘活跃时只会关闭；等关闭动画结束后再开目标菜单。 */
-    private static ResourceLocation pendingMenu;
-    /** 活跃 Overlay 期间禁止替换注册表，避免闪烁和菜单丢失。 */
-    private static boolean pendingPublish;
 
     /** 由车辆轮盘调用，在下一次职业列表到达时标记为车辆换职 */
     public static void markNextClassListAsVehicle(java.util.UUID vehicleId) {
@@ -68,11 +62,13 @@ public final class RadioRadialController {
         Actions.register(NAVIGATE, params -> {
             String target = params.getString("target", "");
             if ("root".equals(target)) {
-                pendingMenu = ROOT;
+                replaceRoot();
             } else if ("classes".equals(target)) {
-                pendingMenu = CLASS_MENU;
+                replaceMenu(buildClassMenuData());
             } else if (target.startsWith("variants:")) {
-                pendingMenu = variantMenuId(target.substring("variants:".length()));
+                String classId = target.substring("variants:".length());
+                cachedClasses.stream().filter(entry -> entry.classId.equals(classId)).findFirst()
+                    .ifPresent(entry -> replaceMenu(buildVariantMenuData(entry)));
             }
         });
         Actions.register(PICK_CLASS, params -> {
@@ -92,6 +88,7 @@ public final class RadioRadialController {
                         org.espetro.network.ClassSelectPacket.fromVehicle(
                             faction != null ? faction : "", classId, variantId,
                             pendingVehicleId));
+                    pendingVehicleId = null;
                 } else {
                     // Radio 换职业
                     NetworkManager.sendRadioClassSelect(
@@ -102,11 +99,8 @@ public final class RadioRadialController {
         Actions.register(DO_ACTION, params -> {
             String action = params.getString("action", "");
             if ("RESUPPLY".equals(action)) {
-                NetworkManager.sendRadioResupply(lastRadioPos);
-                pendingMenu = null;
-                if (RadialMenuOverlay.INSTANCE.isActive()) {
-                    RadialMenuOverlay.INSTANCE.close();
-                }
+                NetworkManager.NET.sendToServer(new org.espetro.network.RequestResupplyCatalogPacket(
+                    org.espetro.logistics.resupply.ResupplySourceRef.radio(lastRadioPos)));
             }
         });
         publishMenus();
@@ -133,54 +127,24 @@ public final class RadioRadialController {
         if (mc.player == null) {
             return;
         }
-        pendingPublish = true;
-        pendingMenu = ROOT;
-        // 等关闭动画真正完成后，tick() 会发布并打开新菜单。
-        if (RadialMenuOverlay.INSTANCE.isActive()) {
-            RadialMenuOverlay.INSTANCE.close();
+        boolean vehicleClassMenu = pendingVehicleId != null;
+        if (RadialMenuClientApi.isActive()) {
+            replaceMenu(vehicleClassMenu ? buildClassMenuData() : rootMenu());
+        } else {
+            publishMenus();
+            RadialMenuClientApi.open(vehicleClassMenu ? CLASS_MENU : ROOT);
         }
     }
 
     /** 客户端 END tick：处理 AuraTip 的关闭动画和延迟二/三级菜单导航。 */
     public static void tick(Minecraft mc) {
-        if (!initialized || mc == null || mc.player == null || mc.screen != null) {
-            return;
-        }
-        if (RadialMenuOverlay.INSTANCE.isActive()) {
-            return;
-        }
-        if (pendingPublish) {
-            pendingPublish = false;
-            try {
-                publishMenus();
-            } catch (Throwable t) {
-                pendingMenu = null;
-                org.espetro.Espetro.LOGGER.warn(
-                    "RadioRadial 注册菜单失败: {}", t.toString(), t);
-                return;
-            }
-        }
-        if (pendingMenu != null) {
-            ResourceLocation next = pendingMenu;
-            pendingMenu = null;
-            RadialMenuClientApi.open(next);
-        }
+        // AuraTip replace() makes navigation synchronous; retained for the existing tick hook.
     }
 
     private static void publishMenus() {
         List<cc.sighs.auratip.data.RadialMenuData> menus =
             new ArrayList<>(2 + cachedClasses.size());
-        menus.add(new RadialMenuBuilder(ROOT)
-            .radii(44, 96)
-            .animationSpeed(1.25f)
-            .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            .slot("espetro.radio.resupply", ICON_RESUPPLY,
-                Actions.script(DO_ACTION, Map.of("action", "RESUPPLY")),
-                Component.literal("补给步兵"), "#FFD5B25C")
-            .slot("espetro.radio.change_class", ICON_CLASS,
-                Actions.script(NAVIGATE, Map.of("target", "classes")),
-                Component.literal("更换职业"), "#FFD5B25C")
-            .build());
+        menus.add(rootMenu());
         menus.add(buildClassMenuData());
         for (RadioRadialPacket.ClassEntry entry : cachedClasses) {
             if (entry != null && entry.variants.size() > 1) {
@@ -190,12 +154,37 @@ public final class RadioRadialController {
         RadialMenuRegistry.setMenus(OWNER, menus);
     }
 
+    private static cc.sighs.auratip.data.RadialMenuData rootMenu() {
+        return new RadialMenuBuilder(ROOT)
+            .radii(44, 96)
+            .animationSpeed(1.25f)
+            .ringColors(List.of("#E6141719", "#F02A2D2F"))
+            .persistentSlot("espetro.radio.resupply", ICON_RESUPPLY,
+                Actions.script(DO_ACTION, Map.of("action", "RESUPPLY")),
+                Component.literal("补给步兵"), "#FFFFFFFF", "#FFFFD54F")
+            .persistentSlot("espetro.radio.change_class", ICON_CLASS,
+                Actions.script(NAVIGATE, Map.of("target", "classes")),
+                Component.literal("更换职业"), "#FFFFFFFF", "#FFFFD54F")
+            .build();
+    }
+
+    public static void replaceRoot() {
+        replaceMenu(rootMenu());
+    }
+
+    private static void replaceMenu(cc.sighs.auratip.data.RadialMenuData data) {
+        if (!RadialMenuClientApi.replace(data)) {
+            publishMenus();
+            RadialMenuClientApi.open(data.id());
+        }
+    }
+
     private static cc.sighs.auratip.data.RadialMenuData buildClassMenuData() {
         var builder = new RadialMenuBuilder(CLASS_MENU)
             .radii(44, 100)
             .animationSpeed(1.25f)
             .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            .slot("espetro.radio.back", ICON_BACK,
+            .persistentSlot("espetro.radio.back", ICON_BACK,
                 Actions.script(NAVIGATE, Map.of("target", "root")),
                 Component.literal("↩"), "#FF888888");
         if (cachedClasses.isEmpty()) {
@@ -215,7 +204,7 @@ public final class RadioRadialController {
                 String highlight = e.enabled ? "#FF8CB4D5"
                     : e.cooldownBlocked ? "#FF44484D" : "#FF4A3030";
                 if (e.variants.size() > 1 && e.enabled) {
-                    builder = builder.slot(slotName, icon,
+                    builder = builder.persistentSlot(slotName, icon,
                         Actions.script(NAVIGATE,
                             Map.of("target", "variants:" + e.classId)),
                         Component.literal(nameColor + displayName + count), highlight);
@@ -235,7 +224,7 @@ public final class RadioRadialController {
             .radii(44, 100)
             .animationSpeed(1.25f)
             .ringColors(List.of("#E6141719", "#F02A2D2F"))
-            .slot("espetro.radio.variant.back", ICON_BACK,
+            .persistentSlot("espetro.radio.variant.back", ICON_BACK,
                 Actions.script(NAVIGATE, Map.of("target", "classes")),
                 Component.literal("↩"), "#FF888888");
         ResourceLocation icon = resolveClassIcon(entry);

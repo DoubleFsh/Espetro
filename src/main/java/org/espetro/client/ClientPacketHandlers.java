@@ -11,6 +11,14 @@ import org.espetro.team.GamePhase;
  */
 public class ClientPacketHandlers {
 
+    public static void handleResupplyCatalog(ResupplyCatalogPacket packet) {
+        org.espetro.client.gui.ResupplyRadialController.onCatalog(packet);
+    }
+
+    public static void handleResupplyDelta(ResupplyEntryDeltaPacket packet) {
+        org.espetro.client.gui.ResupplyRadialController.onDelta(packet);
+    }
+
     // ==================== OpenFactionScreenPacket ====================
 
     public static void handleOpenFactionScreen() {

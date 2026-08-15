@@ -7,8 +7,10 @@
 
 1. 小队长、火力组长或指挥官通过 Alt 轮盘选择“建造工事”。
 2. 建造费用从覆盖目标点的己方 Radio 库存原子扣除；余额不足时不放置也不部分扣款。
-3. 玩家右击已建成的弹药箱打开「补给步兵 / 更换职业」菜单；潜行右击直接补充当前职业装备变体的实际缺口，Radio 弹药不足完整费用时整次取消。
-4. 对准己方补给载具可用 F 轮盘装卸弹药与建材；战斗载具仅能装卸弹药。
+3. 玩家右击已建成弹药箱打开「补给步兵 / 更换职业」根菜单；选择「补给步兵」进入逐项子轮盘。
+   潜行右击直接打开同一补给会话。每次有效点击按该条目的 `ammo_cost` 固定扣费，不再一次补整个列表。
+4. 对准己方补给载具可用 F 轮盘装卸弹药与建材（可长按按 `transfer_interval_ticks` 重复）；
+   「补给步兵」同样进入逐项子轮盘。战斗载具仅能装卸弹药。
 5. Radio 本体不提供存入物资、步兵补给，也不会因为收到物资自动生成弹药箱。
 
 只有 Espetro 发放并带有补给标签的物品可以存入 FOB。普通橡木木板或箭不会被误收。
@@ -54,6 +56,42 @@
 
 `hab_disable_radio_health` 是 Radio 最大生命值的百分比。`sources` 按顺序匹配，命中第一个
 来源后停止。来源中的非空条件必须全部满足。
+
+`hab_construction_cost` / `ammo_crate_construction_cost` 只作为工事 v2 的一次性迁移输入，
+运行时不再读取。地图若确有不同费用，写入：
+
+```json
+{
+  "fortification_overrides": {
+    "espetro:hab": {
+      "cost": { "construction": 500 }
+    }
+  }
+}
+```
+
+职业补给在编制 JSON 的每个 variant 上逐项配置：
+
+```json
+{
+  "resupply": {
+    "items": [
+      { "id": "superbwarfare:medical_kit", "count": 2, "max": 3, "ammo_cost": 1 },
+      {
+        "id": "taczmagazines:magazine",
+        "nbt": "{AmmoCount:30,AmmoId:\"tacz:58x42\",MagazineFamily:\"58x42_30\",MaxCapacity:30}",
+        "count": 1,
+        "max": 7,
+        "ammo_cost": 1
+      }
+    ]
+  }
+}
+```
+
+未写 `nbt` 时按物品 ID 统计所有 tag 变体；写了 `nbt` 才精确匹配。弹匣按
+`MagazineFamily + AmmoId + MaxCapacity` 计满匣数，半匣不计入 `max`，补给时优先替换
+余弹最低的同种半匣。旧 variant 顶层 `resupply.ammo_cost` 已弃用。
 
 平铺字段 `radio_*` / `require_teammate` 仍受支持，并会同步进嵌套 `radio`（或由嵌套写回）。
 推荐在数据包中直接配置 `logistics.radio`。

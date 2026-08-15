@@ -27,6 +27,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.energy.IEnergyStorage;
 import org.espetro.Espetro;
+import org.espetro.api.EspetroAPI;
 import org.espetro.mapconfig.VehSpawnSnapshot;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.GamePhase;
@@ -1188,7 +1189,10 @@ public class VehicleManager {
         vehicleSupplies.clear();
         cooldowns.clear();
         autoRespawnQueue.clear();
-        mappedSupplyStations.clear();
+        if (!mappedSupplyStations.isEmpty()) {
+            mappedSupplyStations.clear();
+            EspetroAPI.markTacticalMapStateDirty();
+        }
     }
 
     private void cancelInitialVehicleDeployment(boolean releaseTickets) {
@@ -1233,14 +1237,18 @@ public class VehicleManager {
         String name = entity.getCustomName() == null
             ? SUPPLY_STATION_DISPLAY_NAME
             : entity.getCustomName().getString();
-        mappedSupplyStations.put(entity.getUUID(), new SupplyStationSnapshot(
+        SupplyStationSnapshot snapshot = new SupplyStationSnapshot(
             entity.getUUID(),
             name,
             team,
             entity.level().dimension().location().toString(),
             pos.getX(),
             pos.getY(),
-            pos.getZ()));
+            pos.getZ());
+        if (!snapshot.equals(mappedSupplyStations.get(entity.getUUID()))) {
+            mappedSupplyStations.put(entity.getUUID(), snapshot);
+            EspetroAPI.markTacticalMapStateDirty();
+        }
     }
 
     /** Register a block-backed or entity-backed station without scanning the world. */
@@ -1249,16 +1257,20 @@ public class VehicleManager {
         if (id == null || team == null || team.isBlank() || dimension == null || pos == null) {
             return;
         }
-        mappedSupplyStations.put(id, new SupplyStationSnapshot(
+        SupplyStationSnapshot snapshot = new SupplyStationSnapshot(
             id,
             name == null || name.isBlank() ? SUPPLY_STATION_DISPLAY_NAME : name,
             team.trim().toUpperCase(Locale.ROOT), dimension,
-            pos.getX(), pos.getY(), pos.getZ()));
+            pos.getX(), pos.getY(), pos.getZ());
+        if (!snapshot.equals(mappedSupplyStations.get(id))) {
+            mappedSupplyStations.put(id, snapshot);
+            EspetroAPI.markTacticalMapStateDirty();
+        }
     }
 
     public void unregisterMappedSupplyStation(UUID entityId) {
-        if (entityId != null) {
-            mappedSupplyStations.remove(entityId);
+        if (entityId != null && mappedSupplyStations.remove(entityId) != null) {
+            EspetroAPI.markTacticalMapStateDirty();
         }
     }
 
@@ -1493,6 +1505,7 @@ public class VehicleManager {
         if (level == null) return 0;
         String dimension = level.dimension().location().toString();
         int removed = 0;
+        boolean mappedStationsChanged = false;
         for (SupplyStationSnapshot snapshot
                 : new ArrayList<>(mappedSupplyStations.values())) {
             if (!dimension.equals(snapshot.dimension())) {
@@ -1504,7 +1517,10 @@ public class VehicleManager {
                 entity.discard();
                 removed++;
             }
-            mappedSupplyStations.remove(snapshot.id());
+            mappedStationsChanged |= mappedSupplyStations.remove(snapshot.id()) != null;
+        }
+        if (mappedStationsChanged) {
+            EspetroAPI.markTacticalMapStateDirty();
         }
         return removed;
     }
@@ -1543,6 +1559,7 @@ public class VehicleManager {
         if (level == null) return 0;
         String dimension = level.dimension().location().toString();
         int removed = 0;
+        boolean mappedStationsChanged = false;
         for (SupplyStationSnapshot snapshot
                 : new ArrayList<>(mappedSupplyStations.values())) {
             if (!dimension.equals(snapshot.dimension())) {
@@ -1553,8 +1570,11 @@ public class VehicleManager {
                 && entity.getTags().contains(MAIN_BASE_SUPPLY_TAG)) {
                 entity.discard();
                 removed++;
-                mappedSupplyStations.remove(snapshot.id());
+                mappedStationsChanged |= mappedSupplyStations.remove(snapshot.id()) != null;
             }
+        }
+        if (mappedStationsChanged) {
+            EspetroAPI.markTacticalMapStateDirty();
         }
         return removed;
     }

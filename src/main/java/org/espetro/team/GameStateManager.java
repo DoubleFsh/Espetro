@@ -26,6 +26,7 @@ import org.espetro.mapconfig.ActiveMapConfig;
 import org.espetro.governance.CommanderGovernanceManager;
 import org.espetro.dimension.BattlefieldWorldManager;
 import org.espetro.logistics.SupplyManager;
+import org.espetro.logistics.resupply.ResupplySessionManager;
 import org.espetro.stamina.StaminaManager;
 import net.minecraftforge.common.MinecraftForge;
 import org.espetro.api.event.GamePhaseChangedEvent;
@@ -118,6 +119,12 @@ public class GameStateManager {
     }
 
     public void setPhase(GamePhase phase) {
+        if (phase != null && !phase.isLobbyLike()
+            && !BattlefieldWorldManager.getInstance().isStartupReady()) {
+            Espetro.LOGGER.error("战场启动门禁未 READY，拒绝阶段切换 {} -> {}",
+                currentPhase, phase);
+            phase = GamePhase.LOBBY;
+        }
         GamePhase previous = this.currentPhase;
         this.currentPhase = phase;
         Espetro.LOGGER.info("游戏阶段切换: {}", phase.getDisplayName());
@@ -132,6 +139,13 @@ public class GameStateManager {
      */
     public boolean prestart(MinecraftServer server) {
         if (server == null || !currentPhase.isLobbyLike()) {
+            return false;
+        }
+        if (!BattlefieldWorldManager.getInstance().isStartupReady()) {
+            var preparation = BattlefieldWorldManager.getInstance().getStartupPreparation();
+            Espetro.broadcastToAll("§c[Espetro] 战场启动重置失败，本次会话地图已禁用："
+                + (preparation.error() == null ? preparation.status().name() : preparation.error()));
+            setPhase(GamePhase.LOBBY);
             return false;
         }
         if (server.getPlayerCount() < 1) {
@@ -1298,6 +1312,7 @@ public class GameStateManager {
     }
 
     private void clearRoundRuntime(boolean clearStats) {
+        ResupplySessionManager.clearAll();
         waitingForTeam.clear();
         teamSelectedPlayers.clear();
         midGameJoiners.clear();
