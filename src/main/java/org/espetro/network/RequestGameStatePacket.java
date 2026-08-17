@@ -64,7 +64,8 @@ public class RequestGameStatePacket {
                     playerFaction,
                     activeTeam,
                     timeRemaining,
-                    gsm.getCurrentMapFolder()
+                    gsm.getCurrentMapFolder(),
+                    org.espetro.mapconfig.BattlefieldContext.getObjectiveMode()
                 );
 
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);

@@ -18,6 +18,8 @@ public class ClientGameState {
     private static long battleTimerAnchorMs;
     // 服务端当前选中/正在运行的地图目录名，用于读取客户端 EsWorld/<name>.png。
     private static String currentMapFolder = null;
+    // 本局目标模式；地图激活前为空。
+    private static String objectiveMode = null;
 
     public static void setCurrentPhase(GamePhase phase) {
         currentPhase = phase;
@@ -33,6 +35,14 @@ public class ClientGameState {
 
     public static String getCurrentMapFolder() {
         return currentMapFolder;
+    }
+
+    public static void setObjectiveMode(String mode) {
+        objectiveMode = mode == null || mode.isBlank() ? null : mode.trim();
+    }
+
+    public static String getObjectiveMode() {
+        return objectiveMode;
     }
 
     public static void setPlayerFactionId(String factionId) {

@@ -18,13 +18,16 @@ public final class ActiveBattlefieldSnapshot {
     private final String backgroundSha256;
     private final int backgroundWidth;
     private final int backgroundHeight;
+    private final String objectiveMode;
+    private final String objectiveLane;
+    private final long objectiveSeed;
 
     public ActiveBattlefieldSnapshot(String mapId, String displayName,
                                      ResourceKey<Level> dimension,
                                      String tacticalMapJson, String capturePointsJson,
                                      String backgroundImage, byte[] backgroundBytes) {
         this(mapId, displayName, dimension, tacticalMapJson, capturePointsJson,
-            backgroundImage, backgroundBytes, "", 0, 0);
+            backgroundImage, backgroundBytes, "", 0, 0, "", "", 0L);
     }
 
     public ActiveBattlefieldSnapshot(String mapId, String displayName,
@@ -33,6 +36,19 @@ public final class ActiveBattlefieldSnapshot {
                                      String backgroundImage, byte[] backgroundBytes,
                                      String backgroundSha256,
                                      int backgroundWidth, int backgroundHeight) {
+        this(mapId, displayName, dimension, tacticalMapJson, capturePointsJson,
+            backgroundImage, backgroundBytes, backgroundSha256,
+            backgroundWidth, backgroundHeight, "", "", 0L);
+    }
+
+    public ActiveBattlefieldSnapshot(String mapId, String displayName,
+                                     ResourceKey<Level> dimension,
+                                     String tacticalMapJson, String capturePointsJson,
+                                     String backgroundImage, byte[] backgroundBytes,
+                                     String backgroundSha256,
+                                     int backgroundWidth, int backgroundHeight,
+                                     String objectiveMode, String objectiveLane,
+                                     long objectiveSeed) {
         this.mapId = mapId;
         this.displayName = displayName;
         this.dimension = dimension;
@@ -43,6 +59,9 @@ public final class ActiveBattlefieldSnapshot {
         this.backgroundSha256 = backgroundSha256 == null ? "" : backgroundSha256;
         this.backgroundWidth = Math.max(0, backgroundWidth);
         this.backgroundHeight = Math.max(0, backgroundHeight);
+        this.objectiveMode = objectiveMode == null ? "" : objectiveMode;
+        this.objectiveLane = objectiveLane == null ? "" : objectiveLane;
+        this.objectiveSeed = objectiveSeed;
     }
 
     public String mapId() {
@@ -83,5 +102,17 @@ public final class ActiveBattlefieldSnapshot {
 
     public int backgroundHeight() {
         return backgroundHeight;
+    }
+
+    public String objectiveMode() {
+        return objectiveMode;
+    }
+
+    public String objectiveLane() {
+        return objectiveLane;
+    }
+
+    public long objectiveSeed() {
+        return objectiveSeed;
     }
 }

@@ -15,40 +15,49 @@ public class GamePhaseSyncPacket {
 
     private final String phaseName;
     private final String mapFolder;
+    private final String objectiveMode;
 
     public GamePhaseSyncPacket(GamePhase phase) {
         this(phase, "");
     }
 
     public GamePhaseSyncPacket(GamePhase phase, String mapFolder) {
+        this(phase, mapFolder, "");
+    }
+
+    public GamePhaseSyncPacket(GamePhase phase, String mapFolder, String objectiveMode) {
         this.phaseName = phase.name();
         this.mapFolder = mapFolder == null ? "" : mapFolder;
+        this.objectiveMode = objectiveMode == null ? "" : objectiveMode;
     }
 
     public static GamePhaseSyncPacket read(FriendlyByteBuf buf) {
         String phaseName = buf.readUtf();
         String mapFolder = buf.readUtf();
+        String objectiveMode = buf.readUtf();
         try {
-            return new GamePhaseSyncPacket(GamePhase.valueOf(phaseName), mapFolder);
+            return new GamePhaseSyncPacket(GamePhase.valueOf(phaseName), mapFolder, objectiveMode);
         } catch (IllegalArgumentException e) {
-            return new GamePhaseSyncPacket(GamePhase.LOBBY, mapFolder);
+            return new GamePhaseSyncPacket(GamePhase.LOBBY, mapFolder, objectiveMode);
         }
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeUtf(phaseName);
         buf.writeUtf(mapFolder);
+        buf.writeUtf(objectiveMode);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         final String phaseNameRef = this.phaseName;
         final String mapFolderRef = this.mapFolder;
+        final String objectiveModeRef = this.objectiveMode;
         
         ctx.get().enqueueWork(() -> {
             try {
                 Class.forName("org.espetro.client.ClientPacketHandlers")
-                    .getMethod("handleGamePhase", String.class, String.class)
-                    .invoke(null, phaseNameRef, mapFolderRef);
+                    .getMethod("handleGamePhase", String.class, String.class, String.class)
+                    .invoke(null, phaseNameRef, mapFolderRef, objectiveModeRef);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -58,4 +67,5 @@ public class GamePhaseSyncPacket {
 
     public String getPhaseName() { return phaseName; }
     public String getMapFolder() { return mapFolder; }
+    public String getObjectiveMode() { return objectiveMode; }
 }

@@ -165,11 +165,16 @@ public class ClientPacketHandlers {
     // ==================== GamePhaseSyncPacket ====================
 
     public static void handleGamePhase(String phaseName) {
-        handleGamePhase(phaseName, "");
+        handleGamePhase(phaseName, "", "");
     }
 
     public static void handleGamePhase(String phaseName, String mapFolder) {
+        handleGamePhase(phaseName, mapFolder, "");
+    }
+
+    public static void handleGamePhase(String phaseName, String mapFolder, String objectiveMode) {
         org.espetro.client.gui.ClientGameState.setCurrentMapFolder(mapFolder);
+        org.espetro.client.gui.ClientGameState.setObjectiveMode(objectiveMode);
         try {
             GamePhase phase = GamePhase.valueOf(phaseName);
             org.espetro.client.gui.ClientGameState.setCurrentPhase(phase);
@@ -303,6 +308,7 @@ public class ClientPacketHandlers {
     public static void handleGameStateResponse(org.espetro.network.GameStateResponsePacket packet) {
         // 更新客户端游戏状态
         org.espetro.client.gui.ClientGameState.setCurrentMapFolder(packet.getMapFolder());
+        org.espetro.client.gui.ClientGameState.setObjectiveMode(packet.getObjectiveMode());
         try {
             org.espetro.client.gui.ClientGameState.setCurrentPhase(
                 GamePhase.valueOf(packet.getPhaseName()));

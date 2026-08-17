@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.31";
+    public static final String PROTOCOL_VERSION = "1.32";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -1082,7 +1082,9 @@ public class NetworkManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
         GamePhaseSyncPacket packet = new GamePhaseSyncPacket(
-            phase, org.espetro.team.GameStateManager.getInstance().getCurrentMapFolder());
+            phase,
+            org.espetro.team.GameStateManager.getInstance().getCurrentMapFolder(),
+            org.espetro.mapconfig.BattlefieldContext.getObjectiveMode());
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
         }

@@ -483,7 +483,10 @@ public class EspetroAPI {
             map.esPoints.backgroundBytes(),
             map.esPoints.backgroundSha256,
             map.esPoints.backgroundWidth,
-            map.esPoints.backgroundHeight
+            map.esPoints.backgroundHeight,
+            map.esPoints.objectiveMode,
+            map.esPoints.objectiveLane,
+            map.esPoints.objectiveSeed
         );
     }
 
