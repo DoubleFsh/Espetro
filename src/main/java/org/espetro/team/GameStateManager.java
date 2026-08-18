@@ -1688,7 +1688,10 @@ public class GameStateManager {
         // 只给该玩家同步阶段信息，避免全局广播
         org.espetro.network.NetworkManager.NET.send(
             net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
-            new org.espetro.network.GamePhaseSyncPacket(currentPhase, getCurrentMapFolder()));
+            new org.espetro.network.GamePhaseSyncPacket(
+                currentPhase,
+                getCurrentMapFolder(),
+                BattlefieldContext.getObjectiveMode()));
         NetworkManager.sendOpenFactionScreen(player);
 
         player.sendSystemMessage(Component.literal("§6========================================"));

@@ -31,12 +31,18 @@ public final class ESPointsMapSnapshot {
     public final String backgroundSha256;
     public final int backgroundWidth;
     public final int backgroundHeight;
+    public final String objectiveMode;
+    public final String objectiveLane;
+    public final long objectiveSeed;
 
     private final byte[] background;
+    private final ObjectiveLayout objectiveLayout;
 
     private ESPointsMapSnapshot(String tacticalMapJson, String capturePointsJson,
                                 String backgroundImage, byte[] backgroundBytes,
-                                PngMetadata pngMeta) {
+                                PngMetadata pngMeta, ObjectiveLayout objectiveLayout,
+                                String objectiveMode, String objectiveLane,
+                                long objectiveSeed) {
         this.tacticalMapJson = tacticalMapJson;
         this.capturePointsJson = capturePointsJson;
         this.backgroundImage = backgroundImage;
@@ -49,6 +55,10 @@ public final class ESPointsMapSnapshot {
         this.backgroundSha256 = pngMeta != null ? pngMeta.sha256 : "";
         this.backgroundWidth = pngMeta != null ? pngMeta.width : 0;
         this.backgroundHeight = pngMeta != null ? pngMeta.height : 0;
+        this.objectiveLayout = objectiveLayout;
+        this.objectiveMode = objectiveMode == null ? "" : objectiveMode;
+        this.objectiveLane = objectiveLane == null ? "" : objectiveLane;
+        this.objectiveSeed = objectiveSeed;
     }
 
     public static ESPointsMapSnapshot load(Path esConfigDir) throws IOException {
@@ -77,19 +87,8 @@ public final class ESPointsMapSnapshot {
         }
         String captureJson = Files.readString(capturePath, StandardCharsets.UTF_8);
 
-        // 校验 CapturePoints.json 无重复据点名称
         JsonObject captureObj = JsonParser.parseString(captureJson).getAsJsonObject();
-        if (captureObj.has("plannedPoints")) {
-            var seen = new java.util.HashSet<String>();
-            for (var elem : captureObj.getAsJsonArray("plannedPoints")) {
-                if (elem.isJsonObject()) {
-                    String name = elem.getAsJsonObject().get("name").getAsString();
-                    if (!seen.add(name)) {
-                        throw new IllegalArgumentException("CapturePoints.json 包含重复据点名称: " + name);
-                    }
-                }
-            }
-        }
+        ObjectiveLayout objectiveLayout = ObjectiveLayout.parse(captureObj);
 
         byte[] bgBytes = null;
         PngMetadata pngMeta = null;
@@ -102,7 +101,30 @@ public final class ESPointsMapSnapshot {
             pngMeta = validatePng(bgBytes, bgPath.getFileName().toString());
         }
 
-        return new ESPointsMapSnapshot(tacticalJson, captureJson, bgImage, bgBytes, pngMeta);
+        return new ESPointsMapSnapshot(tacticalJson, captureJson, bgImage, bgBytes,
+            pngMeta, objectiveLayout, "", "", 0L);
+    }
+
+    /**
+     * Builds the immutable ESPoints payload for one round. The source map
+     * configuration remains unchanged and can be reused by later matches.
+     */
+    public ESPointsMapSnapshot forRound(long seed) {
+        ObjectiveLayout.Selection selection = objectiveLayout.select(seed);
+        PngMetadata pngMeta = hasBackground()
+            ? new PngMetadata(backgroundWidth, backgroundHeight, backgroundSha256)
+            : null;
+        return new ESPointsMapSnapshot(
+            tacticalMapJson,
+            selection.capturePointsJson(),
+            backgroundImage,
+            background,
+            pngMeta,
+            objectiveLayout,
+            selection.mode(),
+            selection.laneId(),
+            selection.seed()
+        );
     }
 
     public boolean hasBackground() {

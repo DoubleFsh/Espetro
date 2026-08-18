@@ -97,6 +97,37 @@ class ESPointsMapSnapshotTest {
         assertEquals(0, snapshot.backgroundBytes().length);
     }
 
+    @Test
+    void resolvesRaasOnlyWhenRoundStarts(@TempDir Path dir) throws Exception {
+        writeTactical(dir, "");
+        Files.writeString(dir.resolve("CapturePoints.json"), """
+            {
+              "objectiveMode":"RAAS",
+              "endBehavior":"terminate",
+              "teamReinforcements":{"ATTACK":280,"DEFEND":1200},
+              "raas":{
+                "points":[
+                  {"id":"main","pos1":[0,60,0],"pos2":[4,70,4]},
+                  {"id":"north","pos1":[8,60,0],"pos2":[12,70,4]},
+                  {"id":"south","pos1":[8,60,8],"pos2":[12,70,12]},
+                  {"id":"terminal","pos1":[16,60,0],"pos2":[20,70,4]}
+                ],
+                "lanes":[
+                  {"id":"east","stages":[["main"],["north","south"],["terminal"]]}
+                ]
+              }
+            }
+            """, StandardCharsets.UTF_8);
+
+        ESPointsMapSnapshot frozen = ESPointsMapSnapshot.load(dir);
+        ESPointsMapSnapshot round = frozen.forRound(17L);
+        assertEquals("RAAS", round.objectiveMode);
+        assertEquals("east", round.objectiveLane);
+        assertEquals(17L, round.objectiveSeed);
+        assertEquals(3, com.google.gson.JsonParser.parseString(round.capturePointsJson)
+            .getAsJsonObject().get("totalBatches").getAsInt());
+    }
+
     private static void writeValidFiles(Path dir, String background) throws Exception {
         writeTactical(dir, background);
         Files.writeString(dir.resolve("CapturePoints.json"), """

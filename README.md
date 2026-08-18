@@ -2,6 +2,8 @@
 
 Espetro 是 Minecraft Forge 1.20.1 的战术小队与侵攻流程模组，提供阵营、编制、职业、小队、指挥官、指挥官技能、兵力、体力、兵站、队包、前哨和载具系统。
 
+地图据点支持兼容旧配置的 AAS、按合法路线逐阶段抽点的 RAAS，以及每局随机选择 AAS/RAAS；具体格式见[配置文档](docs/CONFIGURATION.md#aas--raas-路线)。
+
 ## 核心流程
 
 ```text

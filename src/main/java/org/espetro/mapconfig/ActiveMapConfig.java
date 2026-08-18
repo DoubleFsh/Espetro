@@ -60,6 +60,19 @@ public final class ActiveMapConfig {
         return esPoints != null ? esPoints.capturePointsJson : null;
     }
 
+    /** Returns a per-round copy with AAS/RAAS resolved for the supplied seed. */
+    public ActiveMapConfig forRound(long seed) {
+        if (!usable || esPoints == null) {
+            return this;
+        }
+        return new ActiveMapConfig(
+            displayName, mapFolder, dimensionId, templateWorldDir, esConfigDir,
+            dimensionJson, game, spawnPoints, vehSpawn, squadTypes,
+            outpostsJson, bastionJson, logisticsJson, teamPackJson,
+            esPoints.forRound(seed), rejectionReasons
+        );
+    }
+
     public final List<String> rejectionReasons;
     public final boolean usable;
 

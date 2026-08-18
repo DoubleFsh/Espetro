@@ -145,6 +145,54 @@ ESPoints。ESPoints 不会自行扫描存档、服务器全局配置或数据包
 - 部署阶段开始时 ESPoints 根据这个冻结快照创建第一批据点。切换地图或强制结束时，据点、标点、底图和缓存会一起清空。
 - 管理命令的“保存配置”只会导出到 `config/espoints/exports/`，不会修改地图模板。
 
+### AAS / RAAS 路线
+
+旧版 `CapturePoints.json` 不需要改动，默认按 AAS 固定路线运行。需要 RAAS 时，在根节点加入 `objectiveMode` 和 `raas`：
+
+```json
+{
+  "objectiveMode": "RANDOM",
+  "totalBatches": 3,
+  "endBehavior": "terminate",
+  "teamReinforcements": {"ATTACK": 280, "DEFEND": 1200},
+  "plannedPoints": [
+    {"name":"A","batch":1,"pos1":{"x":0,"y":60,"z":0},"pos2":{"x":16,"y":80,"z":16}},
+    {"name":"B","batch":2,"pos1":{"x":96,"y":60,"z":0},"pos2":{"x":112,"y":80,"z":16}},
+    {"name":"C","batch":3,"pos1":{"x":192,"y":60,"z":0},"pos2":{"x":208,"y":80,"z":16}}
+  ],
+  "raas": {
+    "points": [
+      {"id":"main","pos1":{"x":0,"y":60,"z":0},"pos2":{"x":16,"y":80,"z":16}},
+      {"id":"crossing_north","pos1":{"x":96,"y":60,"z":-48},"pos2":{"x":112,"y":80,"z":-32}},
+      {"id":"crossing_south","pos1":{"x":96,"y":60,"z":48},"pos2":{"x":112,"y":80,"z":64}},
+      {"id":"terminal","pos1":{"x":192,"y":60,"z":0},"pos2":{"x":208,"y":80,"z":16}}
+    ],
+    "lanes": [
+      {"id":"east","stages":[["main"],["crossing_north","crossing_south"],["terminal"]]}
+    ]
+  }
+}
+```
+
+- `objectiveMode`：`AAS`、`RAAS` 或 `RANDOM`。省略时为 `AAS`；`RANDOM` 每局等概率选择 AAS/RAAS。
+- `plannedPoints`：原有 AAS 路线，也是 `RANDOM` 抽到 AAS 时使用的路线。
+- `raas.points`：RAAS 候选点池。`id` 只允许小写字母、数字、点、下划线和连字符。
+- `raas.lanes[].id`：路线 ID，格式与据点 ID 相同。
+- `raas.lanes[].stages`：合法路线的阶段列表；每个阶段可列多个候选点，本局从中抽取一个。
+- 每条 RAAS 路线必须有 3～26 个阶段，同一条路线不能跨阶段重复引用同一个点。
+- 地图配置仍在启动时一次性校验并冻结。战场激活时才为本局选择模式、路线和阶段候选；生成结果继续使用 ESPoints 原有的 `plannedPoints` 格式，因此 ESPoints 不需要了解 RAAS 配置结构。
+- 服务端每局生成一个随机种子；同一个种子必定得到相同路线，便于复盘和测试。源文件与 `EsWorld` 模板不会被修改。
+
+从 BlockOps 的 `raas/*.properties` 导入时可使用仓库内工具：
+
+```bash
+python tools/import_blockops_raas.py \
+  mutaha.properties EsWorld/mutaha/EsConfig/CapturePoints.json \
+  --mode RAAS --radius 16
+```
+
+`RANDOM` 还需要用 `--aas id_a,id_b,id_c` 指定固定 AAS 路线。转换器只写目标 JSON，不修改输入档案或世界存档。
+
 ## 构建与模组元数据配置
 
 | `gradle.properties` 字段 | 当前值 | 说明 |
