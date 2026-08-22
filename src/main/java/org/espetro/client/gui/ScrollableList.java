@@ -2,7 +2,7 @@ package org.espetro.client.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Mth;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /**
  * 垂直滚动列表容器 — 参考 mutil 的 GuiHorizontalScrollable 实现。

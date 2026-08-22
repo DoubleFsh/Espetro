@@ -20,6 +20,7 @@ import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
@@ -574,23 +575,31 @@ public class BastionEventHandler {
         radioDismantleTickCounter = 0;
     }
 
-    /** 爆炸摧毁 Radio：按敌方行为扣兵力。 */
-    @SubscribeEvent
+    /**
+     * 爆炸摧毁 Radio 核心：一律记电台损失。
+     * 不得因工事索引跳过——结构减伤路径无法把电台 HP 打到 0，跳过会留下幽灵电台且不扣兵力。
+     */
+    @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onExplosionDetonateRadio(ExplosionEvent.Detonate event) {
-        if (event.getLevel().isClientSide()) {
+        if (event.getLevel().isClientSide() || !(event.getLevel() instanceof ServerLevel level)) {
             return;
         }
+        var explosion = event.getExplosion();
+        Entity attacker = explosion.getIndirectSourceEntity();
+        if (attacker == null) {
+            attacker = explosion.getExploder();
+        }
         for (BlockPos pos : event.getAffectedBlocks()) {
-            if (event.getLevel() instanceof ServerLevel level
-                && FortificationManager.getInstance().contains(level, pos)) {
-                continue; // 统一工事完整度由 FortificationEventHandler 按结构比例处理。
-            }
             BastionData bastion = BastionManager.getInstance().findRadioByBlockPos(pos);
-            if (bastion != null) {
-                BastionManager.getInstance().destroyBastionWithManpower(bastion,
-                    event.getExplosion().getExploder(), true);
+            boolean indexed = FortificationManager.getInstance().contains(level, pos);
+            if (bastion != null && RadioLossPolicy.explosionScoresRadioLoss(true, indexed)) {
+                BastionManager.getInstance().destroyBastionWithManpower(bastion, attacker, true);
             }
         }
+        final Entity lossAttacker = attacker;
+        // Detonate 时方块尚未被原版清掉；本 tick 末再核对，覆盖 affected 漏列/其它模组拆核。
+        level.getServer().execute(() -> BastionManager.getInstance()
+            .destroyRadiosMissingCoreInArea(level, null, Double.POSITIVE_INFINITY, lossAttacker));
     }
 
     /**

@@ -4,7 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.HashMap;

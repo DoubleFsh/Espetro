@@ -1,6 +1,7 @@
 package org.espetro.client.gui;
 
-import se.mickelus.mutil.gui.*;
+import org.espetro.client.aui.GuiElement;
+import org.espetro.client.aui.GuiRect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -901,21 +902,23 @@ public class UnifiedDeployScreen extends MutilScreen {
         }
         EnumSet<Section> pending = EnumSet.copyOf(dirtySections);
         dirtySections.clear();
-        if (pending.contains(Section.SQUAD)) {
-            rebuildSquadSection();
-        }
-        if (pending.contains(Section.CLASS)) {
-            rebuildClassSection();
-        }
-        if (pending.contains(Section.DEPLOY)) {
-            rebuildDeploySection();
-        }
-        if (pending.contains(Section.MAP_CONTROLS)) {
-            rebuildMapControls();
-        }
-        if (pending.contains(Section.STATUS)) {
-            rebuildStatusSection();
-        }
+        org.espetro.client.aui.AuiScreen.runWithDocument(null, () -> {
+            if (pending.contains(Section.SQUAD)) {
+                rebuildSquadSection();
+            }
+            if (pending.contains(Section.CLASS)) {
+                rebuildClassSection();
+            }
+            if (pending.contains(Section.DEPLOY)) {
+                rebuildDeploySection();
+            }
+            if (pending.contains(Section.MAP_CONTROLS)) {
+                rebuildMapControls();
+            }
+            if (pending.contains(Section.STATUS)) {
+                rebuildStatusSection();
+            }
+        });
     }
 
     private void rebuildSquadSection() {

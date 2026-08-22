@@ -137,9 +137,6 @@ def fixedAuraTipJar = providers.gradleProperty('auratipJar')
 if (!fixedAuraTipJar.isFile()) {
     throw new GradleException("缺少固定 AuraTip 产物: ${fixedAuraTipJar}；请先构建 AuraTip 或设置 -PauratipJar=...")
 }
-if (fixedAuraTipJar.name != "auratip-forge-1.20.1-${auratip_version}.jar") {
-    throw new GradleException("AuraTip 文件名与固定版本不匹配: ${fixedAuraTipJar.name}")
-}
 
 repositories {
     // Consume only the reproducibly published Tetrachord artifact. Upstream's
@@ -150,7 +147,6 @@ repositories {
         content { includeGroup 'com.hexagram2021.tetrachordlib' }
     }
     flatDir {
-        // 本地 ESPoints 与可选的 OELib/AuraTip 开发 jar
         dirs '../../../IdeaProjects/espetro-HCR/build/libs'
         dirs fixedAuraTipJar.parentFile
         dirs 'run/mods'
@@ -178,6 +174,13 @@ repositories {
             includeGroup 'cc.sighs.oelib'
         }
     }
+    maven {
+        name = 'Sighs Public'
+        url = 'https://maven.sighs.cc/repository/maven-public/'
+        content {
+            includeGroup 'com.sighs'
+        }
+    }
     repositories {
         maven {
             url "https://cursemaven.com"
@@ -196,18 +199,15 @@ dependencies {
     implementation(fg.deobf("com.hexagram2021.tetrachordlib:tetrachordlib:${tetrachord_version}")) {
         transitive = false
     }
-    implementation fg.deobf("curse.maven:mutil-351914:7772906")
     implementation fg.deobf("cc.sighs.oelib:OELib-forge-1.20.1:${oelib_version}")
-    // A flatDir module lets ForgeGradle deobfuscate the fixed sibling JAR;
-    // direct files(...) dependencies bypass its remapping pipeline.
     implementation fg.deobf("local:auratip-forge-1.20.1:${auratip_version}")
+    implementation fg.deobf("com.sighs:ApricityUI-forge-1.20.1:${apricityui_version}")
     implementation fg.deobf("dev.latvian.mods:rhino-forge:${rhino_version}")
     implementation fg.deobf("dev.architectury:architectury-forge:${architectury_version}")
     implementation fg.deobf("dev.latvian.mods:kubejs-forge:${kubejs_version}")
 
     // ESPoints depends on Espetro, so Espetro integrates through reflection.
-    // Keep the sibling jar opt-in: older ESPoints builds still require AuraTip
-    // and must not silently make Espetro's standalone dev server fail.
+    // Keep the sibling jar opt-in so standalone Espetro userdev still boots.
     def localEspointsJar = file("../../../IdeaProjects/espetro-HCR/build/libs/espoints-${espoints_version}.jar")
     def includeLocalEspoints = providers.gradleProperty("espetroIncludeLocalEspoints")
         .map { it.toBoolean() }
@@ -244,6 +244,7 @@ tasks.named('processResources', ProcessResources).configure {
                              architectury_version: architectury_version, kubejs_version: kubejs_version,
                              oelib_version       : oelib_version,
                              auratip_version     : auratip_version,
+                             apricityui_version  : apricityui_version,
                              tetrachord_version  : tetrachord_version,
                              taczmagazines_version_range: taczmagazines_version_range,
                              pingwheel_version   : pingwheel_version,]
@@ -287,7 +288,7 @@ tasks.withType(JavaCompile).configureEach {
  * 不能把整合包里的生产 reobf jar 丢进 run/mods，否则 KubeJS 等 mixin 会因
  * SRG 方法名对不上而在 BootstrapLauncher 阶段崩溃。
  * <p>
- * 默认：从 runtimeClasspath 复制已 deobf 的 mutil/oelib/auratip/rhino/architectury/kubejs。
+ * 默认：从 runtimeClasspath 复制已 deobf 的 apricityui/rhino/architectury/kubejs。
  * 可选：{@code -PespetroDevModsSource=/path/to/mods} 仅在明确需要生产 jar 时使用（非 userdev）。
  */
 tasks.register('syncRunMods') {
@@ -305,15 +306,13 @@ tasks.register('syncRunMods') {
                 throw new GradleException("前置源目录不存在: ${sourceDir}")
             }
             logger.warn("syncRunMods: 使用生产 jar 源 {}（勿用于 userdev runClient）", sourceDir)
-            def patterns = [~/mutil-.*\.jar/, ~/OELib-.*\.jar/, ~/oelib-.*\.jar/,
-                            ~/tetrachordlib-.*\.jar/,
-                            ~/.*auratip.*\.jar/, ~/rhino-.*\.jar/, ~/architectury-.*\.jar/, ~/kubejs-.*\.jar/]
+            def patterns = [~/tetrachordlib-.*\.jar/, ~/.*apricityui.*\.jar/,
+                            ~/rhino-.*\.jar/, ~/architectury-.*\.jar/, ~/kubejs-.*\.jar/]
             int n = 0
             sourceDir.listFiles()?.each { File f ->
                 if (!f.isFile() || !f.name.endsWith('.jar')) return
                 if (!patterns.any { f.name ==~ it }) return
-                def name = f.name.toLowerCase().contains('auratip')
-                    ? "auratip-forge-1.20.1-${auratip_version}.jar" : f.name
+                def name = f.name
                 java.nio.file.Files.copy(f.toPath(), new File(destDir, name).toPath(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                 n++
@@ -322,7 +321,7 @@ tasks.register('syncRunMods') {
             return
         }
 
-        def wanted = ['mutil', 'oelib', 'auratip', 'tetrachordlib', 'rhino', 'architectury', 'kubejs']
+        def wanted = ['oelib', 'auratip', 'apricityui', 'tetrachordlib', 'rhino', 'architectury', 'kubejs']
         int copied = 0
         configurations.runtimeClasspath.files.findAll { File f ->
             def n = f.name.toLowerCase()

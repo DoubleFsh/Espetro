@@ -3,6 +3,8 @@ package org.espetro.bastion;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FortificationProgressPolicyTest {
     @Test
@@ -21,6 +23,15 @@ class FortificationProgressPolicyTest {
         int damage = FortificationProgressPolicy.damagePerPart(100, 6);
         for (int i = 0; i < 6; i++) progress = Math.max(0, progress - damage);
         assertEquals(0, progress);
+    }
+
+    @Test
+    void radioExplosionReductionCannotFinishStructureIfEachPartSettlesOnce() {
+        // fortifications.json radio: structural_value 600, explosion reduction 0.9
+        assertFalse(FortificationProgressPolicy.oncePerPartDestroys(600, 1, 0.9));
+        assertFalse(FortificationProgressPolicy.oncePerPartDestroys(600, 8, 0.9));
+        assertFalse(FortificationProgressPolicy.oncePerPartDestroys(600, 24, 0.9));
+        assertTrue(FortificationProgressPolicy.oncePerPartDestroys(100, 6, 0.0));
     }
 
     @Test

@@ -1,0 +1,15 @@
+Java Launcher: /usr/lib/jvm/java-17-openjdk/bin/java
+Arguments: '--task, SRG_TO_MCP, --input, /home/shu/.gradle/caches/modules-2/files-2.1/com.sighs/ApricityUI-forge-1.20.1/1.2.2-hotfix1/66c5fd52beaba9f4df00c03ef7d6f8f5f249cd32/ApricityUI-forge-1.20.1-1.2.2-hotfix1.jar, --output, /home/shu/.gradle/caches/forge_gradle/deobf_dependencies/com/sighs/ApricityUI-forge-1.20.1/1.2.2-hotfix1_mapped_official_1.20.1/ApricityUI-forge-1.20.1-1.2.2-hotfix1_mapped_official_1.20.1.jar, --mcp, /home/shu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip, --strip-signatures'
+Classpath:
+ - /home/shu/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/installertools/1.4.4/installertools-1.4.4-fatjar.jar
+Working directory: /home/shu/Java/Projects/Espetro/build/_RenameSrg2Mcp_1279171575
+Main class: net.minecraftforge.installertools.ConsoleTool
+====================================
+Task: SRG_TO_MCP
+Input:  /home/shu/.gradle/caches/modules-2/files-2.1/com.sighs/ApricityUI-forge-1.20.1/1.2.2-hotfix1/66c5fd52beaba9f4df00c03ef7d6f8f5f249cd32/ApricityUI-forge-1.20.1-1.2.2-hotfix1.jar
+Output: /home/shu/.gradle/caches/forge_gradle/deobf_dependencies/com/sighs/ApricityUI-forge-1.20.1/1.2.2-hotfix1_mapped_official_1.20.1/ApricityUI-forge-1.20.1-1.2.2-hotfix1_mapped_official_1.20.1.jar
+MCP:    /home/shu/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/mapping/1.20.1/mapping-1.20.1-mapping.zip
+Loading MCP Data
+Processing ZIP file
+Stripped Manifest of sha digests
+Process complete

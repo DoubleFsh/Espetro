@@ -1,14 +1,13 @@
 package org.espetro.client.gui;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.Espetro;
 import org.espetro.network.FobSupplySyncPacket;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.io.IOException;
 
@@ -184,10 +183,10 @@ public final class FobSupplyHud {
                 drawSafeFallback(graphics, parentX + getX(), parentY + getY());
                 return;
             }
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
+            HudRenderState.begin(graphics);
             graphics.blit(textureLocation, parentX + getX(), parentY + getY(),
                 0.0f, 0.0f, PANEL_WIDTH, PANEL_HEIGHT, PANEL_WIDTH, PANEL_HEIGHT);
+            HudRenderState.restore(graphics);
         }
 
         private void rebuildTexture() {

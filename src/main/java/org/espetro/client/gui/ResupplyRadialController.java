@@ -229,8 +229,32 @@ public final class ResupplyRadialController {
         return entry;
     }
 
+    static int pageCount(int entryCount, int pageSize) {
+        int size = Math.max(1, pageSize);
+        return Math.max(1, (Math.max(0, entryCount) + size - 1) / size);
+    }
+
+    static List<String> pageSlotIds(int entryCount, int pageIndex, int balanceValue) {
+        int pages = pageCount(entryCount, PAGE_SIZE);
+        int safePage = Math.min(Math.max(0, pageIndex), pages - 1);
+        int first = safePage * PAGE_SIZE;
+        int end = Math.min(entryCount, first + PAGE_SIZE);
+        List<String> ids = new ArrayList<>();
+        for (int i = first; i < end; i++) {
+            ids.add("espetro.resupply.entry." + i);
+        }
+        ids.add("espetro.resupply.back");
+        if (safePage > 0) {
+            ids.add("espetro.resupply.previous");
+        }
+        if (safePage + 1 < pages) {
+            ids.add("espetro.resupply.next");
+        }
+        return ids;
+    }
+
     private static int pageCount() {
-        return Math.max(1, (entries.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+        return pageCount(entries.size(), PAGE_SIZE);
     }
 
     private static ResupplyCatalogPacket.Entry find(int index) {

@@ -124,7 +124,7 @@ public final class VehicleWheelController {
         });
     }
 
-    private static boolean isTransferAction(String action) {
+    static boolean isTransferAction(String action) {
         return action.equals("LOAD_AMMO") || action.equals("UNLOAD_AMMO")
             || action.equals("LOAD_CONSTRUCTION") || action.equals("UNLOAD_CONSTRUCTION");
     }
@@ -195,7 +195,7 @@ public final class VehicleWheelController {
         }
     }
 
-    private static String layoutSignature(@Nullable VehicleSupplySyncPacket packet) {
+    static String layoutSignature(@Nullable VehicleSupplySyncPacket packet) {
         if (packet == null) return "";
         return (packet.canTransferAmmo() ? "A" : "-")
             + (packet.canTransferConstruction() ? "C" : "-")
@@ -257,24 +257,28 @@ public final class VehicleWheelController {
         }
     }
 
-    private static List<String> visibleActions() {
+    static List<String> visibleActions(@Nullable VehicleSupplySyncPacket supply) {
         List<String> actions = new ArrayList<>(5);
-        if (cachedSupply != null && cachedSupply.canTransferAmmo()) {
+        if (supply != null && supply.canTransferAmmo()) {
             actions.add("LOAD_AMMO");
             actions.add("UNLOAD_AMMO");
         }
-        if (cachedSupply != null && cachedSupply.canTransferConstruction()) {
+        if (supply != null && supply.canTransferConstruction()) {
             actions.add("LOAD_CONSTRUCTION");
             actions.add("UNLOAD_CONSTRUCTION");
         }
-        if (cachedSupply != null && cachedSupply.canResupplyInfantry()) {
+        if (supply != null && supply.canResupplyInfantry()) {
             actions.add("RESUPPLY_INFANTRY");
         }
-        if (cachedSupply != null
-            && (cachedSupply.isSupplyVehicle() || cachedSupply.isFightVehicle())) {
+        if (supply != null
+            && (supply.isSupplyVehicle() || supply.isFightVehicle())) {
             actions.add("CHANGE_CLASS");
         }
         return actions;
+    }
+
+    private static List<String> visibleActions() {
+        return visibleActions(cachedSupply);
     }
 
     private static void tickHold(long window) {

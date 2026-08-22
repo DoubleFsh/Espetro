@@ -32,14 +32,11 @@ import org.espetro.team.VoteManager;
 import org.espetro.network.NetworkManager;
 import org.espetro.vehicle.VehicleConfig;
 import org.espetro.vehicle.VehicleManager;
-import se.mickelus.mutil.MUtilMod;
-
 public class EspetroKubeJSPlugin extends KubeJSPlugin {
     @Override
     public void registerClasses(ScriptType type, ClassFilter filter) {
         filter.allow("org.espetro");
         filter.allow("com.example.espoints");
-        filter.allow("se.mickelus.mutil");
     }
 
     @Override
@@ -81,8 +78,6 @@ public class EspetroKubeJSPlugin extends KubeJSPlugin {
         event.add("EspetroOutpostManager", OutpostManager.class);
         event.add("EspetroVehicleConfig", VehicleConfig.class);
         event.add("EspetroVehicleManager", VehicleManager.class);
-        event.add("MUtil", MUtilMod.class);
-        event.add("MUtilMod", MUtilMod.class);
 
         addClassIfPresent(event, "ESPointsCommanderScriptAPI", "com.example.espoints.api.ESPointsCommanderScriptAPI");
         addClassIfPresent(event, "ESPointsTacticalMarkerManager", "com.example.espoints.tactical.TacticalMarkerManager");

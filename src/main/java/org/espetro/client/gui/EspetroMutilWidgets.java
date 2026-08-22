@@ -4,8 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import se.mickelus.mutil.gui.GuiElement;
-import se.mickelus.mutil.gui.GuiRect;
+import org.espetro.client.aui.GuiElement;
+import org.espetro.client.aui.GuiRect;
 
 import java.util.regex.Pattern;
 

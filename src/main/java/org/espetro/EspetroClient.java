@@ -46,10 +46,9 @@ public class EspetroClient {
         org.espetro.client.gui.FobSupplyHud.register();
         org.espetro.client.gui.SeatSwitchHandler.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
-            .addListener(org.espetro.client.EquipZoneRenderer::onRenderLevel);
-        // AuraTip 默认画在 HUD；部署等主 GUI 打开时再叠一层到 Screen 之上
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(org.espetro.client.gui.AuraTipAboveScreen::onScreenRenderPost);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS
+            .addListener(org.espetro.client.EquipZoneRenderer::onRenderLevel);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRightClickBlock);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
@@ -159,17 +158,17 @@ public class EspetroClient {
         }
     }
 
-    private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
+    private static void onRenderOverlay(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc != null && mc.level != null) {
-            if (mc.screen == null) {
-                org.espetro.client.gui.MutilHudOverlay.render(
-                    event.getGuiGraphics(), mc, event.getPartialTick());
-            }
-            // 教程 HUD 始终叠在最上层（含预览 Screen 打开时）
-            org.espetro.client.gui.TutorialHudOverlay.render(
+        if (mc == null || mc.level == null) {
+            return;
+        }
+        if (mc.screen == null) {
+            org.espetro.client.gui.MutilHudOverlay.render(
                 event.getGuiGraphics(), mc, event.getPartialTick());
         }
+        org.espetro.client.gui.TutorialHudOverlay.render(
+            event.getGuiGraphics(), mc, event.getPartialTick());
     }
 
     private static void onLivingJump(

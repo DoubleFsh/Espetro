@@ -1,0 +1,46 @@
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    pointer-events: none;
+}
+
+.tip.hidden {
+    display: none;
+}
+
+.tip {
+    position: fixed;
+    top: 80px;
+    right: 28px;
+    min-width: 380px;
+    max-width: 520px;
+    padding: 18px 22px 20px;
+    box-sizing: border-box;
+    color: #f6f2e6;
+    background: rgba(10, 12, 14, 0.94);
+    border: 3px solid #d5b25c;
+    pointer-events: none;
+}
+
+.tip.error {
+    border-color: #e05a5a;
+}
+
+.title {
+    margin: 0 0 10px;
+    color: #fff4d4;
+    font-size: 22px;
+    line-height: 1.25;
+}
+
+.tip.error .title {
+    color: #ffd0d0;
+}
+
+.body {
+    color: #efe8d8;
+    font-size: 18px;
+    line-height: 1.45;
+}

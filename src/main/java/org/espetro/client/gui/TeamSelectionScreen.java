@@ -3,7 +3,7 @@ package org.espetro.client.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 import net.minecraft.client.gui.GuiGraphics;
 import org.espetro.network.TeamSelectStatePacket;
 

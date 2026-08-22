@@ -296,7 +296,9 @@ public final class FortificationManager {
             } else {
                 construction.structuralValue = Math.max(0, construction.structuralValue
                     - construction.blueprint.profile.removePerHit);
-                if (construction.structuralValue == 0) destroy(level, construction, player, true);
+                if (construction.structuralValue == 0) {
+                    destroy(level, construction, player, true, true, true);
+                }
             }
         } else if (build) {
             int old = construction.progress;
@@ -314,7 +316,9 @@ public final class FortificationManager {
             construction.progress = Math.max(0, construction.progress
                 - construction.blueprint.profile.removePerHit);
             if (!construction.complete) updateFoundationStage(level, construction);
-            if (construction.progress == 0) destroy(level, construction, player, true);
+            if (construction.progress == 0) {
+                destroy(level, construction, player, true, true, true);
+            }
         }
         if (constructions.containsKey(construction.id)) sendProgress(player, construction, build);
         else NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player),
@@ -378,6 +382,10 @@ public final class FortificationManager {
             boolean changed = false;
             for (BlockPos pos : parts) {
                 if (!hitPart.test(pos) || !construction.missing.add(pos.immutable())) continue;
+                if (isCompletedRadioCore(construction, pos)) {
+                    destroy(level, construction, attacker, true);
+                    break;
+                }
                 changed = true;
                 damageConstruction(level, construction, pos, attacker, DamageKind.EXPLOSION);
                 if (!constructions.containsKey(construction.id)) break;
@@ -450,6 +458,13 @@ public final class FortificationManager {
         } else {
             damageConstruction(level, construction, null, null, DamageKind.DIRECT_BREAK);
         }
+    }
+
+    private static boolean isCompletedRadioCore(Construction construction, @Nullable BlockPos pos) {
+        return pos != null
+            && construction.complete
+            && construction.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+            && pos.equals(construction.anchor);
     }
 
     private void damageConstruction(ServerLevel level, Construction construction,
@@ -789,11 +804,16 @@ public final class FortificationManager {
     }
 
     private void destroy(ServerLevel level, Construction c, @Nullable Entity actor, boolean removeWorld) {
-        destroy(level, c, actor, removeWorld, true);
+        destroy(level, c, actor, removeWorld, true, false);
     }
 
     private void destroy(ServerLevel level, Construction c, @Nullable Entity actor,
                          boolean removeWorld, boolean destroyBastionRecord) {
+        destroy(level, c, actor, removeWorld, destroyBastionRecord, false);
+    }
+
+    private void destroy(ServerLevel level, Construction c, @Nullable Entity actor,
+                         boolean removeWorld, boolean destroyBastionRecord, boolean shovelDismantle) {
         unregisterConstruction(c);
         if (removeWorld) {
             for (BlockPos pos : c.footprint) {
@@ -810,11 +830,14 @@ public final class FortificationManager {
         if (destroyBastionRecord && c.bastionId != null) {
             BastionData bastion = BastionManager.getInstance().getBastion(c.bastionId);
             if (bastion != null) {
-                if (c.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO
+                boolean radio = c.blueprint.definition.behaviorType == FortificationConfig.Behavior.RADIO;
+                boolean friendlyShovel = shovelDismantle
                     && actor instanceof ServerPlayer player
-                    && c.team.equals(normalizeTeam(Espetro.getPlayerTeam(player)))) {
+                    && c.team.equals(normalizeTeam(Espetro.getPlayerTeam(player)));
+                if (radio) {
                     BastionManager.getInstance().destroyBastionWithManpower(
-                        bastion, actor, false);
+                        bastion, actor,
+                        RadioLossPolicy.deductManpower(true, friendlyShovel, false));
                 } else {
                     BastionManager.getInstance().destroyBastion(bastion, actor);
                 }

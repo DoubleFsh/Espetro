@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.OutpostSupplySyncPacket;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /** 靠近前哨基地时的 Radio 血量、弹药/建材存量与兵站状态 HUD。 */
 public final class OutpostSupplyHud {
@@ -98,7 +98,7 @@ public final class OutpostSupplyHud {
             int iconX = bx + 6;
             int iconY = by + 6;
             graphics.blit(FOB_STATUS_ICON, iconX, iconY,
-                iconSize, iconSize, 0f, 0f, 16, 16, 16, 16);
+                iconSize, iconSize, 0f, 0f, 128, 128, 128, 128);
 
             int barX = iconX + iconSize + 4;
             int barY = by + 9;
@@ -116,7 +116,7 @@ public final class OutpostSupplyHud {
             int supplyIconSize = 10;
             graphics.blit(AMMO_ICON, bx + 6, supplyY,
                 supplyIconSize, supplyIconSize,
-                0f, 0f, 16, 16, 16, 16);
+                0f, 0f, 128, 128, 128, 128);
             graphics.drawString(Minecraft.getInstance().font,
                 Component.literal(String.valueOf(ammunition)),
                 bx + 6 + supplyIconSize + 3, supplyY + 1, 0xFFFFFFFF, false);
@@ -124,7 +124,7 @@ public final class OutpostSupplyHud {
             int constructionIconX = bx + 78;
             graphics.blit(CONSTRUCTION_ICON, constructionIconX, supplyY,
                 supplyIconSize, supplyIconSize,
-                0f, 0f, 16, 16, 16, 16);
+                0f, 0f, 128, 128, 128, 128);
             graphics.drawString(Minecraft.getInstance().font,
                 Component.literal(String.valueOf(construction)),
                 constructionIconX + supplyIconSize + 3, supplyY + 1, 0xFFFFFFFF, false);

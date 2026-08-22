@@ -10,7 +10,7 @@ import org.espetro.network.GovernanceStatePacket;
 import org.espetro.network.MatchStatsActionPacket;
 import org.espetro.network.MatchStatsSyncPacket;
 import org.espetro.network.NetworkManager;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.Comparator;

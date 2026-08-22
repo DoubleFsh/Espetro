@@ -2,7 +2,7 @@ package org.espetro.client.gui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /**
  * Persistent MUtil root for Espetro HUD elements.

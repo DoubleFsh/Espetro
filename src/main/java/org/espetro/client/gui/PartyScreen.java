@@ -6,7 +6,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.PartyListPacket;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.util.UUID;
 

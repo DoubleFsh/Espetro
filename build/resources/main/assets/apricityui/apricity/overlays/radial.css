@@ -1,0 +1,65 @@
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+.radial.hidden {
+    display: none;
+}
+
+.radial {
+    position: fixed;
+    inset: 0;
+}
+
+.ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 192px;
+    height: 192px;
+    margin: -96px 0 0 -96px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 52px solid rgba(20, 23, 25, 0.88);
+    background: transparent;
+}
+
+.slots {
+    position: absolute;
+    inset: 0;
+}
+
+.slot {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+}
+
+.slot texture {
+    width: 28px;
+    height: 28px;
+    margin: 4px;
+}
+
+.slot.hovered {
+    outline: 1px solid #e6c56a;
+}
+
+.slot.disabled texture {
+    opacity: 0.4;
+}
+
+.label {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 140px;
+    margin: -10px 0 0 -70px;
+    color: #f2f2f2;
+    font-size: 12px;
+    text-align: center;
+}

@@ -1,7 +1,7 @@
 package org.espetro.client.gui;
 
 import net.minecraft.network.chat.Component;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /** Peaceful overworld hub menu. Readiness was intentionally removed. */
 public final class HubScreen extends MutilScreen {
@@ -27,6 +27,11 @@ public final class HubScreen extends MutilScreen {
         }
         this.onlineCount = onlineCount;
         this.status = nextStatus;
+    }
+
+    @Override
+    protected boolean shadeWorld() {
+        return false;
     }
 
     @Override

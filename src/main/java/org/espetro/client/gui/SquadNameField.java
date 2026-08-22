@@ -4,7 +4,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.lwjgl.glfw.GLFW;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /**
  * 小队名称输入框（顶层类，避免嵌套类在部分运行时模块加载器下出现

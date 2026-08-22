@@ -763,6 +763,10 @@ public class BastionManager {
                 Espetro.LOGGER.info("Radio {} 被摧毁！攻击者={} 扣兵力={}", bastionName, attackerName, penalty);
                 Espetro.broadcastToTeam(bastionTeam,
                     "§c[Radio] §e" + bastionName + " §c已被摧毁！- " + penalty + " 兵力");
+            } else if (radio) {
+                Espetro.LOGGER.info("Radio {} 被拆除（不扣兵力）攻击者={}", bastionName, attackerName);
+                Espetro.broadcastToTeam(bastionTeam,
+                    "§e[Radio] §6" + bastionName + " §e已拆除（不扣兵力）。");
             } else {
                 Espetro.LOGGER.info("兵站 HAB {} 被摧毁！攻击者={}（不扣兵力）", bastionName, attackerName);
                 Espetro.broadcastToTeam(bastionTeam,
@@ -774,7 +778,9 @@ public class BastionManager {
                 commander.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                     deductManpower
                         ? "§c你的 Radio §e" + bastionName + " §c已被摧毁！"
-                        : "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
+                        : radio
+                            ? "§e你的 Radio §6" + bastionName + " §e已拆除。"
+                            : "§c你的兵站 §e" + bastionName + " §c已被摧毁！"
                 ));
             }
         }
@@ -1052,9 +1058,10 @@ public class BastionManager {
     /**
      * 轻量一致性清理：仅移除已标记失效的脏记录。
      * <p>
-     * 真摧毁只走事件（{@link BastionEventHandler} 死亡/离开非 unload、方块破坏等）→
-     * {@link #destroyBastion}。禁止「区块已加载却找不到实体」时当摧毁
+     * HAB 真摧毁只走事件（{@link BastionEventHandler} 死亡/离开非 unload、方块破坏等）→
+     * {@link #destroyBastion}。禁止「区块已加载却找不到盔甲架」时当摧毁
      * （卸载竞态 + 无强加载时更易误杀）。
+     * 电台核心是方块：已加载区块中方块消失则记电台损失（爆炸/其它拆除漏网）。
      * 若核心已加载，顺带刷新记录坐标（不强制加载区块）。
      */
     public void removeInvalidBastions() {
@@ -1078,6 +1085,46 @@ public class BastionManager {
                 updateBastionArmorStandPosition(bastion, stand.blockPosition());
             }
         }
+        destroyRadiosMissingCoreInArea(null, null, Double.POSITIVE_INFINITY, null);
+    }
+
+    /**
+     * 已加载区块中电台核心方块消失时记为电台损失。
+     * 不推断未加载区块。{@code center == null} 时检查全部活跃电台。
+     *
+     * @return 本次记损失的电台数
+     */
+    public int destroyRadiosMissingCoreInArea(@Nullable ServerLevel level,
+                                              @Nullable net.minecraft.world.phys.Vec3 center,
+                                              double radius,
+                                              @Nullable Entity attacker) {
+        double radiusSq = radius * radius;
+        List<BastionData> missing = new ArrayList<>();
+        for (BastionData bastion : bastions.values()) {
+            if (bastion == null || !bastion.isActive() || !bastion.isRadio()) {
+                continue;
+            }
+            if (level != null && bastion.getLevel() != level) {
+                continue;
+            }
+            BlockPos pos = bastion.getPosition();
+            ServerLevel bastionLevel = bastion.getLevel();
+            if (pos == null || bastionLevel == null || !bastion.isChunkLoaded()) {
+                continue;
+            }
+            if (center != null && pos.distToCenterSqr(center) > radiusSq) {
+                continue;
+            }
+            if (BastionItems.RADIO_BLOCK != null
+                && bastionLevel.getBlockState(pos).is(BastionItems.RADIO_BLOCK)) {
+                continue;
+            }
+            missing.add(bastion);
+        }
+        for (BastionData bastion : missing) {
+            destroyBastionWithManpower(bastion, attacker, true);
+        }
+        return missing.size();
     }
 
     /**

@@ -99,23 +99,21 @@ public final class SeatSwitchHandler {
             cx - mc.font.width(text) / 2, cy + 30, 0xFFFFFF);
 
         // 圆形进度环
-        drawProgressRing(event.getGuiGraphics().pose(), mc, cx, cy,
+        drawProgressRing(graphics, cx, cy,
             (float)switchTicks / SWITCH_DELAY_TICKS);
     }
 
-    private static void drawProgressRing(PoseStack poseStack, Minecraft mc,
-                                          int cx, int cy, float progress) {
+    private static void drawProgressRing(GuiGraphics graphics, int cx, int cy, float progress) {
         int r = RING_RADIUS;
         int thick = RING_THICKNESS;
         // 进度环颜色：白→黄渐变
         int color = progress > 0.75f ? 0xFF44CC44
             : progress > 0.5f ? 0xFFCCAA00 : 0xFFCC4444;
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
+        HudRenderState.begin(graphics);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        Matrix4f matrix = poseStack.last().pose();
+        Matrix4f matrix = graphics.pose().last().pose();
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
         builder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
@@ -140,7 +138,7 @@ public final class SeatSwitchHandler {
         }
 
         BufferUploader.drawWithShader(builder.end());
-        RenderSystem.disableBlend();
+        HudRenderState.restore(graphics);
     }
 
     private static boolean isEspetroVehicle(net.minecraft.world.entity.Entity vehicle) {

@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Mth;
 import net.minecraft.Util;
 import org.espetro.network.FortificationProgressPacket;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 /** Persistent MUtil construction bar; state changes only when a server packet arrives. */
 public final class FortificationProgressHud {

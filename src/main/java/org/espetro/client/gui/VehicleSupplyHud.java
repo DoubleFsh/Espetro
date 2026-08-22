@@ -66,7 +66,7 @@ public final class VehicleSupplyHud {
         if (VehicleWheelController.isWheelActive()) {
             VehicleSupplySyncPacket supply = VehicleWheelController.getCachedSupply();
             if (supply != null) drawCapacityBar(graphics, mc, supply);
-            if (VehicleWheelController.isHolding()) drawProgressRing(event.getGuiGraphics().pose(), mc);
+            if (VehicleWheelController.isHolding()) drawProgressRing(graphics, mc);
             return;
         }
 
@@ -178,7 +178,7 @@ public final class VehicleSupplyHud {
 
     // ==================== 圆形进度条 ====================
 
-    private static void drawProgressRing(PoseStack poseStack, Minecraft mc) {
+    private static void drawProgressRing(GuiGraphics graphics, Minecraft mc) {
         int progress = VehicleWheelController.getHoldProgress();  // 0..20
         float fill = Math.min(1.0f, (float)progress / 20.0f);
         int color = VehicleWheelController.getHoldColor();
@@ -188,11 +188,10 @@ public final class VehicleSupplyHud {
         int r = PROGRESS_RING_RADIUS;
         int thick = PROGRESS_RING_THICKNESS;
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
+        HudRenderState.begin(graphics);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        Matrix4f matrix = poseStack.last().pose();
+        Matrix4f matrix = graphics.pose().last().pose();
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
         builder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
@@ -220,6 +219,6 @@ public final class VehicleSupplyHud {
         }
 
         BufferUploader.drawWithShader(builder.end());
-        RenderSystem.disableBlend();
+        HudRenderState.restore(graphics);
     }
 }

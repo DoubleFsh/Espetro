@@ -7,7 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.OpenClassSelectionPacket;
 import org.lwjgl.glfw.GLFW;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.util.Collections;
 import java.util.HashMap;

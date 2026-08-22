@@ -12,7 +12,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Radio 电台方块：队伍补给锚点核心。
- * 敌方玩家潜行左键后由服务端执行 30 秒拆除计时，完成时扣除 Radio 兵力。
+ * 敌方拆除、爆炸或其它方式摧毁核心时记为电台损失并扣除 Radio 兵力。
+ * 己方指挥收起、工兵铲拆除、战局清理不计损失。
  */
 public class RadioBlock extends HorizontalDirectionalBlock {
 

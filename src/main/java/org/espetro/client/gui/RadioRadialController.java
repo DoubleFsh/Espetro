@@ -283,7 +283,24 @@ public final class RadioRadialController {
         return ICON_CLASS;
     }
 
-    private static String sanitizeSlotId(String classId) {
+    static List<String> rootSlotIds() {
+        return List.of("espetro.radio.resupply", "espetro.radio.change_class");
+    }
+
+    static List<String> classSlotIds(List<RadioRadialPacket.ClassEntry> classes) {
+        List<String> ids = new ArrayList<>();
+        ids.add("espetro.radio.back");
+        if (classes == null || classes.isEmpty()) {
+            ids.add("espetro.radio.no_class");
+            return ids;
+        }
+        for (RadioRadialPacket.ClassEntry entry : classes) {
+            ids.add("espetro.radio.class." + sanitizeSlotId(entry.classId));
+        }
+        return ids;
+    }
+
+    static String sanitizeSlotId(String classId) {
         if (classId == null || classId.isBlank()) {
             return "unknown";
         }

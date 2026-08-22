@@ -5,7 +5,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.espetro.network.NetworkManager;
 import org.espetro.network.UnifiedDeployScreenPacket;
-import se.mickelus.mutil.gui.GuiElement;
+import org.espetro.client.aui.GuiElement;
 
 import java.util.ArrayList;
 import java.util.HashMap;
