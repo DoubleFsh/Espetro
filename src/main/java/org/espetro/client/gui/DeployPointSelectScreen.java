@@ -13,7 +13,7 @@ import java.util.UUID;
  * 复活点选择界面
  * 玩家死亡后打开，选择在原部署点或兵站复活
  */
-public class DeployPointSelectScreen extends MutilScreen {
+public class DeployPointSelectScreen extends EspetroMenuScreen {
 
     private final boolean hasDeployPoint;
     private final String deployPointPos;
@@ -34,18 +34,18 @@ public class DeployPointSelectScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         startX = (this.width - BUTTON_WIDTH) / 2;
-        EspetroMutilWidgets.addPhaseHeader(root, this.width,
+        EspetroAuiWidgets.addPhaseHeader(root, this.width,
             "§6§l选择复活位置", "§e请选择你要复活的位置", "",
-            EspetroMutilWidgets.GOLD);
+            EspetroAuiWidgets.GOLD);
 
         int y = START_Y;
 
         // 原部署点按钮
         if (hasDeployPoint) {
             String label = "§e原部署点 §7(" + deployPointPos + ")";
-            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
+            root.addChild(EspetroAuiWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
                 label, () -> {
                 if (Minecraft.getInstance().player != null) {
                     Minecraft.getInstance().player.connection.sendCommand("bastion deploy");
@@ -57,7 +57,7 @@ public class DeployPointSelectScreen extends MutilScreen {
         // 兵站按钮
         for (DeployPointSelectPacket.BastionItem b : bastions) {
             String label = "§a" + b.name + " §7(" + b.pos + ")";
-            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
+            root.addChild(EspetroAuiWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
                 label, () -> {
                 if (Minecraft.getInstance().player != null) {
                     Minecraft.getInstance().player.connection.sendCommand(
@@ -69,7 +69,7 @@ public class DeployPointSelectScreen extends MutilScreen {
 
         // 没有可选复活点
         if (!hasDeployPoint && bastions.isEmpty()) {
-            root.addChild(EspetroMutilWidgets.button(startX, y, BUTTON_WIDTH, 30,
+            root.addChild(EspetroAuiWidgets.button(startX, y, BUTTON_WIDTH, 30,
                 "§c没有可用的复活点！", null).setEnabled(false));
         }
     }

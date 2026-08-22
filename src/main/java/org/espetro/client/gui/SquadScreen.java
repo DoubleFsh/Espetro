@@ -20,7 +20,7 @@ import java.util.UUID;
  * 类别弹窗用 setVisible 切换；展开详情/选中态只重建对应子树；
  * 仅当小队列表结构（id+成员）变化时整树 rebuild。
  */
-public class SquadScreen extends MutilScreen {
+public class SquadScreen extends EspetroMenuScreen {
 
     private static final int NO_SQUAD = -1;
     private static final int BUTTON_H = 12;
@@ -47,8 +47,8 @@ public class SquadScreen extends MutilScreen {
     private GuiElement categoryPopup;
     private GuiElement detailContainer;
     private int detailX, detailY, detailW, detailH;
-    private final Map<Integer, EspetroMutilWidgets.ActionButton> rowJoinButtons = new HashMap<>();
-    private final Map<Integer, EspetroMutilWidgets.ActionButton> rowDetailButtons = new HashMap<>();
+    private final Map<Integer, EspetroAuiWidgets.ActionButton> rowJoinButtons = new HashMap<>();
+    private final Map<Integer, EspetroAuiWidgets.ActionButton> rowDetailButtons = new HashMap<>();
 
     public SquadScreen(List<UnifiedDeployScreenPacket.SquadInfo> squads, int mySquadId, String team,
                        List<UnifiedDeployScreenPacket.SquadCategoryInfo> categories, Screen parent) {
@@ -84,7 +84,7 @@ public class SquadScreen extends MutilScreen {
             return;
         }
         if (structureChanged) {
-            rebuildMutilRoot();
+            rebuildMenuRoot();
         } else {
             // 仅成员职业名等展示字段变化：原地刷新行标签与详情
             refreshSquadRowLabels();
@@ -119,13 +119,13 @@ public class SquadScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(net.minecraft.client.gui.GuiGraphics graphics,
+    protected void renderBeforeMenu(net.minecraft.client.gui.GuiGraphics graphics,
                                      int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, this.width, this.height, SCREEN_SHADE);
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         rowJoinButtons.clear();
         rowDetailButtons.clear();
 
@@ -134,16 +134,16 @@ public class SquadScreen extends MutilScreen {
         int panelX = (this.width - panelW) / 2;
         int panelY = Math.max(4, (this.height - panelH) / 2);
 
-        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH,
-            PANEL_BG, EspetroMutilWidgets.BORDER));
+        root.addChild(EspetroAuiWidgets.panel(panelX, panelY, panelW, panelH,
+            PANEL_BG, EspetroAuiWidgets.BORDER));
 
         root.addChild(compactText(panelX + 5, panelY + 5,
-            "§6§l班组小队", EspetroMutilWidgets.GOLD));
+            "§6§l班组小队", EspetroAuiWidgets.GOLD));
         root.addChild(compactText(panelX + 5, panelY + 14,
-            EspetroMutilWidgets.teamPrefix(team) + EspetroMutilWidgets.teamName(team),
-            EspetroMutilWidgets.teamColor(team)));
+            EspetroAuiWidgets.teamPrefix(team) + EspetroAuiWidgets.teamName(team),
+            EspetroAuiWidgets.teamColor(team)));
 
-        EspetroMutilWidgets.ActionButton closeButton = compactButton(
+        EspetroAuiWidgets.ActionButton closeButton = compactButton(
             panelX + panelW - 35, panelY + 4, 30, BUTTON_H, "关闭", this::returnToParent);
         root.addChild(closeButton);
 
@@ -154,11 +154,11 @@ public class SquadScreen extends MutilScreen {
         root.addChild(nameField);
         root.addChild(compactButton(panelX + 5 + inputW + 3, inputY, createW, BUTTON_H,
             "创建", this::createSquad)
-            .setTextColor(EspetroMutilWidgets.POSITIVE));
+            .setTextColor(EspetroAuiWidgets.POSITIVE));
         root.addChild(compactButton(panelX + 5 + inputW + createW + 6, inputY, 32, BUTTON_H,
             "退出", NetworkManager::leaveSquad)
             .setEnabled(mySquadId != NO_SQUAD)
-            .setTextColor(EspetroMutilWidgets.WARNING));
+            .setTextColor(EspetroAuiWidgets.WARNING));
 
         int contentY = panelY + 40;
         int contentH = panelH - 45;
@@ -171,8 +171,8 @@ public class SquadScreen extends MutilScreen {
 
         buildSquadList(root, listX, contentY, listW, contentH);
 
-        root.addChild(EspetroMutilWidgets.panel(detailX, detailY, detailW, detailH,
-            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
+        root.addChild(EspetroAuiWidgets.panel(detailX, detailY, detailW, detailH,
+            PANEL_SOFT_BG, EspetroAuiWidgets.BORDER));
         detailContainer = new GuiElement(0, 0, this.width, this.height);
         root.addChild(detailContainer);
         rebuildDetailContainer();
@@ -184,8 +184,8 @@ public class SquadScreen extends MutilScreen {
     }
 
     private void buildSquadList(GuiElement root, int x, int y, int width, int height) {
-        root.addChild(EspetroMutilWidgets.panel(x, y, width, height,
-            PANEL_SOFT_BG, EspetroMutilWidgets.BORDER));
+        root.addChild(EspetroAuiWidgets.panel(x, y, width, height,
+            PANEL_SOFT_BG, EspetroAuiWidgets.BORDER));
 
         ScrollableList list = new ScrollableList(x + 3, y + 3, width - 6, height - 6)
             .setScrollStep(ROW_H + GAP)
@@ -194,7 +194,7 @@ public class SquadScreen extends MutilScreen {
 
         if (squads.isEmpty()) {
             list.addChild(compactCenteredText(0, 3, width - 10,
-                "暂无小队", EspetroMutilWidgets.MUTED));
+                "暂无小队", EspetroAuiWidgets.MUTED));
             return;
         }
 
@@ -202,15 +202,15 @@ public class SquadScreen extends MutilScreen {
         int buttonW = list.getWidth() - 18;
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
             final int squadId = squad.id;
-            EspetroMutilWidgets.ActionButton joinButton = compactButton(
+            EspetroAuiWidgets.ActionButton joinButton = compactButton(
                 0, rowY, buttonW, ROW_H, squadRowLabel(squad),
                 () -> NetworkManager.joinSquad(squadId));
             list.addChild(joinButton);
             rowJoinButtons.put(squadId, joinButton);
 
-            EspetroMutilWidgets.ActionButton detailButton = compactButton(
+            EspetroAuiWidgets.ActionButton detailButton = compactButton(
                 buttonW + 2, rowY, 12, ROW_H, "▶", () -> toggleDetail(squadId))
-                .setTextColor(EspetroMutilWidgets.GOLD);
+                .setTextColor(EspetroAuiWidgets.GOLD);
             list.addChild(detailButton);
             rowDetailButtons.put(squadId, detailButton);
 
@@ -233,7 +233,7 @@ public class SquadScreen extends MutilScreen {
     /** 原地刷新行按钮的标签/状态与展开三角。 */
     private void refreshSquadRowLabels() {
         for (UnifiedDeployScreenPacket.SquadInfo squad : squads) {
-            EspetroMutilWidgets.ActionButton join = rowJoinButtons.get(squad.id);
+            EspetroAuiWidgets.ActionButton join = rowJoinButtons.get(squad.id);
             if (join != null) {
                 boolean joined = squad.id == mySquadId;
                 boolean full = squad.memberCount >= squad.maxMembers && !joined;
@@ -241,9 +241,9 @@ public class SquadScreen extends MutilScreen {
                 join.setLabel(squadRowLabel(squad))
                     .setSelected(joined)
                     .setEnabled(!full && !blockedByLock)
-                    .setTextColor(full ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
+                    .setTextColor(full ? EspetroAuiWidgets.DIM : EspetroAuiWidgets.TEXT);
             }
-            EspetroMutilWidgets.ActionButton detail = rowDetailButtons.get(squad.id);
+            EspetroAuiWidgets.ActionButton detail = rowDetailButtons.get(squad.id);
             if (detail != null) {
                 detail.setLabel(squad.id == selectedSquadId ? "▼" : "▶")
                     .setSelected(squad.id == selectedSquadId);
@@ -275,14 +275,14 @@ public class SquadScreen extends MutilScreen {
         int height = detailH;
 
         detailContainer.addChild(compactText(x + 4, y + 4, width - 8,
-            "§6§l" + squad.name, EspetroMutilWidgets.GOLD, TEXT_SCALE));
+            "§6§l" + squad.name, EspetroAuiWidgets.GOLD, TEXT_SCALE));
         detailContainer.addChild(compactText(x + 4, y + 13, width - 43,
             "§7成员 " + squad.memberCount + "/" + squad.maxMembers,
-            EspetroMutilWidgets.MUTED, TEXT_SCALE));
+            EspetroAuiWidgets.MUTED, TEXT_SCALE));
 
         if (isLocalPlayerLeader(squad)) {
             String lockLabel = squad.isLocked ? "解锁" : "锁定";
-            int lockColor = squad.isLocked ? EspetroMutilWidgets.POSITIVE : EspetroMutilWidgets.WARNING;
+            int lockColor = squad.isLocked ? EspetroAuiWidgets.POSITIVE : EspetroAuiWidgets.WARNING;
             detailContainer.addChild(compactButton(x + width - 70, y + 11, 32, BUTTON_H,
                 lockLabel, () -> {
                     if (squad.isLocked) {
@@ -293,10 +293,10 @@ public class SquadScreen extends MutilScreen {
                 }).setTextColor(lockColor));
             detailContainer.addChild(compactButton(x + width - 36, y + 11, 32, BUTTON_H,
                 "删除", () -> NetworkManager.deleteSquad(squad.id))
-                .setTextColor(EspetroMutilWidgets.NEGATIVE));
+                .setTextColor(EspetroAuiWidgets.NEGATIVE));
         } else if (squad.isLocked) {
             detailContainer.addChild(compactText(x + width - 70, y + 13, 66,
-                "§c🔒 已锁定", EspetroMutilWidgets.MUTED, TEXT_SCALE));
+                "§c🔒 已锁定", EspetroAuiWidgets.MUTED, TEXT_SCALE));
         }
 
         ScrollableList detailList = new ScrollableList(x + 4, y + 25, width - 8, height - 29)
@@ -305,7 +305,7 @@ public class SquadScreen extends MutilScreen {
         detailContainer.addChild(detailList);
 
         if (squad.members.isEmpty()) {
-            detailList.addChild(compactText(0, 0, "暂无成员", EspetroMutilWidgets.MUTED));
+            detailList.addChild(compactText(0, 0, "暂无成员", EspetroAuiWidgets.MUTED));
             return;
         }
 
@@ -328,7 +328,7 @@ public class SquadScreen extends MutilScreen {
                 detailList.addChild(compactButton(detailList.getWidth() - 35, lineY - 1,
                     29, 9, "踢出", () -> NetworkManager.sendMatchStatsAction(
                         org.espetro.network.MatchStatsActionPacket.Action.KICK_FROM_SQUAD,
-                        member.uuid)).setTextColor(EspetroMutilWidgets.NEGATIVE));
+                        member.uuid)).setTextColor(EspetroAuiWidgets.NEGATIVE));
             }
             lineY += 8;
         }
@@ -355,10 +355,10 @@ public class SquadScreen extends MutilScreen {
                     && mouseY >= clickY && mouseY < clickY + clickH;
             }
         });
-        popup.addChild(EspetroMutilWidgets.panel(x, y, popupW, popupH,
-            0xF0181818, EspetroMutilWidgets.BORDER_ACTIVE));
+        popup.addChild(EspetroAuiWidgets.panel(x, y, popupW, popupH,
+            0xF0181818, EspetroAuiWidgets.BORDER_ACTIVE));
         popup.addChild(compactText(x + 6, y + 6, "§6§l选择小队类别",
-            EspetroMutilWidgets.GOLD));
+            EspetroAuiWidgets.GOLD));
         popup.addChild(compactButton(x + popupW - 34, y + 4, 28, BUTTON_H,
             "取消", this::cancelCategoryPopup));
         ScrollableList list = new ScrollableList(x + 6, y + 22, popupW - 12, popupH - 28)
@@ -387,24 +387,24 @@ public class SquadScreen extends MutilScreen {
         return new String(Character.toChars(cp));
     }
 
-    private static EspetroMutilWidgets.Text compactText(int x, int y, String value, int color) {
-        return EspetroMutilWidgets.text(x, y, value, color).setTextScale(TEXT_SCALE);
+    private static EspetroAuiWidgets.Text compactText(int x, int y, String value, int color) {
+        return EspetroAuiWidgets.text(x, y, value, color).setTextScale(TEXT_SCALE);
     }
 
-    private static EspetroMutilWidgets.Text compactText(int x, int y, int width,
+    private static EspetroAuiWidgets.Text compactText(int x, int y, int width,
                                                        String value, int color, float scale) {
-        return EspetroMutilWidgets.text(x, y, width, value, color).setTextScale(scale);
+        return EspetroAuiWidgets.text(x, y, width, value, color).setTextScale(scale);
     }
 
-    private static EspetroMutilWidgets.Text compactCenteredText(int x, int y, int width,
+    private static EspetroAuiWidgets.Text compactCenteredText(int x, int y, int width,
                                                                String value, int color) {
-        return EspetroMutilWidgets.centeredText(x, y, width, value, color)
+        return EspetroAuiWidgets.centeredText(x, y, width, value, color)
             .setTextScale(TEXT_SCALE);
     }
 
-    private static EspetroMutilWidgets.ActionButton compactButton(
+    private static EspetroAuiWidgets.ActionButton compactButton(
             int x, int y, int width, int height, String label, Runnable action) {
-        return EspetroMutilWidgets.button(x, y, width, height, label, action)
+        return EspetroAuiWidgets.button(x, y, width, height, label, action)
             .setTextScale(TEXT_SCALE);
     }
 

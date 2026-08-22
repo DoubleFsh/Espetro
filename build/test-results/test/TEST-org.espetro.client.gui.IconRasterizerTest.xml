@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.client.gui.IconRasterizerTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.003">
+  <properties/>
+  <testcase name="premultipliedFilterKeepsColorAtTranslucentEdges()" classname="org.espetro.client.gui.IconRasterizerTest" time="0.001"/>
+  <testcase name="rectangularSpriteKeepsItsAspectRatioAndIsCentered()" classname="org.espetro.client.gui.IconRasterizerTest" time="0.0"/>
+  <testcase name="transparentPaddingDoesNotShrinkTheVisibleSprite()" classname="org.espetro.client.gui.IconRasterizerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

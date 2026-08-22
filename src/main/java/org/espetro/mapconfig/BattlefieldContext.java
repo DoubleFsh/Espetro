@@ -24,6 +24,9 @@ public final class BattlefieldContext {
     private static final AtomicReference<ActiveMapConfig> ACTIVE = new AtomicReference<>(null);
     private static final AtomicLong SESSION_ID = new AtomicLong(0L);
     private static volatile String lastRoundWinner = null;
+    /** Filled by ESPoints after it resolves AAS/RAAS from EsConfig. */
+    private static volatile String resolvedObjectiveMode = "";
+    private static volatile String resolvedObjectiveLane = "";
 
     private BattlefieldContext() {
     }
@@ -56,22 +59,28 @@ public final class BattlefieldContext {
         SESSION_ID.incrementAndGet();
         ActiveMapConfig previous = ACTIVE.getAndSet(null);
         if (previous != null) {
+            String esConfigPath = previous.esConfigDir != null
+                ? previous.esConfigDir.toAbsolutePath().normalize().toString()
+                : "";
             ActiveBattlefieldSnapshot snapshot = new ActiveBattlefieldSnapshot(
                 previous.mapFolder,
                 previous.displayName,
                 previous.dimensionKey,
-                previous.esPoints.tacticalMapJson,
-                previous.esPoints.capturePointsJson,
-                previous.esPoints.backgroundImage,
-                previous.esPoints.backgroundBytes(),
-                previous.esPoints.backgroundSha256,
-                previous.esPoints.backgroundWidth,
-                previous.esPoints.backgroundHeight,
-                previous.esPoints.objectiveMode,
-                previous.esPoints.objectiveLane,
-                previous.esPoints.objectiveSeed
+                esConfigPath,
+                previous.esPoints != null ? previous.esPoints.tacticalMapJson : "",
+                previous.esPoints != null ? previous.esPoints.capturePointsJson : "",
+                previous.esPoints != null ? previous.esPoints.backgroundImage : "",
+                previous.esPoints != null ? previous.esPoints.backgroundBytes() : new byte[0],
+                previous.esPoints != null ? previous.esPoints.backgroundSha256 : "",
+                previous.esPoints != null ? previous.esPoints.backgroundWidth : 0,
+                previous.esPoints != null ? previous.esPoints.backgroundHeight : 0,
+                previous.esPoints != null ? previous.esPoints.objectiveMode : "",
+                previous.esPoints != null ? previous.esPoints.objectiveLane : "",
+                previous.esPoints != null ? previous.esPoints.objectiveSeed : 0L
             );
             MinecraftForge.EVENT_BUS.post(new BattlefieldLifecycleEvent.Cleared(snapshot));
+            resolvedObjectiveMode = "";
+            resolvedObjectiveLane = "";
             Espetro.LOGGER.info("已清除活动战场配置");
         }
     }
@@ -90,10 +99,22 @@ public final class BattlefieldContext {
     }
 
     public static String getObjectiveMode() {
+        if (resolvedObjectiveMode != null && !resolvedObjectiveMode.isBlank()) {
+            return resolvedObjectiveMode;
+        }
         ActiveMapConfig config = ACTIVE.get();
         return config == null || config.esPoints == null
             ? ""
             : config.esPoints.objectiveMode;
+    }
+
+    public static void setResolvedObjective(String mode, String laneId) {
+        resolvedObjectiveMode = mode == null ? "" : mode.trim();
+        resolvedObjectiveLane = laneId == null ? "" : laneId.trim();
+    }
+
+    public static String getObjectiveLane() {
+        return resolvedObjectiveLane == null ? "" : resolvedObjectiveLane;
     }
 
     /**

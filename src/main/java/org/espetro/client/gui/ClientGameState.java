@@ -38,7 +38,12 @@ public class ClientGameState {
     }
 
     public static void setObjectiveMode(String mode) {
-        objectiveMode = mode == null || mode.isBlank() ? null : mode.trim();
+        String next = mode == null || mode.isBlank() ? null : mode.trim();
+        if (java.util.Objects.equals(objectiveMode, next)) {
+            return;
+        }
+        objectiveMode = next;
+        TroopCountOverlay.onObjectiveModeChanged();
     }
 
     public static String getObjectiveMode() {

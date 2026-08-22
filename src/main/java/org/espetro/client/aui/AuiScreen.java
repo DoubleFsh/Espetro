@@ -41,7 +41,7 @@ public abstract class AuiScreen extends Screen {
             return false;
         }
         structureSignature = newSignature;
-        rebuildMutilRoot();
+        rebuildMenuRoot();
         return true;
     }
 
@@ -58,24 +58,24 @@ public abstract class AuiScreen extends Screen {
         return true;
     }
 
-    protected final void rebuildMutilRoot() {
+    protected final void rebuildMenuRoot() {
         rootRebuildPending = true;
     }
 
     @Override
     protected void init() {
         super.init();
-        rebuildMutilRootNow();
+        rebuildMenuRootNow();
     }
 
-    private void rebuildMutilRootNow() {
+    private void rebuildMenuRootNow() {
         if (rebuildingRoot) {
             return;
         }
         rebuildingRoot = true;
         try {
             GuiElement next = new GuiElement(0, 0, this.width, this.height);
-            buildMutilRoot(next);
+            buildMenuRoot(next);
             this.root = next;
         } finally {
             rebuildingRoot = false;
@@ -87,19 +87,19 @@ public abstract class AuiScreen extends Screen {
         super.tick();
         if (rootRebuildPending) {
             rootRebuildPending = false;
-            rebuildMutilRootNow();
+            rebuildMenuRootNow();
         }
         if (root != null) {
             root.updateAnimations();
         }
     }
 
-    protected abstract void buildMutilRoot(GuiElement root);
+    protected abstract void buildMenuRoot(GuiElement root);
 
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     }
 
-    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderAfterMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -109,7 +109,7 @@ public abstract class AuiScreen extends Screen {
         RenderSystem.defaultBlendFunc();
         graphics.pose().pushPose();
         try {
-            renderBeforeMutil(graphics, mouseX, mouseY, partialTick);
+            renderBeforeMenu(graphics, mouseX, mouseY, partialTick);
             if (root != null) {
                 root.updateFocusState(0, 0, mouseX, mouseY);
                 root.draw(graphics, 0, 0, this.width, this.height, mouseX, mouseY, partialTick);
@@ -118,7 +118,7 @@ public abstract class AuiScreen extends Screen {
                     graphics.renderComponentTooltip(this.font, tooltip, mouseX, mouseY);
                 }
             }
-            renderAfterMutil(graphics, mouseX, mouseY, partialTick);
+            renderAfterMenu(graphics, mouseX, mouseY, partialTick);
             graphics.flush();
         } finally {
             graphics.flush();

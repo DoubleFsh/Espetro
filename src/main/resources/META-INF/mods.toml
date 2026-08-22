@@ -97,13 +97,7 @@ versionRange = "${taczmagazines_version_range}"
 ordering = "AFTER"
 side = "BOTH"
 
-[[dependencies."${mod_id}"]]
-modId = "pingwheel"
-mandatory = true
-versionRange = "[${pingwheel_version}]"
-ordering = "AFTER"
-side = "BOTH"
-
+# pingwheel 已从 Espetro 剥离（战术标点改由 ESPoints 实现）；不再强制依赖。
 
 [[dependencies."${mod_id}"]]
 modId = "rhino"
@@ -144,6 +138,14 @@ side = "BOTH"
 # DragonRise 继承 SBW VehicleEntity；只声明加载顺序，不把它变成硬前置。
 [[dependencies."${mod_id}"]]
 modId = "dragonrise_reforge"
+mandatory = false
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+# 体力由 EsICO 提供；未安装则无体力。上车/换座/下车读条由 Espetro 自身实现。
+[[dependencies."${mod_id}"]]
+modId = "esico"
 mandatory = false
 versionRange = "[0,)"
 ordering = "AFTER"

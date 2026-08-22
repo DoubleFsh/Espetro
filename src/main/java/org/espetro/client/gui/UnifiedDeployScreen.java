@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  *
  * Squad-style layout: squads | roles and spawn points | tactical map.
  */
-public class UnifiedDeployScreen extends MutilScreen {
+public class UnifiedDeployScreen extends EspetroMenuScreen {
 
     private static final int BTN_H = 12;
     private static final int CLASS_BTN_H = 22;
@@ -707,14 +707,14 @@ public class UnifiedDeployScreen extends MutilScreen {
             }
             int rightLabelWidth = rightLabel.isEmpty() ? 0 : Math.round(
                 Minecraft.getInstance().font.width(
-                    EspetroMutilWidgets.stripFormatting(rightLabel)) * textScale);
+                    EspetroAuiWidgets.stripFormatting(rightLabel)) * textScale);
             int rightLabelX = bx + bw - 3 - rightLabelWidth;
             int availableTextWidth = Math.max(8,
                 rightLabelX - (rightLabel.isEmpty() ? 0 : 4) - contentLeft);
             int logicalTextWidth = Math.max(8, (int) (availableTextWidth / textScale));
-            String drawnLabel = EspetroMutilWidgets.trimToWidth(label, logicalTextWidth);
+            String drawnLabel = EspetroAuiWidgets.trimToWidth(label, logicalTextWidth);
             int textWidth = Math.round(Minecraft.getInstance().font.width(
-                EspetroMutilWidgets.stripFormatting(drawnLabel)) * textScale);
+                EspetroAuiWidgets.stripFormatting(drawnLabel)) * textScale);
             int textX = centeredText
                 ? contentLeft + Math.max(0, (availableTextWidth - textWidth) / 2)
                 : contentLeft;
@@ -780,7 +780,7 @@ public class UnifiedDeployScreen extends MutilScreen {
 
             int textX = bx + bar * 2 + 3;
             int availableWidth = Math.max(8, getWidth() - (bar * 2 + 5));
-            String drawnLabel = EspetroMutilWidgets.trimToWidth(
+            String drawnLabel = EspetroAuiWidgets.trimToWidth(
                 label, (int) (availableWidth / SQUAD_MEMBER_TEXT_SCALE));
             int textHeight = Math.max(1,
                 Math.round(Minecraft.getInstance().font.lineHeight * SQUAD_MEMBER_TEXT_SCALE));
@@ -811,7 +811,7 @@ public class UnifiedDeployScreen extends MutilScreen {
         PlainText(int x, int y, String text, int color) {
             super(x, y,
                 Math.max(1, Math.round(Minecraft.getInstance().font.width(
-                    EspetroMutilWidgets.stripFormatting(text)) * UI_TEXT_SCALE)),
+                    EspetroAuiWidgets.stripFormatting(text)) * UI_TEXT_SCALE)),
                 Math.max(1, Math.round(Minecraft.getInstance().font.lineHeight * UI_TEXT_SCALE)));
             this.text = text;
             this.color = color;
@@ -836,7 +836,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     // ==================== 界面构建 ====================
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         this.root = root;
         dirtySections.clear();
         populateGui();
@@ -1020,7 +1020,7 @@ public class UnifiedDeployScreen extends MutilScreen {
 
     // ---------- 标题行 ----------
     private void buildTitleBar() {
-        String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
+        String teamColor = EspetroAuiWidgets.teamPrefix(team);
         // Phase text — update dynamically by refreshTitleTimer()
         phaseTitleText = new PlainText(5, 3,
             "\u00a76\u00a7l部署阶段 \u00a77| " + teamColor + "\u00a7l"
@@ -1028,16 +1028,16 @@ public class UnifiedDeployScreen extends MutilScreen {
             0xFFFFFF);
         root.addChild(phaseTitleText);
 
-        String teamName = "ATTACK".equals(team) ? "进攻方" : "防守方";
+        String teamName = EspetroAuiWidgets.teamName(team);
         String sub = "\u00a7f" + teamName;
         if (factionDescription != null && !factionDescription.isEmpty())
             sub += " \u00a7f· " + factionDescription;
         PlainText subtitle = new PlainText(5, 15,
-            EspetroMutilWidgets.trimToWidth(sub, Math.max(80, this.width - 16)), BTN_TEXT);
+            EspetroAuiWidgets.trimToWidth(sub, Math.max(80, this.width - 16)), BTN_TEXT);
         root.addChild(subtitle);
 
         PlainText hint = new PlainText(5, 25,
-            EspetroMutilWidgets.trimToWidth(
+            EspetroAuiWidgets.trimToWidth(
                 "\u00a77选择班组、职业与部署点，确认后等待部署",
                 Math.max(80, this.width - 16)), BTN_TEXT);
         root.addChild(hint);
@@ -1869,7 +1869,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     private void refreshTitleTimer() {
         if (statusTimerText == null) return;
 
-        String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
+        String teamColor = EspetroAuiWidgets.teamPrefix(team);
         GamePhase phase = ClientGameState.getCurrentPhase();
 
         // 左上角阶段名
@@ -1893,7 +1893,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             ? " \u00a78· \u00a7e" + objectiveMode
             : "";
         String factionPart = "\u00a77| " + teamColor + "\u00a7l" + factionIcon + " " + factionName;
-        String title = EspetroMutilWidgets.trimToWidth(
+        String title = EspetroAuiWidgets.trimToWidth(
             phaseName + modePart + " " + factionPart, Math.max(80, this.width - 96));
         phaseTitleText.setText(title);
 
@@ -1918,8 +1918,8 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     private String buildStatusText() {
-        String teamColor = "ATTACK".equals(team) ? "\u00a7c" : "\u00a79";
-        String teamName = "ATTACK".equals(team) ? "进攻方" : "防守方";
+        String teamColor = EspetroAuiWidgets.teamPrefix(team);
+        String teamName = EspetroAuiWidgets.teamName(team);
         String squadStr = "";
         for (var squad : squads) {
             if (squad.id == mySquadId) {
@@ -2022,7 +2022,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     // ==================== 渲染 ====================
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         CurrentMapBackgroundRenderer.render(
             graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
         computeRegions();
@@ -2080,7 +2080,7 @@ public class UnifiedDeployScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderAfterMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         computeRegions();
 
         // 在 GUI 元素树绘制完成后解析悬停目标，此时 EspButton.hovered 已被更新。
@@ -2371,7 +2371,7 @@ public class UnifiedDeployScreen extends MutilScreen {
             int ty = py + 3;
             for (String line : lines) {
                 drawScaledString(graphics,
-                    EspetroMutilWidgets.trimToWidth(line, logicalWidth),
+                    EspetroAuiWidgets.trimToWidth(line, logicalWidth),
                     px + 4, ty, BTN_TEXT, TOOLTIP_TEXT_SCALE);
                 ty += lineH;
             }
@@ -2427,20 +2427,20 @@ public class UnifiedDeployScreen extends MutilScreen {
             }
             graphics.drawString(this.font, Component.literal((full ? "§8" : "§f") + variant.name),
                 rowX + 5, rowY + 4, BTN_TEXT, false);
-            int countW = this.font.width(EspetroMutilWidgets.stripFormatting(countText));
+            int countW = this.font.width(EspetroAuiWidgets.stripFormatting(countText));
             graphics.drawString(this.font, Component.literal(countText),
                 rowX + rowW - countW - 5, rowY + 4, BTN_TEXT, false);
             if (variant.description != null && !variant.description.isBlank()) {
                 graphics.drawString(this.font, Component.literal("§7" +
-                    EspetroMutilWidgets.trimToWidth(variant.description, rowW - 10)),
-                    rowX + 5, rowY + 16, EspetroMutilWidgets.DIM, false);
+                    EspetroAuiWidgets.trimToWidth(variant.description, rowW - 10)),
+                    rowX + 5, rowY + 16, EspetroAuiWidgets.DIM, false);
             }
         }
 
         if (variants.size() > VARIANT_MAX_VISIBLE) {
             graphics.drawString(this.font, Component.literal("§8滚轮浏览"),
                 variantPopupX + VARIANT_POPUP_W - 49, variantPopupY + variantPopupH - 10,
-                EspetroMutilWidgets.DIM, false);
+                EspetroAuiWidgets.DIM, false);
         }
     }
 

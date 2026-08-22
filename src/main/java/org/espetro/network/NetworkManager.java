@@ -28,7 +28,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.32";
+    public static final String PROTOCOL_VERSION = "1.33";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -307,24 +307,6 @@ public class NetworkManager {
             CommanderSkillSyncPacket::handle
         );
 
-        // 体力状态同步包（S→C）
-        NET.registerMessage(
-            nextId(),
-            StaminaSyncPacket.class,
-            StaminaSyncPacket::write,
-            StaminaSyncPacket::read,
-            StaminaSyncPacket::handle
-        );
-
-        // 跳跃体力动作包（C→S）
-        NET.registerMessage(
-            nextId(),
-            StaminaJumpPacket.class,
-            StaminaJumpPacket::write,
-            StaminaJumpPacket::read,
-            StaminaJumpPacket::handle
-        );
-
         NET.registerMessage(
             nextId(),
             RadialActionPacket.class,
@@ -424,6 +406,27 @@ public class NetworkManager {
             .encoder(CloseResupplySessionPacket::write)
             .decoder(CloseResupplySessionPacket::read)
             .consumerMainThread(CloseResupplySessionPacket::handle)
+            .add();
+
+        NET.messageBuilder(MountRequestPacket.class, nextId(), NetworkDirection.PLAY_TO_SERVER)
+            .encoder(MountRequestPacket::write)
+            .decoder(MountRequestPacket::read)
+            .consumerMainThread(MountRequestPacket::handle)
+            .add();
+        NET.messageBuilder(MountProgressPacket.class, nextId(), NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(MountProgressPacket::write)
+            .decoder(MountProgressPacket::read)
+            .consumerMainThread(MountProgressPacket::handle)
+            .add();
+        NET.messageBuilder(DismountRequestPacket.class, nextId(), NetworkDirection.PLAY_TO_SERVER)
+            .encoder(DismountRequestPacket::write)
+            .decoder(DismountRequestPacket::read)
+            .consumerMainThread(DismountRequestPacket::handle)
+            .add();
+        NET.messageBuilder(SeatSwitchReadyPacket.class, nextId(), NetworkDirection.PLAY_TO_SERVER)
+            .encoder(SeatSwitchReadyPacket::write)
+            .decoder(SeatSwitchReadyPacket::read)
+            .consumerMainThread(SeatSwitchReadyPacket::handle)
             .add();
     }
 
@@ -646,9 +649,7 @@ public class NetworkManager {
         NET.sendToServer(new RequestGameStatePacket());
     }
 
-    public static void sendStaminaJump() {
-        NET.sendToServer(new StaminaJumpPacket());
-    }
+
 
     public static void sendRadialAction(RadialActionPacket.Action action) {
         NET.sendToServer(new RadialActionPacket(action));
@@ -1312,8 +1313,8 @@ public class NetworkManager {
         }
         bastionList.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));
 
-        // 防守方在部署阶段可使用前哨基地
-        if ("DEFEND".equals(team) && org.espetro.team.OutpostManager.getInstance().isAvailable()) {
+        // AAS 防守方在部署阶段可使用前哨基地；RAAS 双方都不可用。
+        if (org.espetro.team.OutpostManager.getInstance().canListFor(team)) {
             var outposts = org.espetro.team.OutpostManager.getInstance().getOutposts();
             for (int i = 0; i < outposts.size(); i++) {
                 var op = outposts.get(i);
@@ -1428,7 +1429,7 @@ public class NetworkManager {
         }
         items.addAll(org.espetro.team.TeamPackManager.getInstance().getDeployItemsForPlayer(player));
 
-        if ("DEFEND".equals(team) && org.espetro.team.OutpostManager.getInstance().isAvailable()) {
+        if (org.espetro.team.OutpostManager.getInstance().canListFor(team)) {
             var outposts = org.espetro.team.OutpostManager.getInstance().getOutposts();
             for (int i = 0; i < outposts.size(); i++) {
                 var op = outposts.get(i);
@@ -1564,7 +1565,7 @@ public class NetworkManager {
     }
 
     private static String teamDisplayName(String team) {
-        return "ATTACK".equals(team) ? "进攻方" : "防守方";
+        return TeamDisplayNames.displayName(team);
     }
 
     /**

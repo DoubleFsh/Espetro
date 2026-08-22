@@ -133,13 +133,6 @@ public class ClientPacketHandlers {
             packet.getAttackTroops(), packet.getDefendTroops());
     }
 
-    // ==================== StaminaSyncPacket ====================
-
-    public static void handleStamina(StaminaSyncPacket packet) {
-        org.espetro.client.gui.StaminaOverlay.update(
-            packet.isEnabled(), packet.getStamina(), packet.getMaxStamina(), packet.getJumpStaminaCost());
-    }
-
     // ==================== ClassCountSyncPacket ====================
 
     public static void handleClassCountSync(ClassCountSyncPacket packet) {
@@ -494,6 +487,22 @@ public class ClientPacketHandlers {
 
     public static void handleVehicleSupplySync(VehicleSupplySyncPacket packet) {
         org.espetro.client.gui.VehicleWheelController.updateSupply(packet);
+    }
+
+    public static void handleMountProgress(MountProgressPacket packet) {
+        org.espetro.client.vehicle.VehicleInteractionKind kind =
+            org.espetro.client.vehicle.VehicleInteractionState.kind();
+        if (!packet.active()) {
+            if (packet.progress() >= 0.999f) {
+                org.espetro.client.vehicle.VehicleInteractionState.setMount(1f);
+            } else if (kind == org.espetro.client.vehicle.VehicleInteractionKind.MOUNT) {
+                org.espetro.client.vehicle.VehicleInteractionState.clear();
+            }
+            return;
+        }
+        float local = org.espetro.client.vehicle.VehicleInteractionState.progress();
+        float merged = local < 0f ? packet.progress() : Math.max(local, packet.progress());
+        org.espetro.client.vehicle.VehicleInteractionState.setMount(merged);
     }
 
     // ==================== FobSupplySyncPacket ====================

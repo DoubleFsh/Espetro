@@ -7,6 +7,9 @@
       "handleAcceptTeleportPacket": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7376_(Lnet/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket;)V",
       "handleMovePlayer": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7185_(Lnet/minecraft/network/protocol/game/ServerboundMovePlayerPacket;)V"
     },
+    "org/espetro/mixin/sbw/MinecraftSeatMixin": {
+      "handleKeybinds": "Lnet/minecraft/client/Minecraft;m_91279_()V"
+    },
     "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {
       "hurt": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6469_(Lnet/minecraft/world/damagesource/DamageSource;F)Z"
     },
@@ -22,6 +25,9 @@
       "org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin": {
         "handleAcceptTeleportPacket": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7376_(Lnet/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket;)V",
         "handleMovePlayer": "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;m_7185_(Lnet/minecraft/network/protocol/game/ServerboundMovePlayerPacket;)V"
+      },
+      "org/espetro/mixin/sbw/MinecraftSeatMixin": {
+        "handleKeybinds": "Lnet/minecraft/client/Minecraft;m_91279_()V"
       },
       "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {
         "hurt": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6469_(Lnet/minecraft/world/damagesource/DamageSource;F)Z"

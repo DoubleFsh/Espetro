@@ -44,6 +44,11 @@ public final class TroopCountOverlay {
         notifyDeployScreen();
     }
 
+    static void onObjectiveModeChanged() {
+        rebuildDisplay();
+        notifyDeployScreen();
+    }
+
     /** 供 UnifiedDeployScreen 右上角展示；null 表示不显示。 */
     public static String getDisplayLine() {
         return displayLine;
@@ -70,7 +75,8 @@ public final class TroopCountOverlay {
             return;
         }
         int troops = attack ? attackTroops : defendTroops;
-        String label = attack ? "§c■ 进攻方" : "§9■ 防守方";
+        String label = EspetroAuiWidgets.teamPrefix(team) + "■ "
+            + EspetroAuiWidgets.teamName(team);
         String color = troops > 50 ? "§a" : (troops > 20 ? "§e" : "§c");
         displayLine = label + ": " + color + troops;
     }

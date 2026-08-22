@@ -29,8 +29,9 @@ import java.util.UUID;
 /**
  * 前哨基地管理器。
  *
- * 前哨基地仅供防守方在部署阶段（DEPLOYING）使用，
+ * AAS 前哨基地仅供防守方在部署阶段（DEPLOYING）使用，
  * 可直接传送到前哨基地位置。
+ * RAAS 为对称模式，双方都不可使用前哨。
  * 当游戏正式开始（进入 BATTLE 阶段）时，前哨基地被停用，不再生效。
  * 它只复用兵站的部署点界面样式，不创建 BastionData、建筑、核心或补给，
  * 也不计入任何队伍的兵站数量上限。
@@ -138,12 +139,18 @@ public class OutpostManager {
     }
 
     /**
-     * 前哨基地是否可用（部署阶段且已激活）
+     * 前哨基地是否可用（部署阶段且已激活）。RAAS 下始终不可用。
      */
     public boolean isAvailable() {
         return active
+            && !TeamDisplayNames.isSymmetricMode()
             && GameStateManager.getInstance().getCurrentPhase() == GamePhase.DEPLOYING
             && !outposts.isEmpty();
+    }
+
+    /** Unified deploy / deploy-point lists: AAS 防守方可见，RAAS 双方都不列出。 */
+    public boolean canListFor(String team) {
+        return isAvailable() && "DEFEND".equals(team);
     }
 
     /**
@@ -171,11 +178,14 @@ public class OutpostManager {
      * @return null 表示成功，String 表示失败原因
      */
     public String tryDeploy(ServerPlayer player, int outpostIndex) {
+        if (TeamDisplayNames.isSymmetricMode()) {
+            return "§c当前模式双方都不可使用前哨基地！";
+        }
         if (!isAvailable()) {
             return "§c前哨基地已失效！";
         }
 
-        // 仅防守方可使用
+        // AAS 仅防守方可使用
         String team = Espetro.getPlayerTeam(player);
         if (!"DEFEND".equals(team)) {
             return "§c只有防守方可以使用前哨基地！";
@@ -214,6 +224,9 @@ public class OutpostManager {
      * 死亡事件会把玩家转入统一部署点选择状态。
      */
     public String tryStartRedeploy(ServerPlayer player) {
+        if (TeamDisplayNames.isSymmetricMode()) {
+            return "§c当前模式双方都不可使用前哨基地！";
+        }
         if (!isAvailable()) {
             return "§c只能在布防阶段重新部署！";
         }

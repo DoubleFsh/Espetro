@@ -63,10 +63,25 @@ public final class VehicleSupplyHud {
 
         GuiGraphics graphics = event.getGuiGraphics();
 
+        float interactionProgress =
+            org.espetro.client.vehicle.VehicleInteractionState.progress();
+
         if (VehicleWheelController.isWheelActive()) {
             VehicleSupplySyncPacket supply = VehicleWheelController.getCachedSupply();
             if (supply != null) drawCapacityBar(graphics, mc, supply);
-            if (VehicleWheelController.isHolding()) drawProgressRing(graphics, mc);
+            // 上车/换座/下车：中央图标 + 百分比文字（无圆环）。补给 hold 圆环仍可用。
+            if (interactionProgress >= 0f) {
+                drawInteractionCenterProgress(graphics, mc, interactionProgress);
+            } else if (VehicleWheelController.isHolding()) {
+                drawProgressRing(graphics, mc);
+            } else if (VehicleWheelController.isCenterHovered()) {
+                drawCenterMountHint(graphics, mc);
+            }
+            return;
+        }
+
+        if (interactionProgress >= 0f) {
+            drawInteractionCenterProgress(graphics, mc, interactionProgress);
             return;
         }
 
@@ -178,6 +193,31 @@ public final class VehicleSupplyHud {
 
     // ==================== 圆形进度条 ====================
 
+    private static void drawInteractionCenterProgress(GuiGraphics graphics, Minecraft mc, float fill) {
+        int cx = mc.getWindow().getGuiScaledWidth() / 2;
+        int cy = mc.getWindow().getGuiScaledHeight() / 2;
+        var icon = org.espetro.client.vehicle.VehicleInteractionState.icon();
+        int size = 18;
+        graphics.blit(icon, cx - size / 2, cy - size / 2 - 6, size, size,
+            0f, 0f, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
+        String label = org.espetro.client.vehicle.VehicleInteractionState.label();
+        String text = String.format("§e%s §f%.0f%%", label, fill * 100f);
+        graphics.drawString(mc.font, text, cx - mc.font.width(text) / 2, cy + 16, 0xFFFFFF);
+    }
+
+    private static void drawCenterMountHint(GuiGraphics graphics, Minecraft mc) {
+        int cx = mc.getWindow().getGuiScaledWidth() / 2;
+        int cy = mc.getWindow().getGuiScaledHeight() / 2;
+        net.minecraft.resources.ResourceLocation mountIcon =
+            org.espetro.client.vehicle.VehicleInteractionState.icon();
+        graphics.blit(mountIcon, cx - 9, cy - 15, 18, 18,
+            0f, 0f, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
+        String text = "§7上车";
+        graphics.drawString(mc.font, text, cx - mc.font.width(text) / 2, cy + 16, 0xFFFFFF);
+    }
+
     private static void drawProgressRing(GuiGraphics graphics, Minecraft mc) {
         int progress = VehicleWheelController.getHoldProgress();  // 0..20
         float fill = Math.min(1.0f, (float)progress / 20.0f);
@@ -185,6 +225,10 @@ public final class VehicleSupplyHud {
 
         int cx = mc.getWindow().getGuiScaledWidth() / 2;
         int cy = mc.getWindow().getGuiScaledHeight() / 2;
+        drawRingAt(graphics, cx, cy, fill, color);
+    }
+
+    private static void drawRingAt(GuiGraphics graphics, int cx, int cy, float fill, int color) {
         int r = PROGRESS_RING_RADIUS;
         int thick = PROGRESS_RING_THICKNESS;
 

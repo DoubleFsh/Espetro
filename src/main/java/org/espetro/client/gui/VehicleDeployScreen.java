@@ -12,7 +12,7 @@ import java.util.Objects;
 /**
  * 载具部署界面：结构不变时原地刷新冷却/在场数，避免整页 rebuild 闪烁。
  */
-public class VehicleDeployScreen extends MutilScreen {
+public class VehicleDeployScreen extends EspetroMenuScreen {
 
     private static final int PANEL_WIDTH = 560;
     private static final int PANEL_MIN_WIDTH = 300;
@@ -34,10 +34,10 @@ public class VehicleDeployScreen extends MutilScreen {
     private Object structureSignature;
 
     private static final class RowBinding {
-        private final EspetroMutilWidgets.ActionButton button;
+        private final EspetroAuiWidgets.ActionButton button;
         private VehicleDeployScreenPacket.VehicleInfo info;
 
-        private RowBinding(EspetroMutilWidgets.ActionButton button,
+        private RowBinding(EspetroAuiWidgets.ActionButton button,
                            VehicleDeployScreenPacket.VehicleInfo info) {
             this.button = button;
             this.info = info;
@@ -58,7 +58,7 @@ public class VehicleDeployScreen extends MutilScreen {
         this.vehicles = list;
         if (!Objects.equals(structureSignature, sig)) {
             structureSignature = sig;
-            rebuildMutilRoot();
+            rebuildMenuRoot();
         } else {
             for (int i = 0; i < rowBindings.size() && i < list.size(); i++) {
                 rowBindings.get(i).info = list.get(i);
@@ -76,7 +76,7 @@ public class VehicleDeployScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         rowBindings.clear();
         int panelW = Math.min(PANEL_WIDTH, Math.max(PANEL_MIN_WIDTH, this.width - PANEL_MARGIN * 2));
         int listContentH = vehicles.isEmpty()
@@ -88,12 +88,12 @@ public class VehicleDeployScreen extends MutilScreen {
         int panelX = (this.width - panelW) / 2;
         int panelY = Math.max(8, (this.height - panelH) / 2 - 18);
 
-        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, PANEL_BG, EspetroMutilWidgets.BORDER));
-        root.addChild(EspetroMutilWidgets.centeredText(
-            panelX, panelY + 12, panelW, "\u00a76\u00a7l载具信息", EspetroMutilWidgets.GOLD));
-        root.addChild(EspetroMutilWidgets.centeredText(
-            panelX, panelY + 29, panelW, "\u00a77冷却与在场数量实时更新", EspetroMutilWidgets.MUTED));
-        root.addChild(EspetroMutilWidgets.rect(
+        root.addChild(EspetroAuiWidgets.panel(panelX, panelY, panelW, panelH, PANEL_BG, EspetroAuiWidgets.BORDER));
+        root.addChild(EspetroAuiWidgets.centeredText(
+            panelX, panelY + 12, panelW, "\u00a76\u00a7l载具信息", EspetroAuiWidgets.GOLD));
+        root.addChild(EspetroAuiWidgets.centeredText(
+            panelX, panelY + 29, panelW, "\u00a77冷却与在场数量实时更新", EspetroAuiWidgets.MUTED));
+        root.addChild(EspetroAuiWidgets.rect(
             panelX + PANEL_PADDING, panelY + HEADER_H - 3, panelW - PANEL_PADDING * 2, 1, 0x35FFFFFF));
 
         int listX = panelX + PANEL_PADDING;
@@ -133,15 +133,15 @@ public class VehicleDeployScreen extends MutilScreen {
         return (int) Math.min(Integer.MAX_VALUE, (remaining + 999L) / 1000L);
     }
 
-    private EspetroMutilWidgets.ActionButton vehicleButton(
+    private EspetroAuiWidgets.ActionButton vehicleButton(
         int x, int y, int width, String label, boolean enabled, Runnable action
     ) {
-        return EspetroMutilWidgets.button(x, y, width - SCROLLBAR_RESERVED_W, ROW_H, label, action)
+        return EspetroAuiWidgets.button(x, y, width - SCROLLBAR_RESERVED_W, ROW_H, label, action)
             .setEnabled(enabled)
             .setColors(ROW_READY, ROW_READY_HOVER, ROW_READY_HOVER)
             .setDisabledColor(ROW_BLOCKED)
             .setBorderColor(ROW_BORDER)
-            .setTextColor(enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM);
+            .setTextColor(enabled ? EspetroAuiWidgets.TEXT : EspetroAuiWidgets.DIM);
     }
 
     private static String buildVehicleLabel(VehicleDeployScreenPacket.VehicleInfo vehicle,
@@ -169,8 +169,8 @@ public class VehicleDeployScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroAuiWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
     @Override

@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CommanderSkillScreen extends MutilScreen {
+public class CommanderSkillScreen extends EspetroMenuScreen {
 
     private Map<String, Integer> cooldowns = new HashMap<>();
     private final Map<String, Long> cooldownEndsAtMillis = new HashMap<>();
@@ -56,7 +56,7 @@ public class CommanderSkillScreen extends MutilScreen {
         setCooldowns(cooldowns);
         if (root != null) {
             if (layoutChanged) {
-                rebuildMutilRoot();
+                rebuildMenuRoot();
             } else {
                 refreshSkillRows();
             }
@@ -82,28 +82,28 @@ public class CommanderSkillScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         skillRows.clear();
         int panelW = Math.max(300, Math.min(420, this.width - 20));
         int panelH = Math.max(180, Math.min(320, this.height - 24));
         int panelX = (this.width - panelW) / 2;
         int panelY = Math.max(8, (this.height - panelH) / 2);
 
-        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH,
-            EspetroMutilWidgets.PANEL, EspetroMutilWidgets.BORDER));
+        root.addChild(EspetroAuiWidgets.panel(panelX, panelY, panelW, panelH,
+            EspetroAuiWidgets.PANEL, EspetroAuiWidgets.BORDER));
 
-        root.addChild(EspetroMutilWidgets.text(panelX + 10, panelY + 8,
-            "\u00a76\u00a7l战术技能", EspetroMutilWidgets.GOLD));
+        root.addChild(EspetroAuiWidgets.text(panelX + 10, panelY + 8,
+            "\u00a76\u00a7l战术技能", EspetroAuiWidgets.GOLD));
 
-        root.addChild(EspetroMutilWidgets.button(panelX + panelW - 50, panelY + 7, 40, 14,
+        root.addChild(EspetroAuiWidgets.button(panelX + panelW - 50, panelY + 7, 40, 14,
             "关闭", () -> Minecraft.getInstance().setScreen(null)));
 
-        root.addChild(EspetroMutilWidgets.rect(panelX + 10, panelY + 26, panelW - 20, 1, 0x25FFFFFF));
+        root.addChild(EspetroAuiWidgets.rect(panelX + 10, panelY + 26, panelW - 20, 1, 0x25FFFFFF));
 
         // isCommander 在同步包中表示「有技能入口」；列表已由服务端按 usableBy 过滤
         if (skills.isEmpty()) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 50, panelW,
-                "\u00a77当前角色无可用技能", EspetroMutilWidgets.MUTED));
+            root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + 50, panelW,
+                "\u00a77当前角色无可用技能", EspetroAuiWidgets.MUTED));
             lastCooldownSignature = getCooldownSignature();
             return;
         }
@@ -127,32 +127,32 @@ public class CommanderSkillScreen extends MutilScreen {
         boolean onCooldown = cooldownSec > 0;
 
         int cardColor = onCooldown ? 0x55363636 : 0x60404040;
-        int borderColor = onCooldown ? EspetroMutilWidgets.BORDER : 0x806D7482;
-        EspetroMutilWidgets.Panel panel = EspetroMutilWidgets.panel(
+        int borderColor = onCooldown ? EspetroAuiWidgets.BORDER : 0x806D7482;
+        EspetroAuiWidgets.Panel panel = EspetroAuiWidgets.panel(
             x, y, width, cardH, cardColor, borderColor);
         root.addChild(panel);
 
-        root.addChild(EspetroMutilWidgets.text(x + 8, y + 6,
-            "\u00a7e" + skill.displayName(), EspetroMutilWidgets.GOLD));
+        root.addChild(EspetroAuiWidgets.text(x + 8, y + 6,
+            "\u00a7e" + skill.displayName(), EspetroAuiWidgets.GOLD));
 
-        root.addChild(EspetroMutilWidgets.text(x + 8, y + 20,
-            "\u00a77" + skill.description(), EspetroMutilWidgets.MUTED));
+        root.addChild(EspetroAuiWidgets.text(x + 8, y + 20,
+            "\u00a77" + skill.description(), EspetroAuiWidgets.MUTED));
 
         String stats = skill.stats() == null ? "" : skill.stats();
-        root.addChild(EspetroMutilWidgets.text(x + 8, y + 34,
-            stats, EspetroMutilWidgets.DIM));
+        root.addChild(EspetroAuiWidgets.text(x + 8, y + 34,
+            stats, EspetroAuiWidgets.DIM));
 
         int btnW = 56;
         int btnH = 16;
         int btnX = x + width - btnW - 8;
         int btnY = y + (cardH - btnH) / 2;
 
-        EspetroMutilWidgets.ActionButton button = EspetroMutilWidgets.button(
+        EspetroAuiWidgets.ActionButton button = EspetroAuiWidgets.button(
             btnX, btnY, btnW, btnH,
             onCooldown ? cooldownSec + "秒" : "发动",
             () -> activateSkill(skill.id()))
             .setEnabled(!onCooldown)
-            .setTextColor(onCooldown ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.POSITIVE);
+            .setTextColor(onCooldown ? EspetroAuiWidgets.DIM : EspetroAuiWidgets.POSITIVE);
         root.addChild(button);
         skillRows.put(skill.id(), new SkillRow(panel, button));
 
@@ -187,17 +187,17 @@ public class CommanderSkillScreen extends MutilScreen {
             boolean onCooldown = cooldownSec > 0;
             row.panel()
                 .setColor(onCooldown ? 0x55363636 : 0x60404040)
-                .setBorderColor(onCooldown ? EspetroMutilWidgets.BORDER : 0x806D7482);
+                .setBorderColor(onCooldown ? EspetroAuiWidgets.BORDER : 0x806D7482);
             row.button()
                 .setLabel(onCooldown ? cooldownSec + "秒" : "发动")
                 .setEnabled(!onCooldown)
-                .setTextColor(onCooldown ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.POSITIVE);
+                .setTextColor(onCooldown ? EspetroAuiWidgets.DIM : EspetroAuiWidgets.POSITIVE);
         }
         lastCooldownSignature = getCooldownSignature();
     }
 
-    private record SkillRow(EspetroMutilWidgets.Panel panel,
-                            EspetroMutilWidgets.ActionButton button) {
+    private record SkillRow(EspetroAuiWidgets.Panel panel,
+                            EspetroAuiWidgets.ActionButton button) {
     }
 
     private void activateSkill(String skillId) {

@@ -11,7 +11,7 @@ import java.util.*;
 /**
  * 编制选择管理器
  * 队伍全员投票选择编制
- * 支持分阶段：先攻方(30s)，后守方(30s)
+ * 分阶段选择：AAS 先攻后守；RAAS 由 GameStateManager 随机先手
  */
 public class ClassSelectManager {
 
@@ -329,12 +329,14 @@ public class ClassSelectManager {
         if ("DEFEND".equals(finishedTeam)) {
             finalDefendClass = getWinningFaction(finishedTeam);
             String name = getClassDisplayName(finalDefendClass);
-            Espetro.broadcastToTeam("DEFEND", "§6===== 守方编制已确定: §9" + name + "§6 =====");
+            Espetro.broadcastToTeam("DEFEND", "§6===== "
+                + TeamDisplayNames.displayName("DEFEND") + "编制已确定: §9" + name + "§6 =====");
             Espetro.LOGGER.info("守方编制选择结束！编制: {}", name);
         } else {
             finalAttackClass = getWinningFaction(finishedTeam);
             String name = getClassDisplayName(finalAttackClass);
-            Espetro.broadcastToTeam("ATTACK", "§6===== 攻方编制已确定: §c" + name + "§6 =====");
+            Espetro.broadcastToTeam("ATTACK", "§6===== "
+                + TeamDisplayNames.displayName("ATTACK") + "编制已确定: §c" + name + "§6 =====");
             Espetro.LOGGER.info("攻方编制选择结束！编制: {}", name);
         }
 

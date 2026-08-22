@@ -18,7 +18,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
-import net.minecraftforge.event.entity.living.LivingEvent;
+
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
@@ -38,7 +38,7 @@ import org.espetro.kubejs.EspetroKubeJSDefaultScripts;
 import org.espetro.network.NetworkManager;
 import org.espetro.runtime.ServerRuntimeMaintenance;
 import org.espetro.config.GameConfig;
-import org.espetro.stamina.StaminaManager;
+
 import org.espetro.team.TeamManager;
 import org.espetro.team.TeamPackManager;
 import org.espetro.logistics.LogisticsConfig;
@@ -88,6 +88,9 @@ public class Espetro {
 
     public Espetro() {
         ensureKubeJSDefaultScriptsIfLoaded();
+        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+            net.minecraftforge.fml.config.ModConfig.Type.COMMON,
+            org.espetro.vehicle.VehicleInteractionConfig.SPEC);
 
         // 客户端初始化：双重 lambda 确保服务端不加载客户端类
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -289,7 +292,6 @@ public class Espetro {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                 // 先强制主城再清背包/阶段逻辑，避免登录瞬间仍停在战场维度
                 GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
-                StaminaManager.resetPlayer(serverPlayer);
                 clearPlayerInventory(serverPlayer);
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
@@ -312,7 +314,6 @@ public class Espetro {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
                 // 退服前强制写回主城坐标与重生点（主城维度不重置）
                 GameStateManager.getInstance().forcePlayerToHub(serverPlayer);
-                StaminaManager.removePlayer(serverPlayer.getUUID());
                 org.espetro.network.VehicleSupplyActionPacket.clearPlayerRateLimit(
                     serverPlayer.getUUID());
                 org.espetro.bastion.FortificationManager.getInstance()
@@ -482,7 +483,6 @@ public class Espetro {
             VehicleManager.getInstance().clearRuntimeState();
             ServerRuntimeMaintenance.getInstance().reset();
             BattlefieldWorldManager.getInstance().resetAfterServerStop();
-            StaminaManager.clear();
             org.espetro.network.VehicleSupplyActionPacket.clearRateLimits();
             serverInstance = null;
         }
@@ -490,7 +490,6 @@ public class Espetro {
         @SubscribeEvent
         public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-                StaminaManager.resetPlayer(serverPlayer);
                 // 主城重生：所有人先冒险；非管理员再强制锁定
                 GameStateManager.getInstance().applyHubAdventureOnEnter(serverPlayer);
                 GameStateManager.getInstance().enforceHubAdventure(serverPlayer);
@@ -542,14 +541,6 @@ public class Espetro {
                     // 低频兜底：非管理员主城被其它途径改模式时拉回冒险
                     GameStateManager.getInstance().enforceHubAdventure(serverPlayer);
                 }
-                StaminaManager.onPlayerTick(serverPlayer);
-            }
-        }
-
-        @SubscribeEvent
-        public static void onPlayerJump(LivingEvent.LivingJumpEvent event) {
-            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-                StaminaManager.onPlayerJump(serverPlayer);
             }
         }
 

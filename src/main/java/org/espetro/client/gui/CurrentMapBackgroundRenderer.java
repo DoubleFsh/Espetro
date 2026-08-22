@@ -37,7 +37,7 @@ final class CurrentMapBackgroundRenderer {
     static void render(GuiGraphics graphics, int screenWidth, int screenHeight, String mapFolder) {
         BackgroundTexture texture = getOrLoad(mapFolder);
         if (texture == null || screenWidth <= 0 || screenHeight <= 0) {
-            EspetroMutilWidgets.drawScreenShade(graphics, screenWidth, screenHeight);
+            EspetroAuiWidgets.drawScreenShade(graphics, screenWidth, screenHeight);
             return;
         }
 

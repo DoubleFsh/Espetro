@@ -59,7 +59,7 @@ public final class FobSupplyHud {
     private FobSupplyHud() {
     }
 
-    /** Kept for binary/source compatibility; rendering is owned by {@link MutilHudOverlay}. */
+    /** Kept for binary/source compatibility; rendering is owned by {@link EspetroHudOverlay}. */
     public static void register() {
     }
 

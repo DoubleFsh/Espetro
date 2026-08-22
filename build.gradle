@@ -148,6 +148,8 @@ repositories {
     }
     flatDir {
         dirs '../../../IdeaProjects/espetro-HCR/build/libs'
+        dirs '../../../IdeaProjects/EsICO/build/libs'
+        dirs 'libs'
         dirs fixedAuraTipJar.parentFile
         dirs 'run/mods'
     }
@@ -218,6 +220,11 @@ dependencies {
 
     // SBW 仅编译 mixin 目标；运行时软依赖。DragonRise/FCP 载具继承 SBW VehicleEntity。
     compileOnly fg.deobf("curse.maven:superb-warfare-1218165:8104849")
+    // EsICO optional：体力与上车/换座读条；运行时可不装。
+    def localEsicoJar = file("../../../IdeaProjects/EsICO/build/libs/esico-1.0.0.jar")
+    if (localEsicoJar.exists()) {
+        runtimeOnly fg.deobf("local:esico:1.0.0")
+    }
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 
     // 单元测试：仅用于不依赖运行时 Minecraft 服务端的纯解析器测试。

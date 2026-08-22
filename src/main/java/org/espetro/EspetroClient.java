@@ -35,16 +35,16 @@ public class EspetroClient {
             .addListener(EspetroClient::onRenderOverlay);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(EspetroClient::onRenderNameTag);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS
-            .addListener(EspetroClient::onLivingJump);
 
         org.espetro.client.gui.AuraTipRadialController.initialize();
         org.espetro.client.gui.RadioRadialController.initialize();
         org.espetro.client.gui.VehicleWheelController.initialize();
         org.espetro.client.gui.ResupplyRadialController.initialize();
         org.espetro.client.gui.VehicleSupplyHud.register();
+        org.espetro.client.vehicle.VehicleMountClientGate.register();
+        org.espetro.client.vehicle.DismountGate.register();
+        org.espetro.client.vehicle.SeatSwitchGate.register();
         org.espetro.client.gui.FobSupplyHud.register();
-        org.espetro.client.gui.SeatSwitchHandler.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
             .addListener(org.espetro.client.gui.AuraTipAboveScreen::onScreenRenderPost);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS
@@ -103,7 +103,7 @@ public class EspetroClient {
         org.espetro.client.FortificationPlacementController.tick(mc);
         org.espetro.client.gui.TutorialOverlay.tick();
         org.espetro.client.audio.ClientFormationAudioManager.tick(mc);
-        // 无 Screen 时左下「退出教程」点击（有 Screen 时由 MutilScreen 处理）
+        // 无 Screen 时左下「退出教程」点击（有 Screen 时由 EspetroMenuScreen 处理）
         if (org.espetro.client.gui.TutorialClientController.isActive() && mc.screen == null) {
             boolean down = org.lwjgl.glfw.GLFW.glfwGetMouseButton(
                 mc.getWindow().getWindow(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT)
@@ -120,12 +120,6 @@ public class EspetroClient {
         }
 
         if (mc.player == null) return;
-
-        // 客户端立即抑制耗尽后的奔跑，服务端仍会执行权威校验。
-        if (org.espetro.client.gui.StaminaOverlay.isExhausted()) {
-            mc.player.setSprinting(false);
-            mc.options.keySprint.setDown(false);
-        }
 
         // K键 - 请求游戏状态后打开对应界面（不直接打开，先请求服务端）
         if (Espetro.KEY_TEAM != null && ((net.minecraft.client.KeyMapping) Espetro.KEY_TEAM).consumeClick()) {
@@ -164,22 +158,11 @@ public class EspetroClient {
             return;
         }
         if (mc.screen == null) {
-            org.espetro.client.gui.MutilHudOverlay.render(
+            org.espetro.client.gui.EspetroHudOverlay.render(
                 event.getGuiGraphics(), mc, event.getPartialTick());
         }
         org.espetro.client.gui.TutorialHudOverlay.render(
             event.getGuiGraphics(), mc, event.getPartialTick());
-    }
-
-    private static void onLivingJump(
-            net.minecraftforge.event.entity.living.LivingEvent.LivingJumpEvent event) {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.player == null || event.getEntity() != mc.player
-                || !org.espetro.client.gui.StaminaOverlay.isEnabled()) {
-            return;
-        }
-
-        org.espetro.network.NetworkManager.sendStaminaJump();
     }
 
     /**

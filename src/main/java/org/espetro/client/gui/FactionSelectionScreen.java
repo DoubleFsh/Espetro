@@ -13,7 +13,7 @@ import java.util.Arrays;
  * 阵营选择界面
  * 玩家选择自己的阵营编制
  */
-public class FactionSelectionScreen extends MutilScreen {
+public class FactionSelectionScreen extends EspetroMenuScreen {
 
     private FactionDataLoader.FactionData[] factions = new FactionDataLoader.FactionData[0];
     private int scrollOffset = 0;
@@ -38,12 +38,12 @@ public class FactionSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroAuiWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         int panelW = Math.min(520, Math.max(240, this.width - 28));
         int columns = this.width < 420 ? 1 : this.width < 680 ? 2 : 3;
         int gap = 4;
@@ -54,14 +54,14 @@ public class FactionSelectionScreen extends MutilScreen {
         int panelX = (this.width - panelW) / 2;
         int panelY = Math.max(14, (this.height - panelH) / 2);
 
-        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 6, panelW,
-            "\u00a76\u00a7l战术小队 - 选择阵营", EspetroMutilWidgets.TEXT));
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 22, panelW,
-            "\u00a77选择一个阵营编制加入战斗", EspetroMutilWidgets.MUTED));
-        root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 36, panelW,
-            "\u00a7e当前可用阵营: " + factions.length + " 个", EspetroMutilWidgets.GOLD));
-        root.addChild(EspetroMutilWidgets.rect(panelX + 12, panelY + 51, panelW - 24, 1, 0x25FFFFFF));
+        root.addChild(EspetroAuiWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
+        root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + 6, panelW,
+            "\u00a76\u00a7l战术小队 - 选择阵营", EspetroAuiWidgets.TEXT));
+        root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + 22, panelW,
+            "\u00a77选择一个阵营编制加入战斗", EspetroAuiWidgets.MUTED));
+        root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + 36, panelW,
+            "\u00a7e当前可用阵营: " + factions.length + " 个", EspetroAuiWidgets.GOLD));
+        root.addChild(EspetroAuiWidgets.rect(panelX + 12, panelY + 51, panelW - 24, 1, 0x25FFFFFF));
 
         int startX = panelX + 12;
         int startY = panelY + 60;
@@ -82,20 +82,20 @@ public class FactionSelectionScreen extends MutilScreen {
             String icon = faction.icon == null ? "" : faction.icon + " ";
             String name = faction.name == null ? faction.id : faction.name;
             String label = "\u00a7f" + icon + name;
-            var button = EspetroMutilWidgets.button(x, y, cardW, cardH, label, () -> selectFaction(faction.id))
+            var button = EspetroAuiWidgets.button(x, y, cardW, cardH, label, () -> selectFaction(faction.id))
                 .setColors(0x00000000, 0x202C3544, 0x303A3020)
                 .setBorderColor(0x00000000);
             root.addChild(button);
         }
 
         if (maxScrollOffset > 0) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + panelH - 19, panelW,
+            root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + panelH - 19, panelW,
                 "\u00a78鼠标滚轮切换列表  " + (scrollOffset + 1) + "-" + maxVisible + "/" + factions.length,
-                EspetroMutilWidgets.DIM));
+                EspetroAuiWidgets.DIM));
         }
 
-        int backW = EspetroMutilWidgets.textButtonWidth("\u00a7c返回");
-        root.addChild(EspetroMutilWidgets.button(panelX + panelW / 2 - backW / 2, panelY + panelH - 16, backW, 13,
+        int backW = EspetroAuiWidgets.textButtonWidth("\u00a7c返回");
+        root.addChild(EspetroAuiWidgets.button(panelX + panelW / 2 - backW / 2, panelY + panelH - 16, backW, 13,
             "\u00a7c返回", this::onClose)
             .setColors(0x00000000, 0x20251515, 0x30251515)
             .setBorderColor(0x00000000));
@@ -119,7 +119,7 @@ public class FactionSelectionScreen extends MutilScreen {
             nextOffset = Math.max(0, Math.min(maxScrollOffset, nextOffset));
             if (nextOffset != scrollOffset) {
                 scrollOffset = nextOffset;
-                rebuildMutilRoot();
+                rebuildMenuRoot();
                 return true;
             }
         }

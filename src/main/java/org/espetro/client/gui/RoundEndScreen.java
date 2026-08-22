@@ -12,7 +12,7 @@ import org.espetro.client.aui.GuiElement;
  * 上方：超大结算等级文字 + 小字 "XXX赢得了胜利"<br>
  * 下方：左/右双方阵营名 + 剩余票数
  */
-public final class RoundEndScreen extends MutilScreen {
+public final class RoundEndScreen extends EspetroMenuScreen {
 
     // ── 结算等级文案 ──
     private static final String[] WIN_LABELS  = {"平局", "惨烈胜利", "险胜", "决定性胜利", "重大胜利", "完胜"};
@@ -36,7 +36,7 @@ public final class RoundEndScreen extends MutilScreen {
     private final int defendTickets;
     private final int resultLevel;     // 5→0
     private final boolean attackerTimeout;
-    private EspetroMutilWidgets.Text countdownText;
+    private EspetroAuiWidgets.Text countdownText;
 
     public RoundEndScreen(String winner, int displaySeconds,
                           String winnerShowName, String loserShowName,
@@ -54,11 +54,11 @@ public final class RoundEndScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         // 倒计时文字
-        countdownText = EspetroMutilWidgets.centeredText(
+        countdownText = EspetroAuiWidgets.centeredText(
             0, height - 28, width,
-            countdownLabel(), EspetroMutilWidgets.MUTED);
+            countdownLabel(), EspetroAuiWidgets.MUTED);
         root.addChild(countdownText);
     }
 
@@ -80,13 +80,13 @@ public final class RoundEndScreen extends MutilScreen {
     public boolean shouldCloseOnEsc() { return false; }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         CurrentMapBackgroundRenderer.render(
             graphics, width, height, ClientGameState.getCurrentMapFolder());
     }
 
     @Override
-    protected void renderAfterMutil(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    protected void renderAfterMenu(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         String myTeam = ClientGameState.getPlayerTeam();
         boolean isDraw = "DRAW".equals(winner);
@@ -143,8 +143,10 @@ public final class RoundEndScreen extends MutilScreen {
             }
         } else {
             // 平局或无队伍：按攻/守固定展示
-            leftFaction = winnerShowName != null ? winnerShowName : "进攻方";
-            rightFaction = loserShowName != null ? loserShowName : "防守方";
+            leftFaction = winnerShowName != null ? winnerShowName
+                : org.espetro.team.TeamDisplayNames.displayName("ATTACK");
+            rightFaction = loserShowName != null ? loserShowName
+                : org.espetro.team.TeamDisplayNames.displayName("DEFEND");
             leftTickets = attackTickets;
             rightTickets = defendTickets;
         }

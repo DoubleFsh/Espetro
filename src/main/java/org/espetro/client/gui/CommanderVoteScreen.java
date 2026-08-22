@@ -15,7 +15,7 @@ import java.util.Objects;
 /**
  * 指挥官投票界面
  */
-public class CommanderVoteScreen extends MutilScreen {
+public class CommanderVoteScreen extends EspetroMenuScreen {
 
     private final String team;
     private List<String> players;
@@ -28,9 +28,9 @@ public class CommanderVoteScreen extends MutilScreen {
     private String currentVote = null;
     private int scrollOffset = 0;
     private int maxScrollOffset = 0;
-    private EspetroMutilWidgets.PhaseHeader phaseHeader;
-    private final Map<String, EspetroMutilWidgets.ActionButton> voteButtons = new HashMap<>();
-    private EspetroMutilWidgets.Text voteStatusText;
+    private EspetroAuiWidgets.PhaseHeader phaseHeader;
+    private final Map<String, EspetroAuiWidgets.ActionButton> voteButtons = new HashMap<>();
+    private EspetroAuiWidgets.Text voteStatusText;
 
     public CommanderVoteScreen(String team, List<String> players, int timeRemaining,
                                 String opponentTeamName, String opponentFaction,
@@ -79,7 +79,7 @@ public class CommanderVoteScreen extends MutilScreen {
         this.opponentTimeRemaining = updatedOpponentTimeRemaining;
         if (this.root != null) {
             if (playerLayoutChanged) {
-                rebuildMutilRoot();
+                rebuildMenuRoot();
             } else {
                 refreshDynamicElements();
             }
@@ -90,23 +90,23 @@ public class CommanderVoteScreen extends MutilScreen {
     private static final int VISIBLE_NAME_COUNT = 60;
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         CurrentMapBackgroundRenderer.render(
             graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         voteButtons.clear();
         voteStatusText = null;
         int playerCount = players == null ? 0 : players.size();
         boolean votingOpen = timeRemaining > 0;
-        String teamPrefix = EspetroMutilWidgets.teamPrefix(team);
-        phaseHeader = EspetroMutilWidgets.addMutablePhaseHeader(root, this.width,
+        String teamPrefix = EspetroAuiWidgets.teamPrefix(team);
+        phaseHeader = EspetroAuiWidgets.addMutablePhaseHeader(root, this.width,
             "\u00a76\u00a7l指挥官投票 \u00a77| " + teamPrefix + "\u00a7l"
-                + EspetroMutilWidgets.teamName(team),
-            buildTimeText(), buildOpponentText(), EspetroMutilWidgets.teamColor(team));
-        int phaseHeaderH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
+                + EspetroAuiWidgets.teamName(team),
+            buildTimeText(), buildOpponentText(), EspetroAuiWidgets.teamColor(team));
+        int phaseHeaderH = EspetroAuiWidgets.PHASE_HEADER_HEIGHT;
 
         int columns = 4;
         int gap = this.height < 320 ? 2 : 4;
@@ -130,11 +130,11 @@ public class CommanderVoteScreen extends MutilScreen {
         int panelY = phaseHeaderH + 6
             + Math.max(0, (this.height - phaseHeaderH - 12 - panelH) / 2);
 
-        root.addChild(EspetroMutilWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
+        root.addChild(EspetroAuiWidgets.panel(panelX, panelY, panelW, panelH, 0x00000000, 0x00000000));
 
         if (playerCount == 0) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + 12, panelW,
-                "\u00a7c当前队伍没有可投票玩家", EspetroMutilWidgets.NEGATIVE));
+            root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + 12, panelW,
+                "\u00a7c当前队伍没有可投票玩家", EspetroAuiWidgets.NEGATIVE));
             return;
         }
 
@@ -166,27 +166,27 @@ public class CommanderVoteScreen extends MutilScreen {
             // 名字旁边显示实时投票数：票数>0黄色，=0灰色
             String label = prefix + playerName + " \u00a7e[" + votes + "]";
 
-            var button = EspetroMutilWidgets.button(x, y, cardW, cardH, label, () -> voteFor(playerName))
+            var button = EspetroAuiWidgets.button(x, y, cardW, cardH, label, () -> voteFor(playerName))
                 .setEnabled(votingOpen && !isSelf)
                 .setSelected(isSelected)
                 .setColors(0x00000000, 0x202D3444, 0x30243A27)
                 .setBorderColor(0x00000000);
             if (isSelf) {
-                button.setTextColor(EspetroMutilWidgets.DIM);
+                button.setTextColor(EspetroAuiWidgets.DIM);
             }
             root.addChild(button);
             voteButtons.put(playerName, button);
         }
 
         if (maxScrollOffset > 0) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX, panelY + panelH - 26, panelW,
+            root.addChild(EspetroAuiWidgets.centeredText(panelX, panelY + panelH - 26, panelW,
                 "\u00a78鼠标滚轮切换列表  " + (scrollOffset + 1) + "-" + maxVisible + "/" + playerCount,
-                EspetroMutilWidgets.DIM));
+                EspetroAuiWidgets.DIM));
         }
 
-        voteStatusText = EspetroMutilWidgets.centeredText(
+        voteStatusText = EspetroAuiWidgets.centeredText(
             panelX, panelY + panelH - 13, panelW,
-            buildVoteStatusText(), EspetroMutilWidgets.TEXT);
+            buildVoteStatusText(), EspetroAuiWidgets.TEXT);
         root.addChild(voteStatusText);
     }
 
@@ -209,7 +209,7 @@ public class CommanderVoteScreen extends MutilScreen {
         boolean votingOpen = timeRemaining > 0;
         String selfName = Minecraft.getInstance().player == null
             ? "" : Minecraft.getInstance().player.getName().getString();
-        for (Map.Entry<String, EspetroMutilWidgets.ActionButton> entry : voteButtons.entrySet()) {
+        for (Map.Entry<String, EspetroAuiWidgets.ActionButton> entry : voteButtons.entrySet()) {
             String playerName = entry.getKey();
             boolean isSelf = playerName.equals(selfName);
             boolean selected = playerName.equals(currentVote);
@@ -217,7 +217,7 @@ public class CommanderVoteScreen extends MutilScreen {
                 .setLabel(buildPlayerLabel(playerName, isSelf, selected))
                 .setEnabled(votingOpen && !isSelf)
                 .setSelected(selected)
-                .setTextColor(isSelf ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT);
+                .setTextColor(isSelf ? EspetroAuiWidgets.DIM : EspetroAuiWidgets.TEXT);
         }
         if (voteStatusText != null) {
             String next = buildVoteStatusText();
@@ -267,7 +267,7 @@ public class CommanderVoteScreen extends MutilScreen {
         }
         return currentVote == null
             ? "\u00a78尚未投票"
-            : EspetroMutilWidgets.teamPrefix(team) + "当前投票: \u00a7a" + currentVote;
+            : EspetroAuiWidgets.teamPrefix(team) + "当前投票: \u00a7a" + currentVote;
     }
 
     private void voteFor(String playerName) {
@@ -304,7 +304,7 @@ public class CommanderVoteScreen extends MutilScreen {
             nextOffset = Math.max(0, Math.min(maxScrollOffset, nextOffset));
             if (nextOffset != scrollOffset) {
                 scrollOffset = nextOffset;
-                rebuildMutilRoot();
+                rebuildMenuRoot();
                 return true;
             }
         }

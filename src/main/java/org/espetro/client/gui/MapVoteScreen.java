@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Forced global map-vote screen with up to six candidates in a 2×3 grid. */
-public final class MapVoteScreen extends MutilScreen {
+public final class MapVoteScreen extends EspetroMenuScreen {
     private static final int COLUMNS = 3;
     private static final int MAX_ROWS = 2;
     private static final int MAX_CANDIDATES = COLUMNS * MAX_ROWS;
@@ -46,7 +46,7 @@ public final class MapVoteScreen extends MutilScreen {
     private final List<MapCardButton> mapButtons = new ArrayList<>();
     private long receivedAtMs;
     private int receivedRemaining;
-    private EspetroMutilWidgets.PhaseHeader phaseHeader;
+    private EspetroAuiWidgets.PhaseHeader phaseHeader;
     /** 上次写入顶栏的显示秒，避免每 tick 改字符串加重闪烁感。 */
     private int lastStatusSecond = Integer.MIN_VALUE;
 
@@ -91,13 +91,13 @@ public final class MapVoteScreen extends MutilScreen {
             boolean structureChanged = screen.mapButtons.size() != packet.candidates.size();
             screen.receivedAtMs = System.currentTimeMillis();
             screen.receivedRemaining = packet.remainingSeconds;
-            if (structureChanged) screen.rebuildMutilRoot();
+            if (structureChanged) screen.rebuildMenuRoot();
             else screen.refreshLabels();
         }
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         CurrentMapBackgroundRenderer.render(
             graphics, this.width, this.height, resolveBackgroundMapFolder());
     }
@@ -121,7 +121,7 @@ public final class MapVoteScreen extends MutilScreen {
      * 候选不足 6 个时仍用满格卡片尺寸，从左上起填格（不把单卡拉成整行）。
      */
     private LayoutMetrics computeLayout() {
-        int headerH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
+        int headerH = EspetroAuiWidgets.PHASE_HEADER_HEIGHT;
         int startY = headerH + 8;
         // 几乎占满屏：左右/底边少量边距，卡片均分剩余宽高
         int contentW = Math.max(MIN_CARD_W * COLUMNS, this.width - SIDE_PAD * 2);
@@ -153,12 +153,12 @@ public final class MapVoteScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         mapButtons.clear();
-        phaseHeader = EspetroMutilWidgets.addMutablePhaseHeader(root, width,
+        phaseHeader = EspetroAuiWidgets.addMutablePhaseHeader(root, width,
             "§6§l全局地图投票", buildResultText(computeDisplaySeconds()),
             "§7全服统一计票，票数最高的地图胜出",
-            EspetroMutilWidgets.GOLD);
+            EspetroAuiWidgets.GOLD);
 
         int count = Math.min(latest.candidates.size(), MAX_CANDIDATES);
         LayoutMetrics layout = computeLayout();
@@ -318,7 +318,7 @@ public final class MapVoteScreen extends MutilScreen {
                 graphics.drawCenteredString(Minecraft.getInstance().font,
                     Component.literal(placeholder),
                     bx + bw / 2, imgY + imgAreaH / 2 - 5,
-                    EspetroMutilWidgets.DIM);
+                    EspetroAuiWidgets.DIM);
             }
 
             // 票数：外框右下角，只显示数字
@@ -328,17 +328,17 @@ public final class MapVoteScreen extends MutilScreen {
             int voteY = by + bh - 10;
             graphics.drawString(Minecraft.getInstance().font,
                 Component.literal(voteText), voteX, voteY,
-                enabled ? 0xFFE8B85C : EspetroMutilWidgets.DIM, false);
+                enabled ? 0xFFE8B85C : EspetroAuiWidgets.DIM, false);
 
             // 名称：固定放在外框最底下一行，与右下角票数同一行
             int nameMaxW = Math.max(8, bw - 8 - voteW);
-            String mapName = EspetroMutilWidgets.trimToWidth(
+            String mapName = EspetroAuiWidgets.trimToWidth(
                 (selected ? "§a✔ " : "§f") + candidate.displayName, nameMaxW);
             int nameX = bx + 4;
             int nameY = by + bh - 10;
             graphics.drawString(Minecraft.getInstance().font,
                 Component.literal(mapName), nameX, nameY,
-                EspetroMutilWidgets.TEXT, false);
+                EspetroAuiWidgets.TEXT, false);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }

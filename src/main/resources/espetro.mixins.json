@@ -11,12 +11,17 @@
     "hcrpoints.CapturePointNeutralizedAudioMixin",
     "tacz.CommonAssetsManagerMixin",
     "sbw.ChangeVehicleSeatMessageMixin",
+    "sbw.PlayerStopRidingMixin",
     "sbw.VehicleEntityMainBaseProtectionMixin",
     "sbw.VehicleEntitySeatAccessMixin",
     "sbw.VehicleEntityWreckMixin",
     "sbw.TurretWreckEntityMixin"
   ],
-  "client": [],
+  "client": [
+    "sbw.ClickDismountMixin",
+    "sbw.MinecraftSeatMixin",
+    "sbw.VehicleChangeSeatDelayMixin"
+  ],
   "injectors": {
     "defaultRequire": 0
   },

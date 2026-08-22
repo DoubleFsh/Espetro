@@ -82,7 +82,7 @@ public final class TutorialClientController {
         if (mc.screen instanceof ChatScreen) {
             return;
         }
-        // 无 Screen 时 Enter 在 keyPressed 路径可能到不了 MutilScreen；边沿兜底。
+        // 无 Screen 时 Enter 在 keyPressed 路径可能到不了 EspetroMenuScreen；边沿兜底。
         long window = mc.getWindow().getWindow();
         boolean enterDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ENTER) == GLFW.GLFW_PRESS
             || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_KP_ENTER) == GLFW.GLFW_PRESS;
@@ -125,7 +125,7 @@ public final class TutorialClientController {
 
     private static void closePreviewScreen() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc != null && mc.screen instanceof MutilScreen screen && screen.isTutorialPreviewMode()) {
+        if (mc != null && mc.screen instanceof EspetroMenuScreen screen && screen.isTutorialPreviewMode()) {
             mc.setScreen(null);
         }
     }
@@ -138,12 +138,12 @@ public final class TutorialClientController {
         Screen preview = TutorialPreviewFactory.create(step);
         if (preview == null) {
             // 仅 HUD 步骤：关闭旧预览屏
-            if (mc.screen instanceof MutilScreen screen && screen.isTutorialPreviewMode()) {
+            if (mc.screen instanceof EspetroMenuScreen screen && screen.isTutorialPreviewMode()) {
                 mc.setScreen(null);
             }
             return;
         }
-        if (preview instanceof MutilScreen mutil) {
+        if (preview instanceof EspetroMenuScreen mutil) {
             mutil.setTutorialPreviewMode(true);
         }
         mc.setScreen(preview);

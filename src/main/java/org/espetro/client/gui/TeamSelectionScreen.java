@@ -12,7 +12,7 @@ import org.espetro.network.TeamSelectStatePacket;
  * 展示攻击方/防守方编制图片，图片下方显示名称标签。
  * 中途加入时若服务端已发送编制选择图则优先使用；否则回退到默认攻/防图片。
  */
-public class TeamSelectionScreen extends MutilScreen {
+public class TeamSelectionScreen extends EspetroMenuScreen {
     private static int attackCount;
     private static int defendCount;
     private static int remainingSeconds = 60;
@@ -88,7 +88,7 @@ public class TeamSelectionScreen extends MutilScreen {
         if (mc.screen instanceof TeamSelectionScreen screen) {
             // 编制图片变了 → 重建按钮
             if (!eq(oldAtkImg, attackFactionImage) || !eq(oldDefImg, defendFactionImage)) {
-                screen.rebuildMutilRoot();
+                screen.rebuildMenuRoot();
             } else {
                 // 只刷新选中边框
                 screen.refreshSelectionBorders();
@@ -112,23 +112,25 @@ public class TeamSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        EspetroMutilWidgets.drawScreenShade(graphics, this.width, this.height);
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        EspetroAuiWidgets.drawScreenShade(graphics, this.width, this.height);
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
-        // 全屏黑底由 renderBeforeMutil 绘制；此处仅文字 + 图标，无半透明色块。
-        // 计数/倒计时在 renderAfterMutil 绘制，避免每秒重建。
-        root.addChild(EspetroMutilWidgets.centeredText(
+    protected void buildMenuRoot(GuiElement root) {
+        // 全屏黑底由 renderBeforeMenu 绘制；此处仅文字 + 图标，无半透明色块。
+        // 计数/倒计时在 renderAfterMenu 绘制，避免每秒重建。
+        root.addChild(EspetroAuiWidgets.centeredText(
             6, HEADER_TITLE_Y, Math.max(1, this.width - 12),
-            "§6§l队伍选择", EspetroMutilWidgets.TEXT));
-        root.addChild(EspetroMutilWidgets.centeredText(
+            "§6§l队伍选择", EspetroAuiWidgets.TEXT));
+        String attackName = EspetroAuiWidgets.teamName("ATTACK");
+        String defendName = EspetroAuiWidgets.teamName("DEFEND");
+        root.addChild(EspetroAuiWidgets.centeredText(
             6, HEADER_STATUS_Y, Math.max(1, this.width - 12),
-            "§f请选择进攻方或防守方加入战斗", EspetroMutilWidgets.MUTED));
-        root.addChild(EspetroMutilWidgets.centeredText(
+            "§f请选择" + attackName + "或" + defendName + "加入战斗", EspetroAuiWidgets.MUTED));
+        root.addChild(EspetroAuiWidgets.centeredText(
             6, HEADER_DETAIL_Y, Math.max(1, this.width - 12),
-            "§8选择后将进入编制投票阶段", EspetroMutilWidgets.DIM));
+            "§8选择后将进入编制投票阶段", EspetroAuiWidgets.DIM));
 
         // 两个图片 + 间距 + 两侧留白
         int contentW = IMG_W * 2 + IMG_GAP;
@@ -161,10 +163,10 @@ public class TeamSelectionScreen extends MutilScreen {
 
         // 图片下方的文字标签
         int labelY = imgY + IMG_H + 6;
-        root.addChild(EspetroMutilWidgets.centeredText(attackImgX, labelY, IMG_W,
-            "§c§l攻击方", EspetroMutilWidgets.ATTACK));
-        root.addChild(EspetroMutilWidgets.centeredText(defendImgX, labelY, IMG_W,
-            "§9§l防守方", EspetroMutilWidgets.DEFEND));
+        root.addChild(EspetroAuiWidgets.centeredText(attackImgX, labelY, IMG_W,
+            EspetroAuiWidgets.teamPrefix("ATTACK") + "§l" + attackName, EspetroAuiWidgets.ATTACK));
+        root.addChild(EspetroAuiWidgets.centeredText(defendImgX, labelY, IMG_W,
+            EspetroAuiWidgets.teamPrefix("DEFEND") + "§l" + defendName, EspetroAuiWidgets.DEFEND));
 
         refreshSelectionBorders();
     }
@@ -219,13 +221,18 @@ public class TeamSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderAfterMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int elapsed = (int) ((System.currentTimeMillis() - receivedAtMs) / 1000L);
         int left = Math.max(0, remainingSeconds - elapsed);
         // 队伍人数计数
-        String countLine = "§c进攻方 §f" + attackCount + "   §7|   §9防守方 §f" + defendCount;
+        String attackName = EspetroAuiWidgets.teamName("ATTACK");
+        String defendName = EspetroAuiWidgets.teamName("DEFEND");
+        String countLine = EspetroAuiWidgets.teamPrefix("ATTACK") + attackName
+            + " §f" + attackCount + "   §7|   "
+            + EspetroAuiWidgets.teamPrefix("DEFEND") + defendName
+            + " §f" + defendCount;
         if (lockedTeam != null) {
-            countLine += "   §c\uD83D\uDD12 " + ("ATTACK".equals(lockedTeam) ? "进攻方" : "防守方") + "已锁定";
+            countLine += "   §c\uD83D\uDD12 " + EspetroAuiWidgets.teamName(lockedTeam) + "已锁定";
         }
         graphics.drawCenteredString(this.font, countLine,
             this.width / 2, HEADER_COUNT_Y, 0xFFFFFF);

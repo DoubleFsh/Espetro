@@ -117,9 +117,9 @@ def convert(args: argparse.Namespace) -> dict[str, object]:
     aas_route = split_ids(args.aas)
 
     mode = args.mode.upper()
-    if mode in {"AAS", "RANDOM"} and not MIN_STAGES <= len(aas_route) <= MAX_STAGES:
+    if mode == "AAS" and not MIN_STAGES <= len(aas_route) <= MAX_STAGES:
         raise ValueError(
-            f"{mode} requires --aas with {MIN_STAGES} to {MAX_STAGES} point ids")
+            f"AAS requires --aas with {MIN_STAGES} to {MAX_STAGES} point ids")
 
     result: dict[str, object] = {
         "objectiveMode": mode,
@@ -141,7 +141,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="BlockOps raas/*.properties")
     parser.add_argument("output", type=Path, help="Espetro CapturePoints.json")
-    parser.add_argument("--mode", choices=("AAS", "RAAS", "RANDOM"), default="RAAS")
+    parser.add_argument("--mode", choices=("AAS", "RAAS"), default="RAAS")
     parser.add_argument("--aas", default="", help="comma-separated fixed AAS point ids")
     parser.add_argument("--radius", type=int, default=16, help="capture half-width in blocks")
     parser.add_argument("--min-y", type=int, default=-64)

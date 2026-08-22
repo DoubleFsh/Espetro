@@ -212141,3 +212141,6 @@ org/espetro/mixin/ServerGamePacketListenerWaitingLockMixin org/espetro/mixin/Ser
 	awaitingPositionFromClient f_9766_
 	player f_9743_
 	teleport (DDDFF)V m_9774_
+org/espetro/mixin/sbw/MinecraftSeatMixin org/espetro/mixin/sbw/MinecraftSeatMixin
+	options f_91066_
+	player f_91074_

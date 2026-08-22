@@ -473,21 +473,81 @@ public class EspetroAPI {
     }
 
     private static ActiveBattlefieldSnapshot toPublicSnapshot(ActiveMapConfig map) {
+        String esConfigPath = map.esConfigDir != null
+            ? map.esConfigDir.toAbsolutePath().normalize().toString()
+            : "";
         return new ActiveBattlefieldSnapshot(
             map.mapFolder,
             map.displayName,
             map.dimensionKey,
-            map.esPoints.tacticalMapJson,
-            map.esPoints.capturePointsJson,
-            map.esPoints.backgroundImage,
-            map.esPoints.backgroundBytes(),
-            map.esPoints.backgroundSha256,
-            map.esPoints.backgroundWidth,
-            map.esPoints.backgroundHeight,
-            map.esPoints.objectiveMode,
-            map.esPoints.objectiveLane,
-            map.esPoints.objectiveSeed
+            esConfigPath,
+            map.esPoints != null ? map.esPoints.tacticalMapJson : "",
+            map.esPoints != null ? map.esPoints.capturePointsJson : "",
+            map.esPoints != null ? map.esPoints.backgroundImage : "",
+            map.esPoints != null ? map.esPoints.backgroundBytes() : new byte[0],
+            map.esPoints != null ? map.esPoints.backgroundSha256 : "",
+            map.esPoints != null ? map.esPoints.backgroundWidth : 0,
+            map.esPoints != null ? map.esPoints.backgroundHeight : 0,
+            map.esPoints != null ? map.esPoints.objectiveMode : "",
+            map.esPoints != null ? map.esPoints.objectiveLane : "",
+            map.esPoints != null ? map.esPoints.objectiveSeed : 0L
         );
+    }
+
+    /** Player-facing team label (进攻方/阵营A …). */
+    public static String teamDisplayName(String team) {
+        return org.espetro.team.TeamDisplayNames.displayName(team);
+    }
+
+    public static boolean isSymmetricObjectiveMode() {
+        return org.espetro.team.TeamDisplayNames.isSymmetricMode();
+    }
+
+    /** Apply troop delta for ATTACK/DEFEND. Positive adds, negative subtracts. */
+    public static void modifyTeamTroops(String team, int delta, String reason) {
+        if (team == null) {
+            return;
+        }
+        var troops = org.espetro.team.TroopCountManager.getInstance();
+        if ("ATTACK".equalsIgnoreCase(team.trim())) {
+            troops.modifyAttackTroops(delta);
+        } else if ("DEFEND".equalsIgnoreCase(team.trim())) {
+            troops.modifyDefendTroops(delta);
+        }
+        if (reason != null && !reason.isBlank()) {
+            Espetro.LOGGER.info("[Troops] {} {} {:+d} ({})", team, reason, delta);
+        }
+    }
+
+    /**
+     * Objective victory from ESPoints. Broadcasts and records winner; stage
+     * machine may advance on next tick / existing cleanup hooks.
+     */
+    public static void notifyObjectiveVictory(String winnerTeam) {
+        String canonical = winnerTeam == null ? "" : winnerTeam.trim().toUpperCase();
+        if (!"ATTACK".equals(canonical) && !"DEFEND".equals(canonical)) {
+            Espetro.LOGGER.warn("ignore objective victory for unknown team: {}", winnerTeam);
+            return;
+        }
+        org.espetro.mapconfig.BattlefieldContext.setLastRoundWinner(canonical);
+        String winLabel = org.espetro.team.TeamDisplayNames.coloredDisplayName(canonical);
+        Espetro.broadcastToAll("§6§l[据点] §r" + winLabel + "§a 已达成占领目标！");
+        Espetro.LOGGER.info("ESPoints 据点胜利: {}", canonical);
+    }
+
+    /** Called by ESPoints after it resolves AAS/RAAS for the round. */
+    public static void setResolvedObjectiveMode(String mode, String laneId) {
+        org.espetro.mapconfig.BattlefieldContext.setResolvedObjective(
+            mode == null ? "" : mode, laneId == null ? "" : laneId);
+        // Re-broadcast current phase so clients refresh objectiveMode labels (阵营A/B).
+        try {
+            var gsm = org.espetro.team.GameStateManager.getInstance();
+            if (gsm != null) {
+                org.espetro.network.NetworkManager.broadcastGamePhase(gsm.getCurrentPhase());
+            }
+        } catch (Throwable t) {
+            Espetro.LOGGER.debug("objectiveMode 客户端同步跳过: {}", t.toString());
+        }
     }
 
     private static String getPlayerTeamById(UUID playerId) {

@@ -122,64 +122,55 @@ public class TroopCountManager {
     }
 
     /**
-     * 增加/减少攻方兵力
+     * 增加/减少攻方兵力。
      * <p>
-     * ESPoints 通过此方法直接发放批次奖励（绕过 /espetro 命令系统），
-     * 此处用栈追踪检测调用方是否为 CapturePointManager，若是则覆写为配置值。
-     * 栈追踪使用字符串匹配，不受 Forge SecureJar 类加载器隔离影响。
+     * ESPoints 传入的 {@code delta} 即为权威（AAS 批次奖励 / RAAS 占领奖励），
+     * 不再用栈追踪覆写为 GameConfig 值。
      * <p>
-     * 若检测到 ESPoints 批次完成，同时用原版 /title /subtitle /playsound
-     * 指令向双方玩家展示据点占领提示。
+     * AAS 批次完成时，向双方播放据点提示；对称 RAAS 由 ESPoints 自行发消息。
      */
     public void modifyAttackTroops(int delta) {
-        int step = delta;
+        int current = getAttackTroops();
+        setAttackTroops(current + delta);
+
+        if (delta <= 0 || TeamDisplayNames.isSymmetricMode()) {
+            return;
+        }
         boolean fromEsPoints = false;
-        int configured = GameConfigBridge.getAttackBatchCompletionReinforcement();
-        if (configured > 0 && delta > 0) {
-            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
-                if (frame.getClassName().contains("CapturePointManager")) {
-                    Espetro.LOGGER.info("[TroopCountManager] 拦截 ESPoints 批次奖励: {} → {}", delta, configured);
-                    step = configured;
-                    fromEsPoints = true;
-                    break;
-                }
-            }
-        } else if (delta > 0) {
-            // 无配置覆写时也检测 ESPoints 调用，用于播放提示
-            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
-                if (frame.getClassName().contains("CapturePointManager")) {
-                    fromEsPoints = true;
-                    break;
-                }
+        for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+            if (frame.getClassName().contains("CapturePointManager")) {
+                fromEsPoints = true;
+                break;
             }
         }
-        int current = getAttackTroops();
-        setAttackTroops(current + step);
+        if (!fromEsPoints) {
+            return;
+        }
 
-        // ESPoints 批次完成 → 原版指令播放据点占领提示
-        if (fromEsPoints) {
-            MinecraftServer server = Espetro.getServer();
-            if (server != null) {
-                net.minecraft.commands.CommandSourceStack cmdSrc = server.createCommandSourceStack()
-                    .withSuppressedOutput();
-                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    String team = Espetro.getPlayerTeam(player);
-                    if (team == null) continue;
-                    String name = player.getName().getString();
-                    if ("ATTACK".equals(team)) {
-                        server.getCommands().performPrefixedCommand(cmdSrc,
-                            "title " + name + " title {\"text\":\"据点已占领\",\"color\":\"green\",\"bold\":true}");
-                        server.getCommands().performPrefixedCommand(cmdSrc,
-                            "playsound minecraft:entity.player.levelup master " + name + " ~ ~ ~ 1.0 1.0");
-                    } else if ("DEFEND".equals(team)) {
-                        server.getCommands().performPrefixedCommand(cmdSrc,
-                            "title " + name + " title {\"text\":\"据点失守\",\"color\":\"red\",\"bold\":true}");
-                        server.getCommands().performPrefixedCommand(cmdSrc,
-                            "title " + name + " subtitle {\"text\":\"进攻方已攻占本批次所有据点\",\"color\":\"gray\"}");
-                        server.getCommands().performPrefixedCommand(cmdSrc,
-                            "playsound minecraft:block.beacon.deactivate master " + name + " ~ ~ ~ 1.0 1.0");
-                    }
-                }
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return;
+        }
+        net.minecraft.commands.CommandSourceStack cmdSrc = server.createCommandSourceStack()
+            .withSuppressedOutput();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String team = Espetro.getPlayerTeam(player);
+            if (team == null) continue;
+            String name = player.getName().getString();
+            if ("ATTACK".equals(team)) {
+                server.getCommands().performPrefixedCommand(cmdSrc,
+                    "title " + name + " title {\"text\":\"据点已占领\",\"color\":\"green\",\"bold\":true}");
+                server.getCommands().performPrefixedCommand(cmdSrc,
+                    "playsound minecraft:entity.player.levelup master " + name + " ~ ~ ~ 1.0 1.0");
+            } else if ("DEFEND".equals(team)) {
+                server.getCommands().performPrefixedCommand(cmdSrc,
+                    "title " + name + " title {\"text\":\"据点失守\",\"color\":\"red\",\"bold\":true}");
+                server.getCommands().performPrefixedCommand(cmdSrc,
+                    "title " + name + " subtitle {\"text\":\""
+                        + TeamDisplayNames.displayName("ATTACK")
+                        + "已攻占本批次所有据点\",\"color\":\"gray\"}");
+                server.getCommands().performPrefixedCommand(cmdSrc,
+                    "playsound minecraft:block.beacon.deactivate master " + name + " ~ ~ ~ 1.0 1.0");
             }
         }
     }
@@ -221,7 +212,10 @@ public class TroopCountManager {
 
         Espetro.LOGGER.info("兵力统计已初始化: 攻方 {} | 守方 {}", initialAttack, initialDefend);
         Espetro.broadcastToAll("§6========================================");
-        Espetro.broadcastToAll("§e⚔ 战斗开始！进攻方初始兵力: §c" + initialAttack + " §7| §9防守方初始兵力: " + initialDefend + " §e⚔");
+        Espetro.broadcastToAll("§e⚔ 战斗开始！"
+            + TeamDisplayNames.displayName("ATTACK") + "初始兵力: §c" + initialAttack
+            + " §7| §9" + TeamDisplayNames.displayName("DEFEND") + "初始兵力: "
+            + initialDefend + " §e⚔");
         Espetro.broadcastToAll("§6========================================");
 
         // 同步到客户端

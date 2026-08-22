@@ -1,13 +1,5 @@
 args=80dd5fea85075b2d06ea6dcd9cd2300d534885d2
 jvmargs=e6b47f09685854f02297d54ac0dcaad5f6953039
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 input=891c4521418c1e63341925aeb2f1191768bb8055
-=======
-input=aea13b0d79e8278125cd1bfc06022ade9623ec51
->>>>>>> Stashed changes
-=======
-input=aea13b0d79e8278125cd1bfc06022ade9623ec51
->>>>>>> Stashed changes
 libraries=4a366024898b1de396414849a62873010aa6c81b
 jar=e32f2001a30ecbc32ad18a0971f896c96c97d44c

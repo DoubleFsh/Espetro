@@ -33,15 +33,7 @@ net/minecraft/network/syncher/=da39a3ee5e6b4b0d3255bfef95601890afd80709
 net/minecraft/util/datafix/fixes/EntityHorseSplitFix.java.patch=4d0ea2fe1613c0cbbce490be9117b263d9422ced
 net/minecraft/data/=da39a3ee5e6b4b0d3255bfef95601890afd80709
 net/minecraft/client/renderer/entity/EntityRenderDispatcher.java.patch=8bd72e1e21aaed65f659bd33b523dec5dc7a4738
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 /build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=14a136dd0cf5a9fb811a61f161dfaaf3a24754a7
-=======
-/build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=0de47b8a7b9740e4dff039856db5cc36438adf71
->>>>>>> Stashed changes
-=======
-/build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=0de47b8a7b9740e4dff039856db5cc36438adf71
->>>>>>> Stashed changes
 net/minecraft/world/level/storage/loot/=da39a3ee5e6b4b0d3255bfef95601890afd80709
 net/minecraft/commands/Commands.java.patch=9e7447e2165aa58c6080eeae24137a4462a973b1
 com/mojang/blaze3d/=da39a3ee5e6b4b0d3255bfef95601890afd80709

@@ -85,15 +85,15 @@ final class SquadNameField extends GuiElement {
         // 接近不透明，避免输入框在半透明 UI 上叠影闪烁。
         graphics.fill(bx, by, bx + getWidth(), by + getHeight(), active ? 0xF0504834 : 0xE0404040);
         graphics.renderOutline(bx, by, getWidth(), getHeight(),
-            active ? EspetroMutilWidgets.BORDER_ACTIVE : EspetroMutilWidgets.BORDER);
+            active ? EspetroAuiWidgets.BORDER_ACTIVE : EspetroAuiWidgets.BORDER);
 
         String drawn = value.isEmpty() ? placeholder : value;
-        int color = value.isEmpty() ? EspetroMutilWidgets.DIM : EspetroMutilWidgets.TEXT;
+        int color = value.isEmpty() ? EspetroAuiWidgets.DIM : EspetroAuiWidgets.TEXT;
         int logicalTextWidth = Math.max(8, (int) ((getWidth() - 6) / TEXT_SCALE));
         String trimmed = Minecraft.getInstance().font.plainSubstrByWidth(drawn, logicalTextWidth);
         int textHeight = Math.max(1,
             Math.round(Minecraft.getInstance().font.lineHeight * TEXT_SCALE));
-        EspetroMutilWidgets.drawScaledString(graphics, trimmed,
+        EspetroAuiWidgets.drawScaledString(graphics, trimmed,
             bx + 3, by + Math.max(1, (getHeight() - textHeight) / 2),
             color, TEXT_SCALE);
 
@@ -101,7 +101,7 @@ final class SquadNameField extends GuiElement {
             int textW = Math.round(Minecraft.getInstance().font.width(trimmed) * TEXT_SCALE);
             int cursorX = Math.min(bx + getWidth() - 3, bx + 3 + textW + 1);
             graphics.fill(cursorX, by + 2, cursorX + 1, by + getHeight() - 2,
-                EspetroMutilWidgets.TEXT);
+                EspetroAuiWidgets.TEXT);
         }
     }
 }

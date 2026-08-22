@@ -46,5 +46,15 @@
       <option name="name" value="Sighs Releases" />
       <option name="url" value="https://maven.sighs.cc/repository/maven-releases/" />
     </remote-repository>
+    <remote-repository>
+      <option name="id" value="MavenLocal" />
+      <option name="name" value="MavenLocal" />
+      <option name="url" value="file:$MAVEN_REPOSITORY$/" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="Sighs Public" />
+      <option name="name" value="Sighs Public" />
+      <option name="url" value="https://maven.sighs.cc/repository/maven-public/" />
+    </remote-repository>
   </component>
 </project>

@@ -30,7 +30,6 @@ public class TeamManager {
         if (attackTeam == null) {
             attackTeam = scoreboard.addPlayerTeam(ATTACK_TEAM_ID);
             attackTeam.setColor(ChatFormatting.RED);
-            attackTeam.setDisplayName(Component.literal(ATTACK_DISPLAY_NAME));
         }
         attackTeam.setNameTagVisibility(Team.Visibility.HIDE_FOR_OTHER_TEAMS);
 
@@ -39,9 +38,27 @@ public class TeamManager {
         if (defendTeam == null) {
             defendTeam = scoreboard.addPlayerTeam(DEFEND_TEAM_ID);
             defendTeam.setColor(ChatFormatting.BLUE);
-            defendTeam.setDisplayName(Component.literal(DEFEND_DISPLAY_NAME));
         }
         defendTeam.setNameTagVisibility(Team.Visibility.HIDE_FOR_OTHER_TEAMS);
+        refreshDisplayNames(server);
+    }
+
+    /** Refresh scoreboard labels for the current objective mode (AAS vs RAAS). */
+    public static void refreshDisplayNames(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        Scoreboard scoreboard = server.getScoreboard();
+        PlayerTeam attackTeam = scoreboard.getPlayerTeam(ATTACK_TEAM_ID);
+        if (attackTeam != null) {
+            attackTeam.setDisplayName(Component.literal(
+                TeamDisplayNames.prefix("ATTACK") + TeamDisplayNames.displayName("ATTACK")));
+        }
+        PlayerTeam defendTeam = scoreboard.getPlayerTeam(DEFEND_TEAM_ID);
+        if (defendTeam != null) {
+            defendTeam.setDisplayName(Component.literal(
+                TeamDisplayNames.prefix("DEFEND") + TeamDisplayNames.displayName("DEFEND")));
+        }
     }
 
     /**

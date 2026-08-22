@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.mapconfig.ExternalMapConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:44" hostname="cachyos-x8664" time="0.045">
+  <properties/>
+  <testcase name="bundledFlatExampleProvidesItsOwnFlatDimensionGenerator(Path)" classname="org.espetro.mapconfig.ExternalMapConfigTest" time="0.015"/>
+  <testcase name="vehicleSpawnAndUnicodeSquadMarkerPreserveConfigurationOrder()" classname="org.espetro.mapconfig.ExternalMapConfigTest" time="0.003"/>
+  <testcase name="factionVehicleTypesNormalizeAndSlotOverflowIsFiltered(Path)" classname="org.espetro.mapconfig.ExternalMapConfigTest" time="0.015"/>
+  <testcase name="completeMapLoadsAndMissingWorldDataIsRejected(Path)" classname="org.espetro.mapconfig.ExternalMapConfigTest" time="0.007"/>
+  <testcase name="dimensionIdsAreStableAndReservedNamespacesAreRejected()" classname="org.espetro.mapconfig.ExternalMapConfigTest" time="0.001"/>
+  <system-out><![CDATA[[02:59:44] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit12208783119111055715/compatible.json (Test)
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {compatible=1}
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [compatible], factions.keySet: [compatible]
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit12208783119111055715/overflow.json (Test)
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {overflow=1}
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [overflow], factions.keySet: [overflow]
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 1 个职业
+[02:59:44] [Test worker/WARN] [or.es.Espetro/]: [编制兼容] overflow → 失败: 载具类型 'tank' entities(2) > spawn点数(1)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

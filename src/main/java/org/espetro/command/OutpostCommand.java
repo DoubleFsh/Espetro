@@ -61,6 +61,11 @@ public class OutpostCommand {
     private static int listOutposts(ServerPlayer player) {
         if (player == null) return 0;
 
+        if (org.espetro.team.TeamDisplayNames.isSymmetricMode()) {
+            player.sendSystemMessage(Component.literal("§c当前模式双方都不可使用前哨基地！"));
+            return 0;
+        }
+
         if (!"DEFEND".equals(Espetro.getPlayerTeam(player))) {
             player.sendSystemMessage(Component.literal("§c只有防守方可以查看前哨基地！"));
             return 0;

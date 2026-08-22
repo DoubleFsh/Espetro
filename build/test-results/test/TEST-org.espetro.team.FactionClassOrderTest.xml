@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.team.FactionClassOrderTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:44" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="preservesJsonDeclarationOrderAcrossAllDisplayRows(Path)" classname="org.espetro.team.FactionClassOrderTest" time="0.004"/>
+  <system-out><![CDATA[[02:59:44] [Test worker/INFO] [or.es.Espetro/]: 加载外部编制: /tmp/junit1163549637318541634/ordered.json (Order Test)
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classKits 中各类 factionId 的职业数: {ordered=6}
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: [重建缓存诊断] classesByFaction 的 factionId 集合: [ordered], factions.keySet: [ordered]
+[02:59:44] [Test worker/INFO] [or.es.Espetro/]: EsFactions 已冻结: 1 个编制, 6 个职业
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

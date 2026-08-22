@@ -20,7 +20,7 @@ import java.util.Map;
  * 1. 服务端通过网络包发送的完整数据（局域网联机客户端）
  * 2. 本地 FactionDataLoader 加载（J键手动打开时的回退）
  */
-public class ClassSelectionScreen extends MutilScreen {
+public class ClassSelectionScreen extends EspetroMenuScreen {
 
     private final String factionId;
     // 服务端发来的数据（优先使用）
@@ -39,7 +39,7 @@ public class ClassSelectionScreen extends MutilScreen {
 
     private final Map<String, Integer> classCounts = new HashMap<>();
     private final Map<String, Map<String, Integer>> variantCounts = new HashMap<>();
-    private final List<EspetroMutilWidgets.ActionButton> classButtons = new java.util.ArrayList<>();
+    private final List<EspetroAuiWidgets.ActionButton> classButtons = new java.util.ArrayList<>();
 
     // 错误消息
     private String errorMessage = null;
@@ -85,7 +85,7 @@ public class ClassSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         if (displayClasses == null) {
             if (serverClasses != null && !serverClasses.isEmpty()) {
                 // 使用服务端数据
@@ -158,7 +158,7 @@ public class ClassSelectionScreen extends MutilScreen {
             String buttonText =
                 "    " + roleColor + displayClasses[i].name + " §7[" + currentCount
                     + "/" + displayClasses[i].maxPlayers + "]";
-            EspetroMutilWidgets.ActionButton button = EspetroMutilWidgets.button(
+            EspetroAuiWidgets.ActionButton button = EspetroAuiWidgets.button(
                 x, y, buttonWidth, buttonHeight, buttonText, () -> selectClass(classIndex))
                 .setEnabled(!full);
             root.addChild(button);
@@ -309,7 +309,7 @@ public class ClassSelectionScreen extends MutilScreen {
         for (int i = 0; i < displayClasses.length && i < classButtons.size(); i++) {
             ResourceLocation icon = displayClasses[i].iconResource;
             if (icon == null) continue;
-            EspetroMutilWidgets.ActionButton button = classButtons.get(i);
+            EspetroAuiWidgets.ActionButton button = classButtons.get(i);
             int iconSize = 16;
             graphics.blit(icon, button.getX() + 4,
                 button.getY() + (button.getHeight() - iconSize) / 2,
@@ -320,7 +320,7 @@ public class ClassSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         lastMouseX = mouseX;
         lastMouseY = mouseY;
         CurrentMapBackgroundRenderer.render(
@@ -376,7 +376,7 @@ public class ClassSelectionScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderAfterMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderAfterMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderClassIcons(graphics);
         renderVariantPopup(graphics, mouseX, mouseY);
     }
@@ -426,20 +426,20 @@ public class ClassSelectionScreen extends MutilScreen {
             graphics.drawString(this.font,
                 Component.literal((full ? "§8" : "§f") + variant.name()),
                 rowX + 5, rowY + 4, 0xFFFFFF, false);
-            int countW = this.font.width(EspetroMutilWidgets.stripFormatting(countText));
+            int countW = this.font.width(EspetroAuiWidgets.stripFormatting(countText));
             graphics.drawString(this.font, Component.literal(countText),
                 rowX + rowW - countW - 5, rowY + 4, 0xFFFFFF, false);
             if (variant.description() != null && !variant.description().isBlank()) {
                 graphics.drawString(this.font, Component.literal("§7" +
-                    EspetroMutilWidgets.trimToWidth(variant.description(), rowW - 10)),
-                    rowX + 5, rowY + 16, EspetroMutilWidgets.DIM, false);
+                    EspetroAuiWidgets.trimToWidth(variant.description(), rowW - 10)),
+                    rowX + 5, rowY + 16, EspetroAuiWidgets.DIM, false);
             }
         }
 
         if (cls.variants.size() > POPUP_MAX_VISIBLE) {
             graphics.drawString(this.font, Component.literal("§8滚轮浏览"),
                 popupX + POPUP_W - 49, popupY + popupH - 10,
-                EspetroMutilWidgets.DIM, false);
+                EspetroAuiWidgets.DIM, false);
         }
     }
 

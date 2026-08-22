@@ -23,7 +23,7 @@ import java.util.UUID;
  * offline players are sorted alphabetically at the bottom. Right-click opens
  * the server-authoritative squad context menu.
  */
-public final class MatchScoreboardScreen extends MutilScreen {
+public final class MatchScoreboardScreen extends EspetroMenuScreen {
 
     private static MatchStatsSyncPacket latestStats = new MatchStatsSyncPacket(List.of());
 
@@ -65,10 +65,10 @@ public final class MatchScoreboardScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         int top = 8;
         root.addChild(new ScoreboardCanvas(width, height));
-        root.addChild(EspetroMutilWidgets.button(width - 50, top, 42, 18,
+        root.addChild(EspetroAuiWidgets.button(width - 50, top, 42, 18,
             "返回", this::onClose));
     }
 
@@ -96,7 +96,7 @@ public final class MatchScoreboardScreen extends MutilScreen {
     private void renderTeamColumn(GuiGraphics graphics, String team, int x, int y, int w, int accent) {
         graphics.fill(x, y, x + w, height - 8, 0xB0181B1D);
         graphics.renderOutline(x, y, w, height - 8 - y, accent);
-        String title = "ATTACK".equals(team) ? "§c进攻方" : "§9防守方";
+        String title = EspetroAuiWidgets.teamPrefix(team) + EspetroAuiWidgets.teamName(team);
         graphics.drawString(font, title, x + 5, y + 5, 0xFFFFFF);
         graphics.drawString(font, "玩家", x + 5, y + 18, 0xFFBFC3C5);
         graphics.drawString(font, "击杀", x + w - 92, y + 18, 0xFFBFC3C5);

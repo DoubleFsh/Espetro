@@ -31,7 +31,7 @@ final class TutorialPreviewFactory {
                 "DEFEND",
                 List.of("Alpha", "Bravo", "Charlie", "Delta"),
                 20,
-                "进攻方",
+                org.espetro.team.TeamDisplayNames.displayName("ATTACK"),
                 "",
                 0);
             case FACTION_SELECT -> classSelectPreview();
@@ -66,6 +66,7 @@ final class TutorialPreviewFactory {
         factions.add(new ClassSelectScreenPacket.FactionInfo(
             "demo_mech", "机械化示范编制", "", 0));
         return new ClassSelectScreen(
-            "DEFEND", true, factions, 30, "进攻方", "", -1, null);
+            "DEFEND", true, factions, 30,
+            org.espetro.team.TeamDisplayNames.displayName("ATTACK"), "", -1, null);
     }
 }

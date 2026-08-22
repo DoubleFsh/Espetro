@@ -70,22 +70,22 @@ public final class ClientTacticalState {
         String key = key(playerName);
         MarkerInfo info = markersByName.get(key);
         if (commanderNames.contains(key) || (info != null && info.commander)) {
-            return EspetroMutilWidgets.GOLD;
+            return EspetroAuiWidgets.GOLD;
         }
         if (info != null && info.squadId == mySquadId && mySquadId != NO_SQUAD) {
-            return info.leader ? EspetroMutilWidgets.PURPLE : EspetroMutilWidgets.SQUAD_BLUE;
+            return info.leader ? EspetroAuiWidgets.PURPLE : EspetroAuiWidgets.SQUAD_BLUE;
         }
-        return EspetroMutilWidgets.TEXT;
+        return EspetroAuiWidgets.TEXT;
     }
 
     public static int getSquadMemberColor(int squadId, UnifiedDeployScreenPacket.SquadMemberInfo member) {
         if (member.commander || commanderNames.contains(key(member.playerName))) {
-            return EspetroMutilWidgets.GOLD;
+            return EspetroAuiWidgets.GOLD;
         }
         if (squadId == mySquadId && mySquadId != NO_SQUAD) {
-            return member.leader ? EspetroMutilWidgets.PURPLE : EspetroMutilWidgets.SQUAD_BLUE;
+            return member.leader ? EspetroAuiWidgets.PURPLE : EspetroAuiWidgets.SQUAD_BLUE;
         }
-        return EspetroMutilWidgets.TEXT;
+        return EspetroAuiWidgets.TEXT;
     }
 
     public static double getTeammateNameTagDistance() {

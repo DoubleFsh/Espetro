@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.client.gui.MapVotePreviewResolverTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.005">
+  <properties/>
+  <testcase name="resolvesMapFolderNamedPngFromClientRoot(Path)" classname="org.espetro.client.gui.MapVotePreviewResolverTest" time="0.002"/>
+  <testcase name="rejectsTraversalAndMissingFiles(Path)" classname="org.espetro.client.gui.MapVotePreviewResolverTest" time="0.001"/>
+  <testcase name="acceptsRequestedEsworldDirectoryCasing(Path)" classname="org.espetro.client.gui.MapVotePreviewResolverTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

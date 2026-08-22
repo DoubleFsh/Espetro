@@ -23,7 +23,7 @@ import java.util.Objects;
  * 编制选择界面
  * 当前阵营全体玩家投票选择队伍编制。
  */
-public class ClassSelectScreen extends MutilScreen {
+public class ClassSelectScreen extends EspetroMenuScreen {
 
     /** 最底部一行同时放名称与票数，图片区尽量放大。 */
     private static final int CARD_FOOTER_PAD = 2;
@@ -44,7 +44,7 @@ public class ClassSelectScreen extends MutilScreen {
     private int scrollOffset = 0;
     private int maxScrollOffset = 0;
     private int scrollStep = 1;
-    private EspetroMutilWidgets.PhaseHeader phaseHeader;
+    private EspetroAuiWidgets.PhaseHeader phaseHeader;
     private final Map<String, FactionCardButton> factionCards = new HashMap<>();
 
     public ClassSelectScreen(String team, boolean isCommander, List<ClassSelectScreenPacket.FactionInfo> factions,
@@ -63,13 +63,13 @@ public class ClassSelectScreen extends MutilScreen {
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         CurrentMapBackgroundRenderer.render(
             graphics, this.width, this.height, ClientGameState.getCurrentMapFolder());
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         factionCards.clear();
         int count = factions == null ? 0 : factions.size();
         // 编制候选池固定为六个：始终按 Squad 风格的 3 列 × 2 行展示。
@@ -79,7 +79,7 @@ public class ClassSelectScreen extends MutilScreen {
         int panelW = Math.min(this.width - 16,
             24 + columns * 360 + (columns - 1) * cardGap);
         int cardW = (panelW - 24 - (columns - 1) * cardGap) / columns;
-        int startY = EspetroMutilWidgets.PHASE_HEADER_HEIGHT + 8;
+        int startY = EspetroAuiWidgets.PHASE_HEADER_HEIGHT + 8;
         int availableH = Math.max(2 * 67 + cardGap, this.height - startY - 18);
         int maxCardH = Math.max(67, (availableH - cardGap) / visibleRows);
         // 图片画框固定 16:9 横向：先按卡片宽计算高度，放不下时再按高度反推宽度
@@ -96,16 +96,16 @@ public class ClassSelectScreen extends MutilScreen {
         int panelX = (this.width - panelW) / 2;
 
         boolean selectingOpen = timeRemaining > 0;
-        String teamPrefix = EspetroMutilWidgets.teamPrefix(team);
-        phaseHeader = EspetroMutilWidgets.addMutablePhaseHeader(root, this.width,
+        String teamPrefix = EspetroAuiWidgets.teamPrefix(team);
+        phaseHeader = EspetroAuiWidgets.addMutablePhaseHeader(root, this.width,
             "\u00a76\u00a7l编制投票 \u00a77| " + teamPrefix + "\u00a7l"
-                + EspetroMutilWidgets.teamName(team) + " \u00a77[全员投票]",
-            buildTimeText(), buildOpponentText(), EspetroMutilWidgets.teamColor(team));
-        int headerH = EspetroMutilWidgets.PHASE_HEADER_HEIGHT;
+                + EspetroAuiWidgets.teamName(team) + " \u00a77[全员投票]",
+            buildTimeText(), buildOpponentText(), EspetroAuiWidgets.teamColor(team));
+        int headerH = EspetroAuiWidgets.PHASE_HEADER_HEIGHT;
 
         if (count == 0) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX, headerH + 18, panelW,
-                "\u00a7c没有可选编制", EspetroMutilWidgets.NEGATIVE));
+            root.addChild(EspetroAuiWidgets.centeredText(panelX, headerH + 18, panelW,
+                "\u00a7c没有可选编制", EspetroAuiWidgets.NEGATIVE));
             return;
         }
 
@@ -134,10 +134,10 @@ public class ClassSelectScreen extends MutilScreen {
         }
 
         if (maxScrollOffset > 0) {
-            root.addChild(EspetroMutilWidgets.centeredText(panelX,
+            root.addChild(EspetroAuiWidgets.centeredText(panelX,
                 Math.max(headerH, this.height - 10), panelW,
                 "\u00a78滚轮浏览  " + (scrollOffset + 1) + "-" + maxVisible + "/" + count,
-                EspetroMutilWidgets.DIM));
+                EspetroAuiWidgets.DIM));
         }
     }
 
@@ -217,11 +217,11 @@ public class ClassSelectScreen extends MutilScreen {
             } else {
                 String missing = "§7还没配置图片喵";
                 int missingW = Minecraft.getInstance().font.width(
-                    EspetroMutilWidgets.stripFormatting(missing));
+                    EspetroAuiWidgets.stripFormatting(missing));
                 graphics.drawString(Minecraft.getInstance().font, Component.literal(missing),
                     bx + Math.max(4, (bw - missingW) / 2),
                     imageBoxY + Math.max(8, imageSlotH / 2),
-                    EspetroMutilWidgets.DIM, false);
+                    EspetroAuiWidgets.DIM, false);
             }
 
             // 票数：外框右下角，只显示数字
@@ -230,18 +230,18 @@ public class ClassSelectScreen extends MutilScreen {
             int voteX = bx + bw - 4 - voteW;
             int voteY = by + bh - 10;
             graphics.drawString(Minecraft.getInstance().font, Component.literal(voteText),
-                voteX, voteY, enabled ? 0xFFE8B85C : EspetroMutilWidgets.DIM, false);
+                voteX, voteY, enabled ? 0xFFE8B85C : EspetroAuiWidgets.DIM, false);
 
             // 名称：固定放在外框最底下一行，与右下角票数同一行
             String nameOnly = faction.name == null ? "" : faction.name;
             int nameMaxW = Math.max(8,
                 (int) ((bw - 8 - voteW) / CARD_NAME_SCALE));
-            String drawnName = EspetroMutilWidgets.trimToWidth(
+            String drawnName = EspetroAuiWidgets.trimToWidth(
                 (selected ? "§a✔ " : "") + nameOnly, nameMaxW);
-            int nameColor = enabled ? EspetroMutilWidgets.TEXT : EspetroMutilWidgets.DIM;
+            int nameColor = enabled ? EspetroAuiWidgets.TEXT : EspetroAuiWidgets.DIM;
             int nameX = bx + 4;
             int nameY = by + bh - 10;
-            EspetroMutilWidgets.drawScaledString(graphics, drawnName,
+            EspetroAuiWidgets.drawScaledString(graphics, drawnName,
                 nameX, nameY, nameColor, CARD_NAME_SCALE);
 
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
@@ -384,7 +384,7 @@ public class ClassSelectScreen extends MutilScreen {
             ? null : packet.getSelectedFactionId();
         if (this.root != null) {
             if (layoutChanged) {
-                rebuildMutilRoot();
+                rebuildMenuRoot();
             } else {
                 refreshDynamicElements();
             }
@@ -407,8 +407,8 @@ public class ClassSelectScreen extends MutilScreen {
     private void refreshDynamicElements() {
         if (phaseHeader != null) {
             phaseHeader.setTitle("\u00a76\u00a7l编制投票 \u00a77| "
-                + EspetroMutilWidgets.teamPrefix(team) + "\u00a7l"
-                + EspetroMutilWidgets.teamName(team) + " \u00a77[全员投票]");
+                + EspetroAuiWidgets.teamPrefix(team) + "\u00a7l"
+                + EspetroAuiWidgets.teamName(team) + " \u00a77[全员投票]");
             phaseHeader.setStatus(buildTimeText());
             phaseHeader.setDetail(buildOpponentText());
         }
@@ -483,7 +483,7 @@ public class ClassSelectScreen extends MutilScreen {
             nextOffset = Math.max(0, Math.min(maxScrollOffset, nextOffset));
             if (nextOffset != scrollOffset) {
                 scrollOffset = nextOffset;
-                rebuildMutilRoot();
+                rebuildMenuRoot();
                 return true;
             }
         }

@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Hold-F AuraTip wheel for the vehicle currently under the crosshair. */
+/** Hold SBW INTERACT AuraTip wheel for the vehicle under the crosshair. */
 public final class VehicleWheelController {
 
     private static final String OWNER = "espetro_vehicle";
@@ -66,6 +66,40 @@ public final class VehicleWheelController {
 
     public static boolean isWheelActive() {
         return ownsOverlay;
+    }
+
+    /**
+     * True when the wheel is open, no radial slot is hovered, and the cursor
+     * is inside the inner radius (center icon zone used by the mount channel).
+     */
+    public static boolean isCenterHovered() {
+        if (!ownsOverlay || !RadialMenuClientApi.isActive()) {
+            return false;
+        }
+        if (RadialMenuClientApi.hoveredSlotIndex() >= 0) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            return false;
+        }
+        double mx = mc.mouseHandler.xpos()
+            * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
+        double my = mc.mouseHandler.ypos()
+            * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
+        double cx = mc.getWindow().getGuiScaledWidth() * 0.5;
+        double cy = mc.getWindow().getGuiScaledHeight() * 0.5;
+        double dx = mx - cx;
+        double dy = my - cy;
+        return dx * dx + dy * dy <= (double) WHEEL_INNER * (double) WHEEL_INNER;
+    }
+
+    public static boolean isInteractHeld() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            return false;
+        }
+        return isInteractKeyDown(mc.getWindow().getWindow());
     }
 
     public static boolean isHolding() {
@@ -216,7 +250,8 @@ public final class VehicleWheelController {
         }
 
         long window = minecraft.getWindow().getWindow();
-        boolean down = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F) == GLFW.GLFW_PRESS;
+        // Align with SBW「交互」; fall back to F if SBW client classes are absent.
+        boolean down = isInteractKeyDown(window);
         if (!down) {
             if (keyWasDown) closeOwnedOverlay();
             keyWasDown = false;
@@ -346,6 +381,19 @@ public final class VehicleWheelController {
         cachedSupply = null;
         holdAction = null;
         holdProgress = 0;
+    }
+
+    private static boolean isInteractKeyDown(long window) {
+        try {
+            Class<?> keys = Class.forName("com.atsuishio.superbwarfare.init.ModKeyMappings");
+            Object mapping = keys.getField("INTERACT").get(null);
+            if (mapping instanceof net.minecraft.client.KeyMapping keyMapping) {
+                return keyMapping.isDown();
+            }
+        } catch (Throwable ignored) {
+            // fall through
+        }
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F) == GLFW.GLFW_PRESS;
     }
 
     private static ResourceLocation id(String path) {

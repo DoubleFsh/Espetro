@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.espetro.mapconfig.ESPointsMapSnapshotTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.024">
+  <properties/>
+  <testcase name="rejectsPathologicalSingleDimensionBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.003"/>
+  <testcase name="stampsSeedWithoutSelectingCaptureRoute(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="rejectsUnsafeOrForgedBackgrounds(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.003"/>
+  <testcase name="loadsValidFrozenSnapshotAndDefensivelyCopiesBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="rejectsRandomObjectiveMode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <testcase name="rejectsPngPixelBombBeforeDecode(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.008"/>
+  <testcase name="supportsMapWithoutBackground(Path)" classname="org.espetro.mapconfig.ESPointsMapSnapshotTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

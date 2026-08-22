@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class SquadRadialMenuScreen extends MutilScreen {
+public class SquadRadialMenuScreen extends EspetroMenuScreen {
 
     private static final ResourceLocation RADIO =
         ResourceLocation.fromNamespaceAndPath("espetro", "textures/gui/squad/radio_deploy.png");
@@ -33,7 +33,7 @@ public class SquadRadialMenuScreen extends MutilScreen {
 
     private final List<Option> options = new ArrayList<>();
     private int selectedIndex = -1;
-    private EspetroMutilWidgets.Text centerLabel;
+    private EspetroAuiWidgets.Text centerLabel;
 
     public SquadRadialMenuScreen(boolean commander, Map<String, Integer> cooldowns,
                                  List<CommanderSkillManager.SkillView> skills) {
@@ -80,7 +80,7 @@ public class SquadRadialMenuScreen extends MutilScreen {
     }
 
     @Override
-    protected void buildMutilRoot(GuiElement root) {
+    protected void buildMenuRoot(GuiElement root) {
         int centerX = width / 2;
         int centerY = height / 2;
         int radius = options.size() > 6 ? 94 : 72;
@@ -91,13 +91,13 @@ public class SquadRadialMenuScreen extends MutilScreen {
             int optionY = centerY + (int) Math.round(Math.sin(angle) * radius);
             root.addChild(new RadialOption(i, optionX, optionY, options.get(i)));
         }
-        centerLabel = EspetroMutilWidgets.centeredText(centerX - 90, centerY - 5, 180,
-            "移动鼠标选择", EspetroMutilWidgets.TEXT);
+        centerLabel = EspetroAuiWidgets.centeredText(centerX - 90, centerY - 5, 180,
+            "移动鼠标选择", EspetroAuiWidgets.TEXT);
         root.addChild(centerLabel);
     }
 
     @Override
-    protected void renderBeforeMutil(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderBeforeMenu(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int centerX = width / 2;
         int centerY = height / 2;
         double dx = mouseX - centerX;
@@ -141,7 +141,7 @@ public class SquadRadialMenuScreen extends MutilScreen {
                 0f, 0f, 128, 128, option.textureWidth, 128);
             RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
             graphics.drawCenteredString(font, option.label, centerX, centerY + half + 6,
-                !option.enabled ? EspetroMutilWidgets.NEGATIVE
+                !option.enabled ? EspetroAuiWidgets.NEGATIVE
                     : active ? 0xFFFFFFFF : 0xFFBFC3C7);
             super.draw(graphics, x, y, width, height, mouseX, mouseY, partialTick);
         }
