@@ -1,8 +1,13 @@
 args=0ba4af6e27ab31ba75e64b778bf1591d2655ca0c
 jvmargs=da39a3ee5e6b4b0d3255bfef95601890afd80709
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 server=ef7b746db76a0abe01774b977eb27990ee933b89
 client=ae4d279b52ff14bfb0ef76d44138a5d014be9860
+=======
+server=23e14cdb1b892ca9b747c042286893112e76a7e5
+client=8e926c811212ffeeeb22ebee630bf44f03d924ca
+>>>>>>> Stashed changes
 =======
 server=23e14cdb1b892ca9b747c042286893112e76a7e5
 client=8e926c811212ffeeeb22ebee630bf44f03d924ca

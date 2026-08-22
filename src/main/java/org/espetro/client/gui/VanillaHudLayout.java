@@ -3,6 +3,9 @@ package org.espetro.client.gui;
 <<<<<<< Updated upstream
 =======
 import com.mojang.blaze3d.systems.RenderSystem;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.AttackIndicatorStatus;
@@ -94,6 +97,7 @@ public final class VanillaHudLayout {
 
     /**
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
      * Vanilla selected-item highlight timer. The name is drawn beside the
      * matching vertical hotbar slot instead of above the bottom-center bar.
      */
@@ -106,6 +110,8 @@ public final class VanillaHudLayout {
                 && selected.getHighlightTip(selected.getHoverName())
                     .equals(itemNameStack.getHighlightTip(itemNameStack.getHoverName()))) {
 =======
+=======
+>>>>>>> Stashed changes
      * 自维护「主手物品名」的显示计时，不依赖原版 Gui.tick()。
      * 切到空槽位时立即清零，避免原版状态在部分环境下未及时清除导致残留。
      */
@@ -117,6 +123,9 @@ public final class VanillaHudLayout {
                 && mainHand.getHoverName().equals(itemNameStack.getHoverName())
                 && mainHand.getHighlightTip(mainHand.getHoverName())
                         .equals(itemNameStack.getHighlightTip(itemNameStack.getHoverName()))) {
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
             if (itemNameTimer > 0) {
                 itemNameTimer--;
@@ -125,7 +134,11 @@ public final class VanillaHudLayout {
             itemNameTimer = (int) (40.0D * mc.options.notificationDisplayTime().get());
         }
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         itemNameStack = selected.copy();
+=======
+        itemNameStack = mainHand.copy();
+>>>>>>> Stashed changes
 =======
         itemNameStack = mainHand.copy();
 >>>>>>> Stashed changes
@@ -377,20 +390,27 @@ public final class VanillaHudLayout {
     }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     private static void renderSelectedItemNameAtSlot(GuiGraphics graphics, Minecraft mc,
                                                     int slotX, int slotY, float hotbarAlpha) {
 =======
+=======
+>>>>>>> Stashed changes
     /**
      * 把原版屏幕中央的「主手物品名」绘制到右侧热键栏选中槽位的左侧。
      * 显示/淡出由本类自维护的 itemNameTimer / itemNameStack 控制。
      */
     private static void renderSelectedItemNameAtSlot(GuiGraphics graphics, Minecraft mc,
                                                      int baseX, int selectedY, float hotbarAlpha) {
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
         if (itemNameTimer <= 0 || itemNameStack.isEmpty()) {
             return;
         }
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         MutableComponent styled = Component.empty()
             .append(itemNameStack.getHoverName())
@@ -416,6 +436,8 @@ public final class VanillaHudLayout {
             VanillaHudNameLayout.nameBackgroundColor(fade));
         graphics.drawString(font, tip, textX, textY, 0xFFFFFF | fade << 24, true);
 =======
+=======
+>>>>>>> Stashed changes
         MutableComponent name = Component.empty().append(itemNameStack.getHoverName())
                 .withStyle(itemNameStack.getRarity().getStyleModifier());
         if (itemNameStack.hasCustomHoverName()) {
@@ -448,6 +470,9 @@ public final class VanillaHudLayout {
         int backgroundAlpha = (int) (192.0F * alpha / 255.0F);
         graphics.fill(textX - 2, textY - 2, textX + textWidth + 2, textY + 9 + 2, backgroundAlpha << 24);
         graphics.drawString(font, tip, textX, textY, (alpha << 24) | 0xFFFFFF, true);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     }
 

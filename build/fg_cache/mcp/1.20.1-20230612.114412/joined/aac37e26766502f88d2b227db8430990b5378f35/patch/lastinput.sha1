@@ -34,7 +34,11 @@ net/minecraft/util/datafix/fixes/EntityHorseSplitFix.java.patch=4d0ea2fe1613c0cb
 net/minecraft/data/=da39a3ee5e6b4b0d3255bfef95601890afd80709
 net/minecraft/client/renderer/entity/EntityRenderDispatcher.java.patch=8bd72e1e21aaed65f659bd33b523dec5dc7a4738
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 /build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=14a136dd0cf5a9fb811a61f161dfaaf3a24754a7
+=======
+/build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=0de47b8a7b9740e4dff039856db5cc36438adf71
+>>>>>>> Stashed changes
 =======
 /build/fg_cache/mcp/1.20.1-20230612.114412/joined/aac37e26766502f88d2b227db8430990b5378f35/inject/output.jar=0de47b8a7b9740e4dff039856db5cc36438adf71
 >>>>>>> Stashed changes
