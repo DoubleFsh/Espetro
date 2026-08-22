@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.espetro.Espetro;
+import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.team.ClassCountManager;
 import org.espetro.team.ClassSelectManager;
 import org.espetro.team.GamePhase;
@@ -64,7 +65,8 @@ public class RequestGameStatePacket {
                     playerFaction,
                     activeTeam,
                     timeRemaining,
-                    gsm.getCurrentMapFolder()
+                    gsm.getCurrentMapFolder(),
+                    BattlefieldContext.getObjectiveMode()
                 );
 
                 NetworkManager.NET.send(PacketDistributor.PLAYER.with(() -> player), response);

@@ -10,6 +10,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import org.espetro.Espetro;
 import org.espetro.config.GameConfig;
+import org.espetro.mapconfig.BattlefieldContext;
 import org.espetro.team.*;
 
 import java.nio.file.Files;
@@ -27,7 +28,7 @@ import java.util.UUID;
  */
 public class NetworkManager {
 
-    public static final String PROTOCOL_VERSION = "1.31";
+    public static final String PROTOCOL_VERSION = "1.32";
 
     public static final SimpleChannel NET = NetworkRegistry.newSimpleChannel(
         ResourceLocation.fromNamespaceAndPath(Espetro.MOD_ID, "main"),
@@ -1082,7 +1083,9 @@ public class NetworkManager {
         MinecraftServer server = Espetro.getServer();
         if (server == null) return;
         GamePhaseSyncPacket packet = new GamePhaseSyncPacket(
-            phase, org.espetro.team.GameStateManager.getInstance().getCurrentMapFolder());
+            phase,
+            org.espetro.team.GameStateManager.getInstance().getCurrentMapFolder(),
+            BattlefieldContext.getObjectiveMode());
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NET.send(PacketDistributor.PLAYER.with(() -> player), packet);
         }

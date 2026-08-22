@@ -17,6 +17,7 @@ public class GameStateResponsePacket {
     private final String activeTeam;
     private final int timeRemaining;
     private final String mapFolder;
+    private final String objectiveMode;
 
     public GameStateResponsePacket(String phaseName, String playerTeam, String playerFaction,
                                     String activeTeam, int timeRemaining) {
@@ -25,12 +26,19 @@ public class GameStateResponsePacket {
 
     public GameStateResponsePacket(String phaseName, String playerTeam, String playerFaction,
                                    String activeTeam, int timeRemaining, String mapFolder) {
+        this(phaseName, playerTeam, playerFaction, activeTeam, timeRemaining, mapFolder, "");
+    }
+
+    public GameStateResponsePacket(String phaseName, String playerTeam, String playerFaction,
+                                   String activeTeam, int timeRemaining, String mapFolder,
+                                   String objectiveMode) {
         this.phaseName = phaseName;
         this.playerTeam = playerTeam;
         this.playerFaction = playerFaction;
         this.activeTeam = activeTeam;
         this.timeRemaining = timeRemaining;
         this.mapFolder = mapFolder == null ? "" : mapFolder;
+        this.objectiveMode = objectiveMode == null ? "" : objectiveMode;
     }
 
     public static GameStateResponsePacket read(FriendlyByteBuf buf) {
@@ -40,6 +48,7 @@ public class GameStateResponsePacket {
             buf.readUtf(),
             buf.readUtf(),
             buf.readVarInt(),
+            buf.readUtf(),
             buf.readUtf()
         );
     }
@@ -51,6 +60,7 @@ public class GameStateResponsePacket {
         buf.writeUtf(activeTeam != null ? activeTeam : "");
         buf.writeVarInt(timeRemaining);
         buf.writeUtf(mapFolder);
+        buf.writeUtf(objectiveMode);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -72,4 +82,5 @@ public class GameStateResponsePacket {
     public String getActiveTeam() { return activeTeam; }
     public int getTimeRemaining() { return timeRemaining; }
     public String getMapFolder() { return mapFolder; }
+    public String getObjectiveMode() { return objectiveMode; }
 }

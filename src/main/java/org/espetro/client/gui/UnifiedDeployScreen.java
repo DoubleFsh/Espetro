@@ -1887,9 +1887,14 @@ public class UnifiedDeployScreen extends MutilScreen {
             case ROUND_END -> "\u00a76\u00a7l结算";
             case CLEANUP -> "\u00a76\u00a7l清理";
         };
+        String objectiveMode = ClientGameState.getObjectiveMode();
+        String modePart = objectiveMode != null
+            && (phase == GamePhase.DEPLOYING || phase == GamePhase.BATTLE)
+            ? " \u00a78· \u00a7e" + objectiveMode
+            : "";
         String factionPart = "\u00a77| " + teamColor + "\u00a7l" + factionIcon + " " + factionName;
         String title = EspetroMutilWidgets.trimToWidth(
-            phaseName + " " + factionPart, Math.max(80, this.width - 96));
+            phaseName + modePart + " " + factionPart, Math.max(80, this.width - 96));
         phaseTitleText.setText(title);
 
         // 右上角倒计时
