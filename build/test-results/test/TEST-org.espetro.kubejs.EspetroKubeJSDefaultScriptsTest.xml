@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.063">
+<testsuite name="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:30" hostname="cachyos-x8664" time="0.048">
   <properties/>
-  <testcase name="bundledEffectsUseExpectedImplementations()" classname="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" time="0.003"/>
-  <testcase name="bundledCommanderScriptsExistAndParse()" classname="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" time="0.06"/>
+  <testcase name="bundledEffectsUseExpectedImplementations()" classname="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" time="0.002"/>
+  <testcase name="bundledCommanderScriptsExistAndParse()" classname="org.espetro.kubejs.EspetroKubeJSDefaultScriptsTest" time="0.046"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

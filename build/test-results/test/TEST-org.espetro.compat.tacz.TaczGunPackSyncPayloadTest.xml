@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.004">
+<testsuite name="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:29" hostname="cachyos-x8664" time="0.002">
   <properties/>
   <testcase name="roundTripsUnicodeResourceCache()" classname="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" time="0.001"/>
   <testcase name="splitsAndReassemblesAtExactByteBoundaries()" classname="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" time="0.001"/>
-  <testcase name="rejectsIncompleteTransfer()" classname="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" time="0.001"/>
+  <testcase name="rejectsIncompleteTransfer()" classname="org.espetro.compat.tacz.TaczGunPackSyncPayloadTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.mapconfig.ExampleContentInstallerTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.042">
+<testsuite name="org.espetro.mapconfig.ExampleContentInstallerTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:30" hostname="cachyos-x8664" time="0.032">
   <properties/>
-  <testcase name="exportsCompleteBundleWithoutOverwritingOperatorFiles(Path)" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.026"/>
-  <testcase name="existingOperatorFactionDirectoryIsNeverExtended(Path)" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.014"/>
+  <testcase name="exportsCompleteBundleWithoutOverwritingOperatorFiles(Path)" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.019"/>
+  <testcase name="existingOperatorFactionDirectoryIsNeverExtended(Path)" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.012"/>
   <testcase name="rejectsTraversalAndAbsoluteManifestPaths()" classname="org.espetro.mapconfig.ExampleContentInstallerTest" time="0.0"/>
-  <system-out><![CDATA[[02:59:42] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
-[02:59:42] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 16, 跳过 10
+  <system-out><![CDATA[[18:28:30] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 25, 跳过 1
+[18:28:30] [Test worker/INFO] [or.es.Espetro/]: 已安全导出 Espetro 示例内容: 新增 16, 跳过 10
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

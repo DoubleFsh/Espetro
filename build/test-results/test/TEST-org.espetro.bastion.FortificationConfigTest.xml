@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.bastion.FortificationConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:41" hostname="cachyos-x8664" time="0.609">
+<testsuite name="org.espetro.bastion.FortificationConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:29" hostname="cachyos-x8664" time="0.364">
   <properties/>
-  <testcase name="migratesKnownV1EntriesButNeverKeepsInlineShapeAsRuntimeTruth(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.583"/>
+  <testcase name="migratesKnownV1EntriesButNeverKeepsInlineShapeAsRuntimeTruth(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.341"/>
   <testcase name="anyInvalidOrDuplicateDefinitionRejectsWholeTransaction(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.009"/>
-  <testcase name="bundledRegistryContainsExactlyTheFiveMigratedFortificationsAndNoRally()" classname="org.espetro.bastion.FortificationConfigTest" time="0.003"/>
-  <testcase name="entityTypeIsAcceptedAsEntityIdSynonym(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.005"/>
-  <testcase name="parsesV2AndCanonicalizesAlias(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.005"/>
-  <system-out><![CDATA[2026-08-23 02:59:41,848 Test worker WARN Advanced terminal features are not available in this environment
-[02:59:41] [Test worker/WARN] [or.es.Espetro/]: /tmp/junit3030800028644595088/legacy.json: 读取到旧工事格式；仅进行一次性兼容迁移，请保存为 schema_version=2
-[02:59:41] [Test worker/ERROR] [or.es.Espetro/]: 工事配置事务解析失败（未发布任何条目）: /tmp/junit13791983419305580887/duplicate.json.fortifications[1].id: 重复 espetro:same
+  <testcase name="bundledRegistryContainsExactlyTheFiveMigratedFortificationsAndNoRally()" classname="org.espetro.bastion.FortificationConfigTest" time="0.002"/>
+  <testcase name="entityTypeIsAcceptedAsEntityIdSynonym(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.004"/>
+  <testcase name="parsesV2AndCanonicalizesAlias(Path)" classname="org.espetro.bastion.FortificationConfigTest" time="0.004"/>
+  <system-out><![CDATA[2026-08-28 18:28:29,734 Test worker WARN Advanced terminal features are not available in this environment
+[18:28:29] [Test worker/WARN] [or.es.Espetro/]: /tmp/junit4314846137817314631/legacy.json: 读取到旧工事格式；仅进行一次性兼容迁移，请保存为 schema_version=2
+[18:28:29] [Test worker/ERROR] [or.es.Espetro/]: 工事配置事务解析失败（未发布任何条目）: /tmp/junit2276831700232989240/duplicate.json.fortifications[1].id: 重复 espetro:same
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

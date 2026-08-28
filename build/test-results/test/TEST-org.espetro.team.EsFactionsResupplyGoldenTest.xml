@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.team.EsFactionsResupplyGoldenTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:44" hostname="cachyos-x8664" time="0.018">
+<testsuite name="org.espetro.team.EsFactionsResupplyGoldenTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:32" hostname="cachyos-x8664" time="0.016">
   <properties/>
-  <testcase name="migratedVariantsHavePerItemCostAndMatchingMagazineEntries()" classname="org.espetro.team.EsFactionsResupplyGoldenTest" time="0.018"/>
+  <testcase name="migratedVariantsHavePerItemCostAndMatchingMagazineEntries()" classname="org.espetro.team.EsFactionsResupplyGoldenTest" time="0.016"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

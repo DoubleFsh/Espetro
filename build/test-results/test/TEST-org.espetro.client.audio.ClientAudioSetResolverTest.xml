@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.client.audio.ClientAudioSetResolverTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.009">
+<testsuite name="org.espetro.client.audio.ClientAudioSetResolverTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:29" hostname="cachyos-x8664" time="0.008">
   <properties/>
   <testcase name="easterEggMusicFallsBackToNormalVictoryMusic()" classname="org.espetro.client.audio.ClientAudioSetResolverTest" time="0.003"/>
   <testcase name="rejectsTraversalAndFilesOutsideAudioRoot()" classname="org.espetro.client.audio.ClientAudioSetResolverTest" time="0.001"/>

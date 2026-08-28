@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.client.gui.CurrentMapBackgroundRendererTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:42" hostname="cachyos-x8664" time="0.007">
+<testsuite name="org.espetro.client.gui.CurrentMapBackgroundRendererTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:29" hostname="cachyos-x8664" time="0.006">
   <properties/>
-  <testcase name="blurKeepsUniformColorUnchanged()" classname="org.espetro.client.gui.CurrentMapBackgroundRendererTest" time="0.001"/>
-  <testcase name="cropsTallTextureAtItsVerticalCenter()" classname="org.espetro.client.gui.CurrentMapBackgroundRendererTest" time="0.004"/>
+  <testcase name="blurKeepsUniformColorUnchanged()" classname="org.espetro.client.gui.CurrentMapBackgroundRendererTest" time="0.002"/>
+  <testcase name="cropsTallTextureAtItsVerticalCenter()" classname="org.espetro.client.gui.CurrentMapBackgroundRendererTest" time="0.003"/>
   <testcase name="cropsWideTextureAtItsHorizontalCenter()" classname="org.espetro.client.gui.CurrentMapBackgroundRendererTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

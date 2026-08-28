@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.vehicle.VehicleSeatAccessPolicyTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:44" hostname="cachyos-x8664" time="0.049">
+<testsuite name="org.espetro.vehicle.VehicleSeatAccessPolicyTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:32" hostname="cachyos-x8664" time="0.038">
   <properties/>
-  <testcase name="missingFieldKeepsLegacyVehicleTypeDefaults()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.002"/>
+  <testcase name="missingFieldKeepsLegacyVehicleTypeDefaults()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="nonCrewMountUsesFirstEmptyUnrestrictedSeat()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="nonCrewMountIsRejectedWhenOnlyRestrictedOrOccupiedSeatsRemain()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
-  <testcase name="explicitCrewFlagOverridesLegacyIconFallback()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="[1] 0, 0, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.01"/>
+  <testcase name="explicitCrewFlagOverridesLegacyIconFallback()" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="[1] 0, 0, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.007"/>
   <testcase name="[2] 1, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="[3] 1, 1, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="[3] 1, 1, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[4] 2, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
   <testcase name="[5] 2, 1, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
   <testcase name="[6] 2, 2, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <testcase name="[7] 3, 0, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
-  <testcase name="[8] 3, 2, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
-  <testcase name="[9] 3, 3, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="[8] 3, 2, true" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.0"/>
+  <testcase name="[9] 3, 3, false" classname="org.espetro.vehicle.VehicleSeatAccessPolicyTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

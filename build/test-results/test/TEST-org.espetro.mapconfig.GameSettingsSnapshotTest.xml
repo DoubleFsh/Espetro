@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.mapconfig.GameSettingsSnapshotTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:44" hostname="cachyos-x8664" time="0.003">
+<testsuite name="org.espetro.mapconfig.GameSettingsSnapshotTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:32" hostname="cachyos-x8664" time="0.002">
   <properties/>
-  <testcase name="mainBaseInvulnerabilityRadiusCanBeConfiguredOrDisabled()" classname="org.espetro.mapconfig.GameSettingsSnapshotTest" time="0.001"/>
+  <testcase name="mainBaseInvulnerabilityRadiusCanBeConfiguredOrDisabled()" classname="org.espetro.mapconfig.GameSettingsSnapshotTest" time="0.0"/>
   <testcase name="negativeClassSwitchCooldownIsClampedToZero()" classname="org.espetro.mapconfig.GameSettingsSnapshotTest" time="0.0"/>
   <testcase name="classSwitchCooldownCanBeConfiguredOrDisabled()" classname="org.espetro.mapconfig.GameSettingsSnapshotTest" time="0.0"/>
   <testcase name="staminaFullRecoveryTargetCanBeConfiguredOrDisabled()" classname="org.espetro.mapconfig.GameSettingsSnapshotTest" time="0.0"/>

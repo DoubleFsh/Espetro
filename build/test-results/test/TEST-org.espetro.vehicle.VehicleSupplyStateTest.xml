@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.espetro.vehicle.VehicleSupplyStateTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-22T18:59:45" hostname="cachyos-x8664" time="0.006">
+<testsuite name="org.espetro.vehicle.VehicleSupplyStateTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-28T10:28:32" hostname="cachyos-x8664" time="0.005">
   <properties/>
   <testcase name="explicitFalseSupplyFlagsDisableLegacyFallback()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.002"/>
   <testcase name="fillHalfSplitsCapacityForSupplyVehicle()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.001"/>
   <testcase name="cannotCarryConstructionWhenDisabled()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
-  <testcase name="fillAmmoClearsConstruction()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.001"/>
+  <testcase name="fillAmmoClearsConstruction()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
   <testcase name="sharedCapacityLimitsAmmoAndConstruction()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
-  <testcase name="removeAndAffordAmmo()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
+  <testcase name="removeAndAffordAmmo()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.001"/>
   <testcase name="loadRespectsFreeSpaceBeforeTransfer()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
   <testcase name="legacyVehicleWithoutSupplyFlagsDefaultsToCombatVehicle()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
   <testcase name="fillHalfWithoutConstructionOnlyFillsAmmoHalf()" classname="org.espetro.vehicle.VehicleSupplyStateTest" time="0.0"/>
