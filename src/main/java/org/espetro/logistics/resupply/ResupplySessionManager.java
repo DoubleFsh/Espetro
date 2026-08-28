@@ -452,6 +452,17 @@ public final class ResupplySessionManager {
     @Nullable
     private static ResolvedSource resolveSource(ServerPlayer player, ResupplySourceRef ref,
                                                 @Nullable UUID expectedAccount) {
+        if (ref.kind() == ResupplySourceRef.Kind.MAIN_BASE_AMMO) {
+            // 主出生点无限弹药箱：必须仍是部署点旁自动放置的弹药箱（防伪造），
+            // 弹药值无限且永不消耗。
+            if (!org.espetro.logistics.DeploySupplyStationPlacer
+                .isMainBaseAmmoCrate(
+                    (net.minecraft.server.level.ServerLevel) player.serverLevel(), ref.blockPos())) {
+                return null;
+            }
+            return new ResolvedSource(new UUID(0L, 1L), () -> Integer.MAX_VALUE,
+                amount -> true, amount -> { }, () -> { });
+        }
         if (ref.kind() == ResupplySourceRef.Kind.RADIO) {
             BastionData nearby = org.espetro.network.RadioRadialPacket
                 .findFriendlyRadioNearby(player, ref.blockPos());

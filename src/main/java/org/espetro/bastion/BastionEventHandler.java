@@ -657,6 +657,7 @@ public class BastionEventHandler {
     /**
      * 右击已建成弹药箱：打开更换职业根菜单；潜行右击打开逐项补给会话。
      * 识别以工事 behavior=ammo_crate 为准，原版潜影盒只作为旧世界形状兼容。
+     * 主出生点无限弹药箱（部署点旁自动放置）无需 Radio 即可使用，且补给不消耗弹药值。
      */
     @SubscribeEvent
     public static void onShulkerBoxInteract(PlayerInteractEvent.RightClickBlock event) {
@@ -670,6 +671,24 @@ public class BastionEventHandler {
             event.setCancellationResult(InteractionResult.SUCCESS);
             return;
         }
+
+        // 主出生点无限弹药箱：部署点旁自动放置的潜影盒，具备弹药箱完整功能且不消耗弹药值。
+        boolean mainBaseAmmo = org.espetro.logistics.DeploySupplyStationPlacer
+            .isMainBaseAmmoCrate(level, clickedPos);
+        if (mainBaseAmmo) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            String team = Espetro.getPlayerTeam(player);
+            if (team == null) return;
+            if (player.isShiftKeyDown()) {
+                org.espetro.logistics.resupply.ResupplySessionManager.open(player,
+                    org.espetro.logistics.resupply.ResupplySourceRef.mainBaseAmmo(clickedPos));
+            } else {
+                RadioRadialPacket.openClassMenuAt(player, clickedPos);
+            }
+            return;
+        }
+
         BlockState state = level.getBlockState(clickedPos);
         boolean legacyShulker = state.is(Blocks.SHULKER_BOX)
             || state.is(Blocks.RED_SHULKER_BOX)

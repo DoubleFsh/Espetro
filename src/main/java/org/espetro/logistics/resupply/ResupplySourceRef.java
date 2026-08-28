@@ -10,7 +10,9 @@ import java.util.UUID;
 public record ResupplySourceRef(Kind kind, BlockPos blockPos, UUID entityId) {
     public enum Kind {
         RADIO,
-        VEHICLE
+        VEHICLE,
+        /** 主出生点无限弹药箱：功能与弹药箱一致，但不消耗弹药值。 */
+        MAIN_BASE_AMMO
     }
 
     public ResupplySourceRef {
@@ -27,14 +29,22 @@ public record ResupplySourceRef(Kind kind, BlockPos blockPos, UUID entityId) {
         return new ResupplySourceRef(Kind.VEHICLE, BlockPos.ZERO, id);
     }
 
+    public static ResupplySourceRef mainBaseAmmo(BlockPos pos) {
+        return new ResupplySourceRef(Kind.MAIN_BASE_AMMO, pos, null);
+    }
+
     public void write(FriendlyByteBuf buf) {
         buf.writeEnum(kind);
-        if (kind == Kind.RADIO) buf.writeBlockPos(blockPos);
+        if (kind == Kind.RADIO || kind == Kind.MAIN_BASE_AMMO) buf.writeBlockPos(blockPos);
         else buf.writeUUID(entityId);
     }
 
     public static ResupplySourceRef read(FriendlyByteBuf buf) {
         Kind kind = buf.readEnum(Kind.class);
-        return kind == Kind.RADIO ? radio(buf.readBlockPos()) : vehicle(buf.readUUID());
+        return switch (kind) {
+            case RADIO -> radio(buf.readBlockPos());
+            case MAIN_BASE_AMMO -> mainBaseAmmo(buf.readBlockPos());
+            default -> vehicle(buf.readUUID());
+        };
     }
 }

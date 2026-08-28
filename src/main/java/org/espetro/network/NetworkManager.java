@@ -217,6 +217,15 @@ public class NetworkManager {
             RequestClassSelectionPacket::handle
         );
 
+        // 客户端补加实体后请求重同步位置/数据（方案 A：修复开局载具错位）
+        NET.registerMessage(
+            nextId(),
+            EntityResyncRequestPacket.class,
+            EntityResyncRequestPacket::write,
+            EntityResyncRequestPacket::read,
+            EntityResyncRequestPacket::handle
+        );
+
         // 请求游戏状态包（C→S）
         NET.registerMessage(
             nextId(),

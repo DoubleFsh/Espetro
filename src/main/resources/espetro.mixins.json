@@ -20,7 +20,9 @@
   "client": [
     "sbw.ClickDismountMixin",
     "sbw.MinecraftSeatMixin",
-    "sbw.VehicleChangeSeatDelayMixin"
+    "sbw.VehicleChangeSeatDelayMixin",
+    "client.ClientLevelEntityRetryMixin",
+    "client.ClientLevelEntityRetryAccessor"
   ],
   "injectors": {
     "defaultRequire": 0

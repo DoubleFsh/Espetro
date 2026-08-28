@@ -509,22 +509,9 @@ public final class BattlefieldWorldManager {
 
         BattlefieldContext.activate(map);
         lastLoaded = map;
-        // 载具补给站只允许通过「建造工事」放置；载具坑不再自动生成。
-        // 原部署点旁预放 espetro:supply_source +「补给站」标题（spawn 已由 GameConfigBridge 写入）
-        try {
-            int deployStations = org.espetro.logistics.DeploySupplyStationPlacer.placeAtSpawnPoints(level);
-            Espetro.LOGGER.info("战场原部署点补给站: {} 个", deployStations);
-        } catch (Exception e) {
-            Espetro.LOGGER.error("预放原部署点补给站失败", e);
-        }
-        // 开局时在双方主重生点旁生成 Dragonrise 弹药补给站实体
-        try {
-            int mainBaseStations = org.espetro.vehicle.VehicleManager.getInstance()
-                .spawnMainBaseSupplyStations(level);
-            Espetro.LOGGER.info("主重生点弹药补给站: {} 个", mainBaseStations);
-        } catch (Exception e) {
-            Espetro.LOGGER.error("生成主重生点弹药补给站失败", e);
-        }
+        // 部署点弹药箱与主重生点补给站延迟到玩家进入战场后再放置
+        // （与初始载具刷新队列同条件，避免生成时客户端区块未加载导致实体丢失）。
+        org.espetro.vehicle.VehicleManager.getInstance().scheduleDeferredSupplyPlacement();
         state = ImportState.READY;
         busy.set(false);
         Espetro.LOGGER.info("战场地图已从只读模板副本就绪: {}（预载{}个关键区块）",

@@ -10,8 +10,14 @@
     "org/espetro/mixin/sbw/MinecraftSeatMixin": {
       "handleKeybinds": "Lnet/minecraft/client/Minecraft;m_91279_()V"
     },
+    "org/espetro/mixin/client/ClientLevelEntityRetryAccessor": {
+      "addEntity": "m_104739_(ILnet/minecraft/world/entity/Entity;)V"
+    },
     "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {
       "hurt": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6469_(Lnet/minecraft/world/damagesource/DamageSource;F)Z"
+    },
+    "org/espetro/mixin/client/ClientLevelEntityRetryMixin": {
+      "addEntity(ILnet/minecraft/world/entity/Entity;)V": "Lnet/minecraft/client/multiplayer/ClientLevel;m_104739_(ILnet/minecraft/world/entity/Entity;)V"
     },
     "org/espetro/mixin/sbw/VehicleEntityWreckMixin": {
       "baseTick": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6075_()V"
@@ -29,8 +35,14 @@
       "org/espetro/mixin/sbw/MinecraftSeatMixin": {
         "handleKeybinds": "Lnet/minecraft/client/Minecraft;m_91279_()V"
       },
+      "org/espetro/mixin/client/ClientLevelEntityRetryAccessor": {
+        "addEntity": "m_104739_(ILnet/minecraft/world/entity/Entity;)V"
+      },
       "org/espetro/mixin/sbw/VehicleEntityMainBaseProtectionMixin": {
         "hurt": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6469_(Lnet/minecraft/world/damagesource/DamageSource;F)Z"
+      },
+      "org/espetro/mixin/client/ClientLevelEntityRetryMixin": {
+        "addEntity(ILnet/minecraft/world/entity/Entity;)V": "Lnet/minecraft/client/multiplayer/ClientLevel;m_104739_(ILnet/minecraft/world/entity/Entity;)V"
       },
       "org/espetro/mixin/sbw/VehicleEntityWreckMixin": {
         "baseTick": "Lcom/atsuishio/superbwarfare/entity/vehicle/base/VehicleEntity;m_6075_()V"

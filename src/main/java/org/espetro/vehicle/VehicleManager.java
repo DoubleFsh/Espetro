@@ -72,6 +72,14 @@ public class VehicleManager {
     /** Bound first-wave chunk work so deployment never creates an I/O spike. */
     private static final int INITIAL_CHUNKS_STARTED_PER_TICK = 2;
     private static final int INITIAL_CHUNKS_MAX_IN_FLIGHT = 4;
+    /** 开局（部署阶段开始）后首辆初始载具的生成延迟（tick）。 */
+    private static final int INITIAL_SPAWN_FIRST_DELAY_TICKS = 20 * 5;
+    /** 相邻两辆初始载具的生成间隔（tick）：每秒一辆。 */
+    private static final int INITIAL_SPAWN_INTERVAL_TICKS = 20;
+    /** 等待已选队玩家进入战场的超时兜底（tick）：超时后强制启动刷新队列。 */
+    private static final int INITIAL_SPAWN_ARM_TIMEOUT_TICKS = 20 * 30;
+    /** 方案 B：实体生成后向在线玩家重发 spawn 包的延迟点（tick）：1s / 3s / 10s。 */
+    private static final long[] SPAWN_RESEND_DELAYS_TICKS = {20L, 60L, 200L};
 
     // factionId -> (vehicleType -> List<UUID>) 追踪活跃载具
     private final Map<String, Map<String, List<UUID>>> activeVehicles = new HashMap<>();
@@ -100,6 +108,18 @@ public class VehicleManager {
     private final ArrayDeque<ChunkPos> pendingInitialChunks = new ArrayDeque<>();
     private final Set<ChunkPos> readyInitialChunks = new LinkedHashSet<>();
     private final Set<ChunkPos> ticketedInitialChunks = new LinkedHashSet<>();
+    /** 已就绪（出生区块 FULL 加载完成）的初始载具刷新队列：随机顺序，每秒生成一辆。 */
+    private final ArrayDeque<PendingInitialVehicle> initialSpawnQueue = new ArrayDeque<>();
+    /** 下一辆初始载具允许生成的服务器 tick；-1 表示尚未启动节流。 */
+    private long nextInitialSpawnTick = -1;
+    /** 是否正在等待已选队玩家全部进入战场（进入后才开始 5 秒倒计时）。 */
+    private boolean initialSpawnArming;
+    /** 进入等待状态的 tick，用于超时兜底。 */
+    private long initialSpawnArmStartedTick = -1;
+    /** 战场激活时置位：等玩家进入战场后再放置部署点弹药箱与主重生点补给站。 */
+    private boolean deferredSupplyPlacementPending;
+    /** 方案 B：待重发 spawn 包的实体：entityId -> 重发 tick 队列（升序）。 */
+    private final Map<Integer, ArrayDeque<Long>> spawnResendPlans = new HashMap<>();
     @Nullable
     private ServerLevel initialDeploymentLevel;
     private int initialChunksInFlight;
@@ -309,6 +329,68 @@ public class VehicleManager {
     /** 服务器 tick：处理被摧毁载具的自动刷新。 */
     public void onServerTick() {
         processAutoRespawns();
+        processSpawnResends();
+    }
+
+    /**
+     * 方案 B：登记一个实体，稍后向所有在线玩家重发 spawn 包（1s/3s/10s 各一次）。
+     * 客户端对「已存在实体」会替换、对「未注册实体」会补加，因此重发是安全的；
+     * 与方案 A（客户端补加）互补：即使 spawn 包在区块未加载时被丢弃，也能补救。
+     */
+    public void scheduleSpawnResend(Entity entity) {
+        if (entity == null || entity.isRemoved()) {
+            return;
+        }
+        ServerLevel level = entity.level() instanceof ServerLevel serverLevel ? serverLevel : null;
+        if (level == null) {
+            return;
+        }
+        ArrayDeque<Long> plan = new ArrayDeque<>();
+        long now = level.getGameTime();
+        for (long delay : SPAWN_RESEND_DELAYS_TICKS) {
+            plan.addLast(now + delay);
+        }
+        spawnResendPlans.put(entity.getId(), plan);
+    }
+
+    private void processSpawnResends() {
+        if (spawnResendPlans.isEmpty()) {
+            return;
+        }
+        MinecraftServer server = Espetro.getServer();
+        if (server == null) {
+            return;
+        }
+        ServerLevel level = org.espetro.mapconfig.BattlefieldContext.requireBattlefield(server);
+        if (level == null) {
+            return;
+        }
+        long now = level.getGameTime();
+        java.util.Iterator<Map.Entry<Integer, ArrayDeque<Long>>> iterator =
+            spawnResendPlans.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Integer, ArrayDeque<Long>> entry = iterator.next();
+            ArrayDeque<Long> plan = entry.getValue();
+            while (!plan.isEmpty() && plan.peekFirst() <= now) {
+                plan.pollFirst();
+                Entity entity = level.getEntity(entry.getKey());
+                if (entity == null || entity.isRemoved()) {
+                    break; // 实体已消失，放弃后续重发
+                }
+                // 向所有与实体同维度的在线玩家重发 spawn 包
+                // （原版客户端同 ID 已存在时替换，不存在时补加）
+                var packet = new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(entity);
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    if (player.connection != null
+                        && player.serverLevel() == level) {
+                        player.connection.send(packet);
+                    }
+                }
+            }
+            if (plan.isEmpty()) {
+                iterator.remove();
+            }
+        }
     }
 
     /** 载具被摧毁后开始刷新计时。 */
@@ -391,6 +473,8 @@ public class VehicleManager {
         }
         trackVehicle(vehicle, factionId, vehicleType, slotIndex, team, false);
         broadcastVehicleInfoToTeam(team);
+        // 方案 B：稍后重发 spawn 包，兜底客户端区块未就绪导致的丢失
+        scheduleSpawnResend(vehicle);
         Espetro.LOGGER.info("载具自动刷新: {} / {} / {} at {}", team, factionId, vehicleType, spawnPos);
         return true;
     }
@@ -611,6 +695,13 @@ public class VehicleManager {
     public int activateInitialVehicleDeployment() {
         int before = initialVehiclesSpawned;
         initialDeploymentActive = true;
+        // 方案 C：开局计时不立即开始，而是等所有已选队玩家进入战场后才开始
+        // 5 秒倒计时，给客户端留出战场区块加载窗口（见 drainInitialSpawnQueue）。
+        initialSpawnArming = true;
+        if (initialDeploymentLevel != null) {
+            initialSpawnArmStartedTick = initialDeploymentLevel.getGameTime();
+        }
+        nextInitialSpawnTick = -1;
         for (ChunkPos chunk : new ArrayList<>(readyInitialChunks)) {
             spawnInitialVehiclesInChunk(chunk);
         }
@@ -690,12 +781,17 @@ public class VehicleManager {
                     logInitialDeploymentCompletionIfReady();
                 }));
         }
+        // 等玩家进入战场后再放置部署点弹药箱/主重生点补给站（与载具同条件）。
+        processDeferredSupplyPlacement(level);
+        // 每秒从刷新队列弹出一辆生成（开局 5 秒后开始）。
+        drainInitialSpawnQueue(level);
         logInitialDeploymentCompletionIfReady();
     }
 
     public InitialDeploymentStatus getInitialDeploymentStatus() {
-        int pending = delayedInitialVehicles.size() + initialVehiclesByChunk.values().stream()
-            .mapToInt(List::size).sum();
+        int pending = delayedInitialVehicles.size()
+            + initialVehiclesByChunk.values().stream().mapToInt(List::size).sum()
+            + initialSpawnQueue.size();
         return new InitialDeploymentStatus(
             initialVehiclesPlanned, initialVehiclesSpawned, initialVehiclesFailed, pending);
     }
@@ -705,7 +801,8 @@ public class VehicleManager {
             && delayedInitialVehicles.isEmpty()
             && pendingInitialChunks.isEmpty()
             && initialChunksInFlight == 0
-            && initialVehiclesByChunk.isEmpty();
+            && initialVehiclesByChunk.isEmpty()
+            && initialSpawnQueue.isEmpty();
     }
 
     private void spawnInitialVehiclesInChunk(ChunkPos chunk) {
@@ -720,55 +817,175 @@ public class VehicleManager {
             return;
         }
 
-        Map<String, ActiveVehicleData> panelSyncs = new LinkedHashMap<>();
-        for (PendingInitialVehicle pending : vehicles) {
-            InitialVehicleDeploymentLedger.SlotKey key = pending.key();
-            Entity vehicleEntity = createVehicleEntity(
-                level,
-                key.vehicleType(),
-                pending.spawnPosition(),
-                key.factionId(),
-                pending.config(),
-                pending.slot(),
-                pending.deployment().yaw);
-            if (vehicleEntity == null) {
-                initialVehiclesFailed++;
-                Espetro.LOGGER.warn(
-                    "初始载具预部署失败: 无法创建 {} / {} 槽位{}的实体",
-                    key.factionId(), key.vehicleType(), key.slotIndex());
-                continue;
-            }
-            if (!level.addFreshEntity(vehicleEntity)) {
-                vehicleEntity.discard();
-                initialVehiclesFailed++;
-                Espetro.LOGGER.warn(
-                    "初始载具预部署失败: {} / {} 槽位{}未能加入战场",
-                    key.factionId(), key.vehicleType(), key.slotIndex());
-                continue;
-            }
-            trackVehicle(
-                vehicleEntity,
-                key.factionId(),
-                key.vehicleType(),
-                key.slotIndex(),
-                key.team(),
-                true);
-            // 首发不进入刷新冷却；载具被摧毁后才开始自动刷新计时。
-            Map<String, Long> initialCooldown = cooldowns.get(
-                cooldownOwner(key.team(), key.factionId()));
-            if (initialCooldown != null) {
-                initialCooldown.remove(key.vehicleType());
-            }
-            ActiveVehicleData tracked = activeVehicleData.get(vehicleEntity.getUUID());
-            if (tracked != null) {
-                panelSyncs.put(tracked.team() + '|' + tracked.factionId(), tracked);
-            }
-            initialVehiclesSpawned++;
-            broadcastVehicleInfoToTeam(key.team());
-        }
-        // 同一出生区块可能包含多辆车；每个阵营只推一次增量面板状态。
-        panelSyncs.values().forEach(VehicleManager::syncCommanderVehiclePanel);
+        // 同一出生区块的多辆载具随机打乱后排入刷新队列，由调度器每秒生成一辆，
+        // 避免开局瞬间批量生成导致客户端区块未加载而丢失实体。
+        Collections.shuffle(vehicles);
+        initialSpawnQueue.addAll(vehicles);
+        Espetro.LOGGER.info(
+            "初始载具出生区块已就绪: chunk={}, 入队{}辆, 队列{}辆",
+            chunk, vehicles.size(), initialSpawnQueue.size());
         releaseInitialChunkTicket(level, chunk);
+    }
+
+    /**
+     * 战场地图就绪后调用：部署点弹药箱与主重生点补给站延迟到玩家进入战场后再放置，
+     * 与初始载具刷新队列同条件（避免生成时客户端区块未加载导致实体丢失）。
+     */
+    public void scheduleDeferredSupplyPlacement() {
+        deferredSupplyPlacementPending = true;
+    }
+
+    /**
+     * 每 tick 由 {@link #processInitialVehicleDeployments()} 调用：
+     * 满足「所有已选队玩家进入战场（或超时兜底）」后执行一次延迟补给站放置。
+     */
+    private void processDeferredSupplyPlacement(ServerLevel level) {
+        if (!deferredSupplyPlacementPending || !initialDeploymentActive) {
+            return;
+        }
+        long tick = level.getGameTime();
+        if (initialSpawnArming && !allAssignedPlayersInBattlefield(level)) {
+            long waited = tick - initialSpawnArmStartedTick;
+            if (waited < INITIAL_SPAWN_ARM_TIMEOUT_TICKS) {
+                return; // 还有已选队玩家未进入战场，继续等待
+            }
+            Espetro.LOGGER.warn(
+                "等待玩家进入战场超时({}s)，强制放置部署点弹药箱/补给站",
+                waited / 20L);
+        }
+        deferredSupplyPlacementPending = false;
+        try {
+            int deployStations = org.espetro.logistics.DeploySupplyStationPlacer
+                .placeAtSpawnPoints(level);
+            Espetro.LOGGER.info("原部署点无限弹药箱: {} 个", deployStations);
+        } catch (Exception e) {
+            Espetro.LOGGER.error("预放原部署点无限弹药箱失败", e);
+        }
+        try {
+            int mainBaseStations = spawnMainBaseSupplyStations(level);
+            Espetro.LOGGER.info("主重生点弹药补给站: {} 个", mainBaseStations);
+        } catch (Exception e) {
+            Espetro.LOGGER.error("生成主重生点弹药补给站失败", e);
+        }
+    }
+
+    /**
+     * 每 tick 由 {@link #processInitialVehicleDeployments()} 调用：
+     * 等所有已选队玩家进入战场后，5 秒开始，每秒从刷新队列弹出一辆生成。
+     */
+    private void drainInitialSpawnQueue(ServerLevel level) {
+        if (!initialDeploymentActive || initialSpawnQueue.isEmpty()) {
+            return;
+        }
+        long tick = level.getGameTime();
+        if (nextInitialSpawnTick < 0) {
+            // 方案 C：开局计时从「所有已选队玩家进入战场」之后才开始。
+            // 玩家进入战场（服务端视角的维度切换）通常早于其客户端区块加载完成，
+            // 以此为起点再等 5 秒，可显著降低生成时客户端区块未就绪的概率。
+            if (initialSpawnArming && !allAssignedPlayersInBattlefield(level)) {
+                long waited = tick - initialSpawnArmStartedTick;
+                if (waited < INITIAL_SPAWN_ARM_TIMEOUT_TICKS) {
+                    return; // 还有已选队玩家未进入战场，继续等待
+                }
+                // 超时兜底：个别玩家长期不进入战场时强制启动，避免队列卡死。
+                Espetro.LOGGER.warn(
+                    "等待玩家进入战场超时({}s)，强制启动初始载具刷新队列",
+                    waited / 20L);
+            }
+            initialSpawnArming = false;
+            nextInitialSpawnTick = tick + INITIAL_SPAWN_FIRST_DELAY_TICKS;
+            Espetro.LOGGER.info(
+                "初始载具刷新队列启动: 5秒后开始每秒一辆 (tick={}, 队列{}辆)",
+                tick, initialSpawnQueue.size());
+        }
+        if (tick < nextInitialSpawnTick) {
+            return;
+        }
+        PendingInitialVehicle pending = initialSpawnQueue.pollFirst();
+        if (pending == null) {
+            return;
+        }
+        spawnSingleInitialVehicle(level, pending);
+        // 成功生成后按每秒一辆推进；失败不推进，下 tick 继续尝试下一辆。
+        nextInitialSpawnTick = tick + INITIAL_SPAWN_INTERVAL_TICKS;
+    }
+
+    /**
+     * 检查所有已选队（ATTACK/DEFEND）的在线玩家是否都已进入战场维度。
+     * 未选边的旁观/等待玩家不阻塞队列。
+     */
+    private boolean allAssignedPlayersInBattlefield(ServerLevel level) {
+        MinecraftServer server = level.getServer();
+        if (server == null) {
+            return true;
+        }
+        net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> battlefieldDim =
+            level.dimension();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String team = ClassCountManager.getInstance().getPlayerTeam(player.getUUID());
+            if (team == null) {
+                team = Espetro.getPlayerTeam(player);
+            }
+            if (!"ATTACK".equals(team) && !"DEFEND".equals(team)) {
+                continue; // 未选边玩家不阻塞
+            }
+            if (player.serverLevel() == null
+                || player.serverLevel().dimension() != battlefieldDim) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void spawnSingleInitialVehicle(ServerLevel level, PendingInitialVehicle pending) {
+        InitialVehicleDeploymentLedger.SlotKey key = pending.key();
+        Entity vehicleEntity = createVehicleEntity(
+            level,
+            key.vehicleType(),
+            pending.spawnPosition(),
+            key.factionId(),
+            pending.config(),
+            pending.slot(),
+            pending.deployment().yaw);
+        if (vehicleEntity == null) {
+            initialVehiclesFailed++;
+            Espetro.LOGGER.warn(
+                "初始载具预部署失败: 无法创建 {} / {} 槽位{}的实体",
+                key.factionId(), key.vehicleType(), key.slotIndex());
+            return;
+        }
+        if (!level.addFreshEntity(vehicleEntity)) {
+            vehicleEntity.discard();
+            initialVehiclesFailed++;
+            Espetro.LOGGER.warn(
+                "初始载具预部署失败: {} / {} 槽位{}未能加入战场",
+                key.factionId(), key.vehicleType(), key.slotIndex());
+            return;
+        }
+        trackVehicle(
+            vehicleEntity,
+            key.factionId(),
+            key.vehicleType(),
+            key.slotIndex(),
+            key.team(),
+            true);
+        // 首发不进入刷新冷却；载具被摧毁后才开始自动刷新计时。
+        Map<String, Long> initialCooldown = cooldowns.get(
+            cooldownOwner(key.team(), key.factionId()));
+        if (initialCooldown != null) {
+            initialCooldown.remove(key.vehicleType());
+        }
+        ActiveVehicleData tracked = activeVehicleData.get(vehicleEntity.getUUID());
+        if (tracked != null) {
+            syncCommanderVehiclePanel(tracked);
+        }
+        initialVehiclesSpawned++;
+        broadcastVehicleInfoToTeam(key.team());
+        // 方案 B：稍后重发 spawn 包，兜底客户端区块未就绪导致的丢失
+        scheduleSpawnResend(vehicleEntity);
+        Espetro.LOGGER.info(
+            "初始载具已刷新: {} / {} 槽位{} (队列剩余{})",
+            key.factionId(), key.vehicleType(), key.slotIndex(), initialSpawnQueue.size());
     }
 
     private boolean hasPendingInitialVehicle(String team, String factionId, String vehicleType) {
@@ -780,6 +997,9 @@ public class VehicleManager {
             for (PendingInitialVehicle pending : pendingInChunk) {
                 if (matchesInitialType(pending, normalizedTeam, factionId, vehicleType)) return true;
             }
+        }
+        for (PendingInitialVehicle pending : initialSpawnQueue) {
+            if (matchesInitialType(pending, normalizedTeam, factionId, vehicleType)) return true;
         }
         return false;
     }
@@ -1189,6 +1409,7 @@ public class VehicleManager {
         vehicleSupplies.clear();
         cooldowns.clear();
         autoRespawnQueue.clear();
+        spawnResendPlans.clear();
         if (!mappedSupplyStations.isEmpty()) {
             mappedSupplyStations.clear();
             EspetroAPI.markTacticalMapStateDirty();
@@ -1214,6 +1435,11 @@ public class VehicleManager {
         pendingInitialChunks.clear();
         readyInitialChunks.clear();
         ticketedInitialChunks.clear();
+        initialSpawnQueue.clear();
+        nextInitialSpawnTick = -1;
+        initialSpawnArming = false;
+        initialSpawnArmStartedTick = -1;
+        deferredSupplyPlacementPending = false;
         initialDeploymentLevel = null;
         initialChunksInFlight = 0;
         initialDeploymentActive = false;
@@ -1614,6 +1840,8 @@ public class VehicleManager {
             Espetro.LOGGER.warn("主重生点补给站未能加入世界 at {} ({})", stationPos, team);
             return false;
         }
+        // 方案 B：稍后重发 spawn 包，兜底客户端区块未就绪导致的丢失
+        scheduleSpawnResend(entity);
         return true;
     }
 
@@ -1669,6 +1897,8 @@ public class VehicleManager {
             Espetro.LOGGER.warn("补给站未能加入世界 at {} ({}/{})", stationPos, vehicleType, pitId);
             return false;
         }
+        // 方案 B：稍后重发 spawn 包，兜底客户端区块未就绪导致的丢失
+        scheduleSpawnResend(entity);
         return true;
     }
 

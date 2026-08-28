@@ -233,7 +233,10 @@ public class RadioRadialPacket {
     }
 
     private void handleOpen(ServerPlayer player) {
-        if (!isFriendlyRadioNearby(player, pos)) {
+        // 主出生点无限弹药箱不需要附近 Radio 即可打开职业轮盘
+        boolean mainBaseAmmo = org.espetro.logistics.DeploySupplyStationPlacer
+            .isMainBaseAmmoCrate((net.minecraft.server.level.ServerLevel) player.serverLevel(), pos);
+        if (!mainBaseAmmo && !isFriendlyRadioNearby(player, pos)) {
             player.sendSystemMessage(Component.literal("§c附近没有己方 Radio。"));
             return;
         }
