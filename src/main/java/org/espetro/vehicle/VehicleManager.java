@@ -870,6 +870,63 @@ public class VehicleManager {
     }
 
     /**
+     * 玩家部署完成（选点落地/复活）后调用：向该玩家重发所有活跃载具与补给站的
+     * spawn 包 + 绝对位置 + 全量数据，确保客户端与服务端同步。
+     * 客户端对「已存在实体」会替换、对「未注册实体」会补加，因此幂等安全。
+     */
+    public void resyncVehiclesForPlayer(ServerPlayer player) {
+        if (player == null || player.connection == null) {
+            return;
+        }
+        ServerLevel level = player.serverLevel();
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+        ResourceKey<Level> dimension = level.dimension();
+        int sent = 0;
+        // 活跃载具
+        for (UUID id : new ArrayList<>(activeVehicleIds)) {
+            Entity entity = level.getEntity(id);
+            if (entity == null || entity.isRemoved()) {
+                continue;
+            }
+            ActiveVehicleData data = activeVehicleData.get(id);
+            if (data != null && !data.dimension().equals(dimension)) {
+                continue; // 只同步本维度实体
+            }
+            sendFullEntityResync(player, entity);
+            sent++;
+        }
+        // 补给站实体（载具坑/主重生点预放的 Dragonrise 弹药补给站）
+        for (UUID id : new ArrayList<>(mappedSupplyStations.keySet())) {
+            Entity entity = level.getEntity(id);
+            if (entity == null || entity.isRemoved()) {
+                continue;
+            }
+            sendFullEntityResync(player, entity);
+            sent++;
+        }
+        Espetro.LOGGER.info("部署完成载具双端同步: {} 向 {} 重发 {} 个实体",
+            dimension.location(), player.getName().getString(), sent);
+    }
+
+    /** 向单个玩家重发实体 spawn 包 + teleport + 实体数据（全量权威状态）。 */
+    private static void sendFullEntityResync(ServerPlayer player, Entity entity) {
+        if (player == null || player.connection == null || entity == null) {
+            return;
+        }
+        player.connection.send(
+            new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(entity));
+        player.connection.send(
+            new net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket(entity));
+        java.util.List<net.minecraft.network.syncher.SynchedEntityData.DataValue<?>> data =
+            entity.getEntityData().getNonDefaultValues();
+        player.connection.send(
+            new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(
+                entity.getId(), data == null ? java.util.List.of() : data));
+    }
+
+    /**
      * 每 tick 由 {@link #processInitialVehicleDeployments()} 调用：
      * 等所有已选队玩家进入战场后，5 秒开始，每秒从刷新队列弹出一辆生成。
      */

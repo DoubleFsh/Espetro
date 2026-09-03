@@ -135,7 +135,7 @@ def fixedAuraTipJar = providers.gradleProperty('auratipJar')
     .map { file(it) }
     .getOrElse(file("../AuraTip/build/libs/auratip-forge-1.20.1-${auratip_version}.jar"))
 if (!fixedAuraTipJar.isFile()) {
-    throw new GradleException("缺少固定 AuraTip 产物: ${fixedAuraTipJar}；请先构建 AuraTip 或设置 -PauratipJar=...")
+     throw new GradleException("缺少固定 AuraTip 产物: ${fixedAuraTipJar}；请先构建 AuraTip 或设置 -PauratipJar=...")
 }
 
 repositories {

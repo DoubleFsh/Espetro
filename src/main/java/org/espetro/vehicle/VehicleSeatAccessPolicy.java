@@ -30,16 +30,6 @@ public final class VehicleSeatAccessPolicy {
     private VehicleSeatAccessPolicy() {
     }
 
-    static int legacyVehicleCrewSeatCount(SbwVehicleSeatResolver.Kind kind) {
-        if (kind == null) return 0;
-        return switch (kind) {
-            case TANK -> 3;
-            case IFV -> 2;
-            case HELICOPTER -> 1;
-            case OTHER -> 0;
-        };
-    }
-
     static boolean requiresVehicleCrew(int requiredSeatCount, int seatIndex) {
         return seatIndex >= 0 && seatIndex < Math.max(0, requiredSeatCount);
     }
@@ -106,6 +96,13 @@ public final class VehicleSeatAccessPolicy {
         Entity vehicle = event.getEntityBeingMounted();
         if (!SbwVehicleSeatResolver.isSupportedVehicle(vehicle)) return;
 
+        // 小队归属准入（主城阶段放行；非队长成员不能上未认领/非本队的载具）。
+        // 作为读条通道 tryMount 之外的最后防线，覆盖任何其他上车路径。
+        if (!VehicleEventHandler.isMountAllowed(player, vehicle)) {
+            event.setCanceled(true);
+            return;
+        }
+
         int requiredSeatCount = getRequiredVehicleCrewSeatCount(vehicle);
         if (!isRestrictionActive(player) || isVehicleCrew(player) || requiredSeatCount <= 0) {
             return;
@@ -131,11 +128,12 @@ public final class VehicleSeatAccessPolicy {
         if (factionId != null && vehicleType != null) {
             VehicleConfig.VehicleTypeConfig config =
                 VehicleConfig.getVehicleConfig(factionId, vehicleType);
+            // 仅以编制 JSON 声明的 vehicle_crew_seats 为准；未声明（null）即无需载具组员装备。
             if (config != null && config.vehicleCrewSeats != null) {
                 return Math.max(0, config.vehicleCrewSeats);
             }
         }
-        return legacyVehicleCrewSeatCount(SbwVehicleSeatResolver.getKind(vehicle));
+        return 0;
     }
 
     private static boolean isRestrictionActive(ServerPlayer player) {

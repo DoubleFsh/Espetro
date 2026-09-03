@@ -1337,9 +1337,9 @@ public class UnifiedDeployScreen extends EspetroMenuScreen {
         int btnSpacing = 1;
         int row = 0;
 
-        // 原部署点
+        // 主基地
         if (hasDeployPoint) {
-            String deployLabel = "\u00a7e\u25c6 原部署点 \u00a77(" + deployPointPos + ")";
+            String deployLabel = "\u00a7e\u25c6 主基地 \u00a77(" + deployPointPos + ")";
             String deployCommand = "bastion deploy";
             EspButton btn = new EspButton(
                 2, row * (BTN_H + btnSpacing), btnW, BTN_H,
@@ -2538,7 +2538,7 @@ public class UnifiedDeployScreen extends EspetroMenuScreen {
     /** 客户端侧选职拒绝原因（与服务端规则对齐的展示层）。 */
     private String resolveClassDenialMessage(UnifiedDeployScreenPacket.ClassInfo cls) {
         if (!isClassSelectionLocationAllowed()) {
-            return "只能在选择部署点时、原部署点附近或己方 Radio 轮盘中选择职业。";
+            return "只能在选择部署点时、主基地附近或己方 Radio 轮盘中选择职业。";
         }
         if (getClassSwitchCooldownRemaining() > 0) {
             return "职业切换冷却中，还需等待 " + getClassSwitchCooldownRemaining() + " 秒。";

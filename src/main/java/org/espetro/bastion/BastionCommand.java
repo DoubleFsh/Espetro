@@ -63,7 +63,7 @@ public class BastionCommand {
                     player.sendSystemMessage(Component.literal("§6=== 兵站命令帮助 ==="));
                     player.sendSystemMessage(Component.literal("§e/bastion list §7- 查看可用兵站列表"));
                     player.sendSystemMessage(Component.literal("§e/bastion select <id> §7- 在指定兵站或队伍集结点复活"));
-                    player.sendSystemMessage(Component.literal("§e/bastion deploy §7- 在原部署点复活"));
+                    player.sendSystemMessage(Component.literal("§e/bastion deploy §7- 在主基地复活"));
                     player.sendSystemMessage(Component.literal("§7(点击聊天中的链接可直接选择)"));
                     return 1;
                 })
@@ -124,18 +124,18 @@ public class BastionCommand {
             return 0;
         }
 
-        // 检查是否有原部署点记录
+        // 检查是否有主基地记录
         if (!BastionManager.getInstance().isWaitingForBastion(player.getUUID())) {
             player.sendSystemMessage(Component.literal("§c你不在等待复活状态！"));
             return 0;
         }
         BastionManager.DeployPoint deployPoint = BastionManager.getInstance().getPlayerDeployPoint(player.getUUID());
         if (deployPoint == null) {
-            player.sendSystemMessage(Component.literal("§c无法找到原部署点！"));
+            player.sendSystemMessage(Component.literal("§c无法找到主基地！"));
             return 0;
         }
 
-        // 执行原部署点复活
+        // 执行主基地复活
         if (BastionManager.getInstance().respawnAtDeployPoint(
             org.espetro.mapconfig.BattlefieldContext.requireBattlefield(player.server), player)) {
             // 战局中加入：部署完成后触发职业选择

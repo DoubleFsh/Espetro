@@ -148,52 +148,71 @@ public class VehicleEventHandler {
         Entity target = event.getTarget();
         if (!isSbwVehicle(target)) return;
 
+        if (!isMountAllowed(player, target)) {
+            event.setCanceled(true);
+        }
+    }
+
+    /**
+     * 载具小队归属准入检查（对局中生效）。
+     * <p>同时被右键交互（{@link #onVehicleEntityInteract}）与读条上车通道
+     * （{@code VehicleMountServer.tryMount}）调用，防止非队长成员绕过交互拦截
+     * 直接上未认领/非本队的载具。主城阶段放行（原版 SBW 交互不受限制）。</p>
+     *
+     * @return true = 允许上车；false = 拒绝（已向队长发起认领申请）
+     */
+    public static boolean isMountAllowed(ServerPlayer player, Entity vehicle) {
+        if (player == null || !isSbwVehicle(vehicle)) return true;
+        // 主城阶段放行：使用原版 SBW 上车，不限制。
+        if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase().isLobbyLike()) {
+            return true;
+        }
+
         String team = Espetro.getPlayerTeam(player);
-        if (team == null) return; // 不在阵营中的玩家不受限制
+        if (team == null) return true; // 不在阵营中的玩家不受限制
 
         team = team.toUpperCase();
         SquadManager sm = SquadManager.getInstance();
         int playerSquad = sm.getPlayerSquadId(player.getUUID());
         boolean isLeader = sm.isSquadLeader(player.getUUID());
 
-        int vehicleSquad = VehicleSquadOwnership.getSquadId(target);
+        int vehicleSquad = VehicleSquadOwnership.getSquadId(vehicle);
         boolean vehicleOwned = vehicleSquad != -1;
-        boolean vehicleHasPassengers = !target.getPassengers().isEmpty();
+        boolean vehicleHasPassengers = !vehicle.getPassengers().isEmpty();
 
         // 1) 载具上有人 → 任何人可登
         if (vehicleHasPassengers) {
-            return;
+            return true;
         }
 
         // 2) 载具无人 → 按归属规则判断
         if (!vehicleOwned) {
             // 无归属：只有小队长可登（自动归属），小队员触发申请
             if (isLeader) {
-                return; // 允许交互，挂载时自动归属
+                return true; // 允许交互，挂载时自动归属
             }
             if (playerSquad != SquadManager.NO_SQUAD) {
-                submitClaim(player, target, playerSquad, team, sm);
+                submitClaim(player, vehicle, playerSquad, team, sm);
             }
-            event.setCanceled(true);
-            return;
+            return false;
         }
 
         // 已归属且无人
         if (playerSquad == vehicleSquad) {
             // 本队队员可直接登（包含队长）
-            return;
+            return true;
         }
 
         if (isLeader) {
             // 别队队长登空载具 → 允许交互，挂载时重新归属
-            return;
+            return true;
         }
 
         if (playerSquad != SquadManager.NO_SQUAD) {
             // 别队小队员 → 触发申请
-            submitClaim(player, target, playerSquad, team, sm);
+            submitClaim(player, vehicle, playerSquad, team, sm);
         }
-        event.setCanceled(true);
+        return false;
     }
 
     private static void submitClaim(ServerPlayer member, Entity vehicle, int squadId,
@@ -229,6 +248,12 @@ public class VehicleEventHandler {
 
         Entity vehicle = event.getEntityBeingMounted();
         if (!isSbwVehicle(vehicle)) return;
+
+        // 主城阶段不进行小队归属：主城使用原版 SBW 上车（测试/自由使用），
+        // 不应污染对局中的载具归属状态。
+        if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase().isLobbyLike()) {
+            return;
+        }
 
         SquadManager sm = SquadManager.getInstance();
         if (!sm.isSquadLeader(player.getUUID())) return;

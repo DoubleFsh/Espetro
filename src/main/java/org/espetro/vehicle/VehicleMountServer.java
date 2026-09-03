@@ -38,6 +38,11 @@ public final class VehicleMountServer {
             cancel(player);
             return;
         }
+        // 主城阶段：跳过读条，立即上车（原版 SBW 交互行为）。
+        if (org.espetro.team.GameStateManager.getInstance().getCurrentPhase().isLobbyLike()) {
+            tryMount(player, entity);
+            return;
+        }
         int delay = VehicleInteractionConfig.mountDelayTicks();
         if (delay <= 0) {
             tryMount(player, entity);
@@ -125,6 +130,12 @@ public final class VehicleMountServer {
             return;
         }
         if (player.distanceTo(entity) > VehicleInteractionConfig.mountMaxDistance() + 0.75) {
+            return;
+        }
+        // 读条上车通道同样执行小队归属准入（主城阶段放行），防止非队长成员
+        // 绕过右键交互拦截直接上未认领/非本队的载具。
+        if (!VehicleEventHandler.isMountAllowed(player, entity)) {
+            cancel(player);
             return;
         }
         player.startRiding(entity, true);

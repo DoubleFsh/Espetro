@@ -1416,7 +1416,6 @@ public class BastionManager {
         armorStand.setCustomNameVisible(false);
         syncCoreArmorStand(armorStand);
         armorStand.setHealth(armorStandHealth);
-
         ItemStack helmet = new ItemStack(Items.LEATHER_HELMET);
         CompoundTag displayTag = new CompoundTag();
         displayTag.putInt("color", "ATTACK".equals(team) ? 0xAA0000 : 0x0000AA);
@@ -1433,7 +1432,10 @@ public class BastionManager {
         if (maxHealth != null && maxHealth.getBaseValue() != armorStandHealth) {
             maxHealth.setBaseValue(armorStandHealth);
         }
-        armorStand.setInvulnerable(false);
+        // 核心隐藏 + 无敌：兵站只能通过工事结构（铲子拆除/爆炸）摧毁，
+        // 不再能直接攻击盔甲架核心（读档后再次确保）。
+        armorStand.setInvulnerable(true);
+        armorStand.setInvisible(true);
         armorStand.setSilent(true);
         armorStand.addTag("bastion_armor_stand");
     }
@@ -1686,7 +1688,7 @@ public class BastionManager {
         ));
         org.espetro.team.GameStateManager.getInstance().applyBattlefieldMiningRestriction(player);
 
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a已在原部署点复活！"));
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a已在主基地复活！"));
 
         return true;
     }

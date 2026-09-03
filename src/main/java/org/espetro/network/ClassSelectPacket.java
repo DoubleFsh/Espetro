@@ -134,7 +134,12 @@ public class ClassSelectPacket {
              */
             boolean allowed;
             if (source == Source.RADIO) {
-                allowed = RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos);
+                // 主基地（原部署点）无限弹药箱本身即为合法换职区，无需附近 Radio。
+                boolean mainBaseAmmo = org.espetro.logistics.DeploySupplyStationPlacer
+                    .isMainBaseAmmoCrate(
+                        (net.minecraft.server.level.ServerLevel) player.serverLevel(), sourcePos);
+                allowed = mainBaseAmmo
+                    || RadioRadialPacket.isFriendlyRadioNearby(player, sourcePos);
             } else if (source == Source.VEHICLE) {
                 // 同队 + 五格视线 + 补给载具类型（最终提交时再次权威校验）
                 allowed = vehicleId != null

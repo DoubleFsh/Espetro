@@ -173,13 +173,48 @@ public class TeamSelectionScreen extends EspetroMenuScreen {
 
     private static ResourceLocation resolveTexture(String fullPath, ResourceLocation fallback) {
         if (fullPath == null || fullPath.isEmpty()) return fallback;
-        int colon = fullPath.indexOf(':');
-        if (colon > 0) {
-            return ResourceLocation.fromNamespaceAndPath(
-                fullPath.substring(0, colon), fullPath.substring(colon + 1));
+        String trimmed = fullPath.trim();
+        // 1. 尝试 ResourceLocation 格式（espetro:textures/...）且资源确实存在，
+        //    避免客户端资源缺失时直接 blit 显示紫黑块。
+        ResourceLocation rl = ResourceLocation.tryParse(trimmed);
+        if (rl != null) {
+            try {
+                if (Minecraft.getInstance().getResourceManager()
+                        .getResource(rl).isPresent()) {
+                    return rl;
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
         }
-        ResourceLocation rl = ResourceLocation.tryParse(fullPath);
-        return rl != null ? rl : fallback;
+        // 2. 尝试客户端本地 EsFactions/ 目录下的图片文件（单机/局域网备用）。
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null) {
+            java.nio.file.Path imagePath =
+                FactionSelectionImageResolver.resolveClientFile(mc.gameDirectory.toPath(), trimmed);
+            if (imagePath != null) {
+                ResourceLocation dynamic = tryRegisterLocalImage(imagePath, trimmed);
+                if (dynamic != null) return dynamic;
+            }
+        }
+        // 3. 回退默认图。
+        return fallback;
+    }
+
+    /** 读取客户端本地图片并注册动态纹理；失败返回 null。 */
+    private static ResourceLocation tryRegisterLocalImage(java.nio.file.Path imagePath, String key) {
+        try (java.io.InputStream in = java.nio.file.Files.newInputStream(imagePath)) {
+            com.mojang.blaze3d.platform.NativeImage image =
+                com.mojang.blaze3d.platform.NativeImage.read(in);
+            net.minecraft.client.renderer.texture.DynamicTexture texture =
+                new net.minecraft.client.renderer.texture.DynamicTexture(image);
+            ResourceLocation location = ResourceLocation.fromNamespaceAndPath(
+                "espetro", "dynamic/team_select_" + Integer.toHexString(key.hashCode()));
+            Minecraft.getInstance().getTextureManager().register(location, texture);
+            return location;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     /** 按当前 myTeam 和 lockedTeam 刷新两侧图片的边框。 */

@@ -89,6 +89,8 @@ public class GameStateManager {
     private final Map<UUID, String> assignedTeams = new java.util.HashMap<>();
     // 已在部署阶段选择过职业的玩家（防止重复选择）
     private final Set<UUID> deployClassSelected = new HashSet<>();
+    /** 管理员设为观察者的玩家（局内观战）：本局结束（beginCleanup/forceStop/reset）时自动清除恢复。 */
+    private final Set<UUID> observers = new HashSet<>();
     private int teamSelectTickCounter = 0;
     private int roundEndTickCounter = 0;
     private String pendingRoundWinner = null;
@@ -345,6 +347,8 @@ public class GameStateManager {
         teamSelectedPlayers.clear();
         midGameJoiners.clear();
         teamSelectTickCounter = 0;
+        // 新局选边开始：上一局的观察者全部恢复为正常玩家
+        clearAllObservers();
         setPhase(GamePhase.TEAM_SELECT);
         TeamManager.refreshDisplayNames(server);
 
@@ -1275,6 +1279,8 @@ public class GameStateManager {
         pendingRoundWinner = null;
         pendingMap = null;
         currentPhase = GamePhase.LOBBY;
+        // 局重置：观察者恢复为正常玩家
+        clearAllObservers();
 
         if (server != null) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -1321,6 +1327,8 @@ public class GameStateManager {
         int playerCount = server.getPlayerCount();
 
         setPhase(GamePhase.CLEANUP);
+        // 强制结束：观察者恢复为正常玩家
+        clearAllObservers();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             clearPlayerRoundAssignment(player);
             player.removeAllEffects();
@@ -1408,6 +1416,25 @@ public class GameStateManager {
         PlayerMatchStatsManager.getInstance().onPlayerJoin(player);
         // 入服时主动推送指挥官技能数据，确保客户端轮盘可立即显示技能入口
         NetworkManager.sendCommanderSkillSync(player);
+
+        // 观察者重连：本局内保持旁观，不重新编队、不强制回城/等待点。
+        if (observers.contains(player.getUUID())) {
+            player.removeAllEffects();
+            player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            player.setHealth(player.getMaxHealth());
+            player.sendSystemMessage(Component.literal(
+                "§e你仍是观察者，本局结束后自动恢复为正常玩家。"));
+            return;
+        }
+
+        // 入服即同步当前游戏阶段，防止客户端阶段停留在默认主城导致
+        // 误判主城（跳过上车读条、放行原版交互）而无法在战局内上车。
+        org.espetro.network.NetworkManager.NET.send(
+            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+            new org.espetro.network.GamePhaseSyncPacket(
+                currentPhase,
+                getCurrentMapFolder(),
+                BattlefieldContext.getObjectiveMode()));
 
         switch (currentPhase) {
             case LOBBY, WAITING_FOR_PLAYERS -> {
@@ -1897,6 +1924,10 @@ public class GameStateManager {
         boolean wasMidGameJoiner = midGameJoiners.remove(player.getUUID());
         applyBattlefieldMiningRestriction(player);
 
+        // 每次部署完成都核对一次载具：重发全部活跃载具/补给站（spawn + teleport + 数据），
+        // 确保客户端与服务端载具状态一致（部署瞬间客户端区块可能尚未就绪）。
+        org.espetro.vehicle.VehicleManager.getInstance().resyncVehiclesForPlayer(player);
+
         // 落地后若已选职却未发装（等待点选职失败 / 背包被清），补发一次
         ClassEquipment.ensureEquippedIfNeeded(player);
 
@@ -2014,6 +2045,8 @@ public class GameStateManager {
             return;
         }
         setPhase(GamePhase.CLEANUP);
+        // 本局结束：观察者恢复为正常玩家
+        clearAllObservers();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             applyHubState(player);
             ClassEquipment.clearEquipment(player);
@@ -2053,6 +2086,92 @@ public class GameStateManager {
         if (squadTeam != null) {
             NetworkManager.syncSquadsToTeam(squadTeam);
         }
+    }
+
+    // ========== 管理员：跳边 / 观战 ==========
+
+    public boolean isObserver(UUID playerId) {
+        return playerId != null && observers.contains(playerId);
+    }
+
+    /**
+     * 管理员将玩家切换为观察者：离开任何队伍，旁观模式自由观战。
+     * 本局结束（beginCleanup/forceStop/resetGame）后自动恢复为正常玩家。
+     */
+    public boolean adminSetObserver(ServerPlayer player) {
+        if (player == null) return false;
+        UUID id = player.getUUID();
+        observers.add(id);
+        clearPlayerRoundAssignment(player);
+        BastionManager.getInstance().clearWaiting(id);
+        BastionManager.getInstance().unlockPlayerPosition(id);
+        player.removeAllEffects();
+        player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+        player.setHealth(player.getMaxHealth());
+        player.sendSystemMessage(Component.literal(
+            "§e你已被管理员设为观察者，本局结束后将自动恢复为正常玩家。"));
+        return true;
+    }
+
+    /**
+     * 管理员跳边：
+     * <ul>
+     *   <li>观察者玩家：随机编入一方并正常进入部署流程。</li>
+     *   <li>普通玩家：立即击杀并将队伍更换到对面。</li>
+     * </ul>
+     * @return 目标队伍（ATTACK/DEFEND），失败返回 null
+     */
+    @javax.annotation.Nullable
+    public String adminChangeTeam(ServerPlayer player) {
+        if (player == null) return null;
+        UUID id = player.getUUID();
+        if (observers.remove(id)) {
+            String team = java.util.concurrent.ThreadLocalRandom.current().nextBoolean()
+                ? "ATTACK" : "DEFEND";
+            clearPlayerRoundAssignment(player);
+            applyTeamAssignmentToPlayer(player, team);
+            // applyTeamAssignmentToPlayer 只设置了 ATTACK/DEFEND 作为临时 factionId；
+            // 补上实际编制 ID，与中途加入流程一致。
+            ClassSelectManager selectManager = ClassSelectManager.getInstance();
+            String factionId = "ATTACK".equals(team)
+                ? selectManager.getFinalAttackClass()
+                : selectManager.getFinalDefendClass();
+            if (factionId == null) factionId = team;
+            ClassCountManager.getInstance().setPlayerFaction(player.getUUID(), factionId);
+            player.removeAllEffects();
+            // 观战玩家编入后直接进入部署流程（无需击杀，人已在战场）。
+            if (currentPhase == GamePhase.DEPLOYING || currentPhase == GamePhase.BATTLE) {
+                prepareDeploySelection(player, team);
+                NetworkManager.queueUnifiedDeployScreen(player, getDeployTimeRemainingSeconds());
+            } else {
+                applyMatchHoldState(player, HoldAnchor.AUTO);
+            }
+            player.sendSystemMessage(Component.literal(
+                "§a你已被管理员编入" + TeamDisplayNames.coloredDisplayName(team) + "，请选择部署点。"));
+            Espetro.broadcastToAll("§e[管理] " + player.getName().getString()
+                + " 已加入" + TeamDisplayNames.coloredDisplayName(team));
+            return team;
+        }
+
+        String current = ClassCountManager.getInstance().getPlayerTeam(id);
+        if (current == null) {
+            current = getTeamFromFactionStatic(ClassCountManager.getInstance().getPlayerFaction(id));
+        }
+        String target = "ATTACK".equals(current) ? "DEFEND" : "ATTACK";
+        clearPlayerRoundAssignment(player);
+        applyTeamAssignmentToPlayer(player, target);
+        // 先换队再击杀：死亡流程会按新队伍记录部署点并进入部署选择。
+        player.kill();
+        player.sendSystemMessage(Component.literal(
+            "§e你已被管理员跳边至" + TeamDisplayNames.coloredDisplayName(target) + "，即将重生。"));
+        Espetro.broadcastToAll("§e[管理] " + player.getName().getString()
+            + " 已跳边至" + TeamDisplayNames.coloredDisplayName(target));
+        return target;
+    }
+
+    /** 本局结束：观察者恢复为正常玩家（保留 spectators 本身由回城流程处理）。 */
+    public void clearAllObservers() {
+        observers.clear();
     }
 
     private void broadcastHubStatus() {

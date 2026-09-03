@@ -426,7 +426,7 @@ public class ClassCountManager {
             case INVALID_VARIANT -> "§c无效的职业装备变体。";
             case INVALID_CLASS -> "§c该职业不属于你当前选择的编制。";
             case NO_TEAM -> "§c你尚未加入攻防方，无法选择职业。";
-            case OUT_OF_RANGE -> "§c只能在选择部署点时、原部署点附近或己方 Radio 轮盘中选择职业！";
+            case OUT_OF_RANGE -> "§c只能在选择部署点时、主基地附近或己方 Radio 轮盘中选择职业！";
             case LEADER_ONLY -> "§c该职业仅小队长可选！";
             case UNLOCK_MIN_SQUAD -> "§c小队人数不足，无法选择该职业！";
             case UNLOCK_PER_N, UNLOCK_PER_N_FULL -> "§c该职业名额已用完或小队人数不足！";

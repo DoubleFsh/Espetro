@@ -51,6 +51,26 @@ public final class SbwVehicleSeatResolver {
         return vehicle != null && access != null && access.vehicleClass.isInstance(vehicle);
     }
 
+    /**
+     * 反射调用 SBW {@code changeSeat(Entity, int)}。
+     * 客户端用于本地预测（配合 {@code VehicleChangeSeatDelayMixin} 的 armed 门控放行）；
+     * 服务端由 SBW 原版 {@code ChangeVehicleSeatMessage.handler} 权威执行并广播乘客同步。
+     */
+    public static boolean changeSeat(@Nullable Entity vehicle, @Nullable Entity passenger,
+                                     int seatIndex) {
+        VehicleAccess access = access();
+        if (vehicle == null || passenger == null || seatIndex < 0 || access == null
+            || !access.vehicleClass.isInstance(vehicle)) {
+            return false;
+        }
+        try {
+            Object result = access.changeSeat.invoke(vehicle, passenger, seatIndex);
+            return result instanceof Boolean value && value;
+        } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
     public static Kind getKind(@Nullable Entity vehicle) {
         VehicleAccess access = access();
         if (vehicle == null || access == null || !access.vehicleClass.isInstance(vehicle)) {
@@ -185,6 +205,7 @@ public final class SbwVehicleSeatResolver {
                         vehicleClass.getMethod("getOrderedPassengers"),
                         vehicleClass.getMethod("getEntityIndexOverride"),
                         vehicleClass.getMethod("setEntityIndexOverride", Function.class),
+                        vehicleClass.getMethod("changeSeat", Entity.class, int.class),
                         true);
                 } catch (ReflectiveOperationException | LinkageError ignored) {
                     cached = VehicleAccess.UNAVAILABLE;
@@ -198,9 +219,10 @@ public final class SbwVehicleSeatResolver {
     private record VehicleAccess(Class<?> vehicleClass, Method getVehicleType,
                                  Method getSeatIndex, Method getOrderedPassengers,
                                  Method getEntityIndexOverride, Method setEntityIndexOverride,
+                                 Method changeSeat,
                                  boolean available) {
         private static final VehicleAccess UNAVAILABLE = new VehicleAccess(
-            Object.class, null, null, null, null, null, false);
+            Object.class, null, null, null, null, null, null, false);
     }
 
     /** Server-thread-only function consumed by SBW's addPassenger implementation. */

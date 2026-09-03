@@ -352,6 +352,27 @@ public class RadioRadialPacket {
         BlockPos playerPos = player.blockPosition();
         BlockPos anchor = clickPos != null ? clickPos : playerPos;
 
+        // 点击位置是己方已注册弹药箱：直接按其归属 Radio 放行。
+        // 弹药箱建造时已校验在己方 Radio 覆盖范围内，无需再做「附近最近 Radio」
+        // 模糊搜索（depositRadius 小于 radioBuildRadius，边缘 FOB 的弹药箱会被误拒）。
+        if (player.level() instanceof net.minecraft.server.level.ServerLevel level) {
+            org.espetro.bastion.FortificationManager fm =
+                org.espetro.bastion.FortificationManager.getInstance();
+            BastionData crateRadio = fm.findRadioForAmmoCrate(level, anchor, team);
+            if (crateRadio == null) {
+                BastionData byShulker =
+                    BastionManager.getInstance().findBastionByShulkerPos(anchor);
+                if (byShulker != null && team.equals(byShulker.getTeam())
+                    && byShulker.isActive()) {
+                    crateRadio = byShulker;
+                }
+            }
+            if (crateRadio != null && crateRadio.isActive() && crateRadio.isRadio()
+                && crateRadio.getLevel() == level) {
+                return crateRadio;
+            }
+        }
+
         // 优先：点击的 Radio 属于己方
         BastionData atClick = BastionManager.getInstance().findRadioByBlockPos(anchor);
         if (atClick != null && team.equals(atClick.getTeam()) && atClick.isActive()) {

@@ -1,7 +1,7 @@
-Java Launcher: /home/shu/.jdks/ms-17.0.19/bin/java
-Arguments: '--inJar, /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20/forge-1.20.1-47.4.20-injected.jar, --outJar, /home/shu/Java/Projects/Espetro/build/fg_cache/net/minecraftforge/forge/1.20.1-47.4.20_mapped_official_1.20.1/forge-1.20.1-47.4.20_mapped_official_1.20.1.jar, --logFile, accesstransform.log, --atFile, /home/shu/Java/Projects/Espetro/src/main/resources/META-INF/accesstransformer.cfg, --atFile, /home/shu/Java/Projects/Espetro/build/_atJar_4/parent_at.cfg'
+Java Launcher: C:\Program Files\Java\jdk-17\bin\java.exe
+Arguments: '--inJar, D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.22\forge-1.20.1-47.4.22-injected.jar, --outJar, D:\minecraft\modp\Espetro\build\fg_cache\net\minecraftforge\forge\1.20.1-47.4.22_mapped_official_1.20.1\forge-1.20.1-47.4.22_mapped_official_1.20.1.jar, --logFile, accesstransform.log, --atFile, D:\minecraft\modp\Espetro\src\main\resources\META-INF\accesstransformer.cfg, --atFile, D:\minecraft\modp\Espetro\build\_atJar_4\parent_at.cfg'
 Classpath:
- - /home/shu/.gradle/caches/forge_gradle/maven_downloader/net/minecraftforge/accesstransformers/8.2.14/accesstransformers-8.2.14-fatjar.jar
-Working directory: /home/shu/Java/Projects/Espetro/build/_atJar_4
+ - C:\Users\Administrator\.gradle\caches\forge_gradle\maven_downloader\net\minecraftforge\accesstransformers\8.2.14\accesstransformers-8.2.14-fatjar.jar
+Working directory: D:\minecraft\modp\Espetro\build\_atJar_4
 Main class: net.minecraftforge.accesstransformer.TransformerProcessor
 ====================================

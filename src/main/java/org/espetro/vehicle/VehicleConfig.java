@@ -195,6 +195,8 @@ public class VehicleConfig {
                 cfg.displayName = firstNonBlank(data.displayName, type);
                 cfg.troopValue = Math.max(0, data.troopValue);
                 cfg.nbt = firstNonBlank(data.nbt, null);
+                // 必须复制组员座位配置，否则运行时所有载具都会被当作无需组员装备
+                cfg.vehicleCrewSeats = data.vehicleCrewSeats;
                 applySupplyProfile(cfg, data.supplyVeh, data.fightVeh, data.capacity);
                 if (cfg.legacyDefaultedToFightVehicle) legacyVehicleTypes++;
                 if (data.initialDeployDelay != null) {

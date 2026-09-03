@@ -10,6 +10,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
 import org.espetro.Espetro;
+import org.espetro.team.GameStateManager;
 
 @Mod.EventBusSubscriber(modid = Espetro.MOD_ID)
 public final class VehicleMountEvents {
@@ -34,6 +35,10 @@ public final class VehicleMountEvents {
             return;
         }
         if (player.getVehicle() != null) {
+            return;
+        }
+        // 主城阶段：跳过读条，放行原版 SBW 交互上车。
+        if (GameStateManager.getInstance().getCurrentPhase().isLobbyLike()) {
             return;
         }
         if (VehicleInteractionConfig.mountDelayTicks() <= 0) {

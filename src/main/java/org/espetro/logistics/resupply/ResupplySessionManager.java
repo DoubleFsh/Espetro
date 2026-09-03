@@ -464,6 +464,13 @@ public final class ResupplySessionManager {
                 amount -> true, amount -> { }, () -> { });
         }
         if (ref.kind() == ResupplySourceRef.Kind.RADIO) {
+            // 主基地（原部署点）无限弹药箱：轮盘「补给步兵」从弹药箱发起时
+            // source 仍标记为 radio(点击位置)，此处识别为主基地无限源。
+            if (org.espetro.logistics.DeploySupplyStationPlacer.isMainBaseAmmoCrate(
+                    (net.minecraft.server.level.ServerLevel) player.serverLevel(), ref.blockPos())) {
+                return new ResolvedSource(new UUID(0L, 1L), () -> Integer.MAX_VALUE,
+                    amount -> true, amount -> { }, () -> { });
+            }
             BastionData nearby = org.espetro.network.RadioRadialPacket
                 .findFriendlyRadioNearby(player, ref.blockPos());
             if (nearby == null || expectedAccount != null

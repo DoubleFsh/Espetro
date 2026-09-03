@@ -9,6 +9,7 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
+import org.espetro.client.gui.ClientGameState;
 import org.espetro.client.gui.VehicleWheelController;
 import org.espetro.network.MountRequestPacket;
 import org.espetro.network.NetworkManager;
@@ -46,6 +47,10 @@ public final class VehicleMountClientGate {
         if (!SbwVehicleSeatResolver.isSupportedVehicle(event.getTarget())) {
             return;
         }
+        // 主城阶段：跳过读条，放行原版 SBW 交互上车（不使用本 mod 的上车读条/拦截）。
+        if (ClientGameState.getCurrentPhase().isLobbyLike()) {
+            return;
+        }
         if (VehicleInteractionConfig.mountDelayTicks() <= 0) {
             return;
         }
@@ -65,6 +70,12 @@ public final class VehicleMountClientGate {
 
         if (mc.player.getVehicle() != null) {
             resetMount(false);
+            return;
+        }
+
+        // 主城阶段：跳过上车读条，完全走原版 SBW 交互上车。
+        if (ClientGameState.getCurrentPhase().isLobbyLike()) {
+            resetMount(true);
             return;
         }
 

@@ -11,6 +11,10 @@ import org.espetro.team.GamePhase;
  */
 public class ClientPacketHandlers {
 
+    public static void handleHitboxPolicy(HitboxPolicyPacket packet) {
+        org.espetro.client.vehicle.HitboxPolicyController.onPolicy(packet);
+    }
+
     public static void handleResupplyCatalog(ResupplyCatalogPacket packet) {
         org.espetro.client.gui.ResupplyRadialController.onCatalog(packet);
     }

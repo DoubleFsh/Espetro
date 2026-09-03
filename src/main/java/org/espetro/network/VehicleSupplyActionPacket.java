@@ -135,16 +135,17 @@ public final class VehicleSupplyActionPacket {
             player.displayClientMessage(Component.literal("§e载具容量已满。"), true);
             return;
         }
-        int available = interaction.mainBase() ? wanted
+        // 主基地/骑乘在载具上：不经过 FOB Radio 库存，直接按需求装载
+        int available = interaction.unrestricted() ? wanted
             : Math.min(wanted, interaction.radio().getAmmunitionSupplies());
         if (available <= 0) {
             player.displayClientMessage(Component.literal("§c补给点弹药不足。"), true);
             return;
         }
-        if (!interaction.mainBase()
+        if (!interaction.unrestricted()
             && !interaction.radio().consumeAmmunitionSupplies(available)) return;
         int added = supply.addAmmo(available);
-        if (added < available && !interaction.mainBase()) {
+        if (added < available && !interaction.unrestricted()) {
             interaction.radio().addAmmunitionSupplies(
                 available - added, LogisticsConfig.get().maxAmmunition);
         }
@@ -154,7 +155,7 @@ public final class VehicleSupplyActionPacket {
     private static void unloadAmmo(ServerPlayer player, Interaction interaction, int chunk) {
         VehicleManager.VehicleSupplyState supply = interaction.supply();
         int removable = Math.min(chunk, supply.getAmmo());
-        if (!interaction.mainBase()) {
+        if (!interaction.unrestricted()) {
             removable = Math.min(removable,
                 Math.max(0, LogisticsConfig.get().maxAmmunition
                     - interaction.radio().getAmmunitionSupplies()));
@@ -164,7 +165,7 @@ public final class VehicleSupplyActionPacket {
             return;
         }
         int removed = supply.removeAmmo(removable);
-        if (!interaction.mainBase()) {
+        if (!interaction.unrestricted()) {
             interaction.radio().addAmmunitionSupplies(removed, LogisticsConfig.get().maxAmmunition);
         }
         notifyRadio(interaction.radio());
@@ -177,16 +178,17 @@ public final class VehicleSupplyActionPacket {
             player.displayClientMessage(Component.literal("§e载具容量已满。"), true);
             return;
         }
-        int available = interaction.mainBase() ? wanted
+        // 主基地/骑乘在载具上：不经过 FOB Radio 库存，直接按需求装载
+        int available = interaction.unrestricted() ? wanted
             : Math.min(wanted, interaction.radio().getConstructionSupplies());
         if (available <= 0) {
             player.displayClientMessage(Component.literal("§c补给点建材不足。"), true);
             return;
         }
-        if (!interaction.mainBase()
+        if (!interaction.unrestricted()
             && !interaction.radio().consumeConstructionSupplies(available)) return;
         int added = supply.addConstruction(available);
-        if (added < available && !interaction.mainBase()) {
+        if (added < available && !interaction.unrestricted()) {
             interaction.radio().addConstructionSupplies(
                 available - added, LogisticsConfig.get().maxConstruction);
         }
@@ -196,7 +198,7 @@ public final class VehicleSupplyActionPacket {
     private static void unloadConstruction(ServerPlayer player, Interaction interaction, int chunk) {
         VehicleManager.VehicleSupplyState supply = interaction.supply();
         int removable = Math.min(chunk, supply.getConstruction());
-        if (!interaction.mainBase()) {
+        if (!interaction.unrestricted()) {
             removable = Math.min(removable,
                 Math.max(0, LogisticsConfig.get().maxConstruction
                     - interaction.radio().getConstructionSupplies()));
@@ -206,7 +208,7 @@ public final class VehicleSupplyActionPacket {
             return;
         }
         int removed = supply.removeConstruction(removable);
-        if (!interaction.mainBase()) {
+        if (!interaction.unrestricted()) {
             interaction.radio().addConstructionSupplies(removed, LogisticsConfig.get().maxConstruction);
         }
         notifyRadio(interaction.radio());
@@ -254,6 +256,10 @@ public final class VehicleSupplyActionPacket {
         ServerLevel level = player.serverLevel();
         BlockPos vehiclePos = entity.blockPosition();
         boolean mainBase = isAtMainBase(level, vehiclePos, team);
+        // 骑乘在载具上本身不授予装卸权限：装卸必须在主基地或 FOB 覆盖范围内。
+        boolean ridingThisVehicle = player.getVehicle() != null
+            && (vehicleId.equals(player.getVehicle().getUUID())
+                || vehicleId.equals(player.getVehicle().getRootVehicle().getUUID()));
         BastionData radio = null;
         if (!mainBase) {
             if (config.supplyVeh) {
@@ -269,7 +275,7 @@ public final class VehicleSupplyActionPacket {
         boolean canTransferAmmo = supplyLike && (mainBase || radio != null);
         boolean canTransferConstruction = config.supplyVeh && canTransferAmmo;
         return new Interaction(vehicleId, factionId, config, supply, mainBase, radio,
-            canTransferAmmo, canTransferConstruction);
+            ridingThisVehicle, canTransferAmmo, canTransferConstruction);
     }
 
     static boolean isAtMainBase(ServerLevel level, BlockPos vehiclePos, String team) {
@@ -292,8 +298,13 @@ public final class VehicleSupplyActionPacket {
         VehicleManager.VehicleSupplyState supply,
         boolean mainBase,
         @Nullable BastionData radio,
+        boolean ridingThisVehicle,
         boolean canTransferAmmo,
         boolean canTransferConstruction
     ) {
+        /** 主基地装卸不经过 FOB Radio 库存；骑乘载具本身不授予装卸权限。 */
+        boolean unrestricted() {
+            return mainBase;
+        }
     }
 }

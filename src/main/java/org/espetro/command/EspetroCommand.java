@@ -15,6 +15,7 @@ import org.espetro.team.ClassCountManager;
 import org.espetro.team.FactionDataLoader;
 import org.espetro.team.FactionDataProvider;
 import org.espetro.team.GameStateManager;
+import org.espetro.team.TeamDisplayNames;
 import org.espetro.team.TeamManager;
 import org.espetro.team.SpawnPointConfig;
 import org.espetro.team.TroopCountManager;
@@ -412,6 +413,81 @@ public class EspetroCommand {
                             return 1;
                         })
                     )
+                )
+            )
+            // 碰撞体积（F3+B）显示策略：/espetro hitbox on|off
+            .then(Commands.literal("hitbox")
+                .then(Commands.literal("on")
+                    .executes(ctx -> {
+                        org.espetro.network.HitboxPolicyController.setRenderHitBoxesOnServer(true);
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            "§a已允许玩家查看碰撞体积（F3+B）。"));
+                        return 1;
+                    })
+                )
+                .then(Commands.literal("off")
+                    .executes(ctx -> {
+                        org.espetro.network.HitboxPolicyController.setRenderHitBoxesOnServer(false);
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            "§e已禁止玩家查看碰撞体积（F3+B 强制关闭）。"));
+                        return 1;
+                    })
+                )
+                .executes(ctx -> {
+                    boolean current = org.espetro.network.HitboxPolicyController.isRenderHitBoxesEnabled();
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "§6[Espetro] 碰撞体积显示: " + (current ? "§a开启" : "§c关闭")
+                            + "§7（使用 /espetro hitbox on|off 切换）"));
+                    return 1;
+                })
+            )
+            // 管理员跳边：/espetro changeteam <玩家名>
+            .then(Commands.literal("changeteam")
+                .then(Commands.argument("player", StringArgumentType.string())
+                    .executes(ctx -> {
+                        String playerName = StringArgumentType.getString(ctx, "player");
+                        var target = ctx.getSource().getServer().getPlayerList()
+                            .getPlayerByName(playerName);
+                        if (target == null) {
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§c玩家不在线: " + playerName));
+                            return 0;
+                        }
+                        String team = GameStateManager.getInstance().adminChangeTeam(target);
+                        if (team == null) {
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§c跳边失败：玩家不存在或状态异常。"));
+                            return 0;
+                        }
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            "§a已将 " + playerName + " 跳边至 "
+                                + TeamDisplayNames.coloredDisplayName(team)));
+                        return 1;
+                    })
+                )
+            )
+            // 管理员观战：/espetro observer <玩家名>
+            .then(Commands.literal("observer")
+                .then(Commands.argument("player", StringArgumentType.string())
+                    .executes(ctx -> {
+                        String playerName = StringArgumentType.getString(ctx, "player");
+                        var target = ctx.getSource().getServer().getPlayerList()
+                            .getPlayerByName(playerName);
+                        if (target == null) {
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§c玩家不在线: " + playerName));
+                            return 0;
+                        }
+                        boolean ok = GameStateManager.getInstance().adminSetObserver(target);
+                        if (!ok) {
+                            ctx.getSource().sendSystemMessage(Component.literal(
+                                "§c操作失败。"));
+                            return 0;
+                        }
+                        ctx.getSource().sendSystemMessage(Component.literal(
+                            "§a已将 " + playerName + " 切换为观察者（本局结束后自动恢复）。"));
+                        return 1;
+                    })
                 )
             )
         );

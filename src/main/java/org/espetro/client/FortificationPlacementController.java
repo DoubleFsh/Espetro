@@ -160,7 +160,9 @@ public final class FortificationPlacementController {
             BlockPos pos = anchor.offset(dx, offset.y(), dz);
             next.add(new AABB(pos).inflate(0.002D));
             var state = mc.level.getBlockState(pos);
-            if (!state.isAir() && !state.is(Blocks.SNOW)) clear = false;
+            // 与服务端 spaceIsClear/isReplaceable 一致：空气、雪层及一切可替换方块
+            // （草、花、雪层、地毯等非完整方块）均可被工事覆盖
+            if (!state.isAir() && !state.is(Blocks.SNOW) && !state.canBeReplaced()) clear = false;
             if (!mc.level.getEntities((Entity) null, new AABB(pos), entity -> entity != mc.player
                 && entity instanceof LivingEntity && entity.isAlive()).isEmpty()) clear = false;
         }

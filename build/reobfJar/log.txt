@@ -175,14 +175,6 @@ Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/ti
 Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/TeamSelectionScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
-Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
@@ -193,6 +185,14 @@ Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/tick
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/ClassSelectScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
+Conflicting propagated mapping for org/espetro/client/gui/ClassSelectionScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/CommanderVoteScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
@@ -212,22 +212,12 @@ Conflicting propagated mapping for org/espetro/client/gui/FactionRevealScreen/ti
 Conflicting propagated mapping for org/espetro/client/gui/FactionRevealScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/FactionRevealScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/FactionRevealScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
-Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/removed()V from net/minecraft/client/gui/screens/Screen/removed()V: removed -> m_7861_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
 Conflicting propagated mapping for org/espetro/client/gui/UnifiedDeployScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
@@ -241,7 +231,6 @@ Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/onClose(
 Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
 Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
 Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/MapVoteScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/RoundEndScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
@@ -264,7 +253,6 @@ Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/ch
 Conflicting propagated mapping for org/espetro/client/gui/VehicleDeployScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
@@ -273,13 +261,6 @@ Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScree
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/DeployPointSelectScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
-Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
@@ -289,6 +270,42 @@ Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/mouseClick
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/SquadScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
+Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
+Conflicting propagated mapping for org/espetro/client/gui/CommanderSkillScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
+Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
+Conflicting propagated mapping for org/espetro/client/gui/PartyScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
@@ -300,23 +317,6 @@ Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/FactionSelectionScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
-Conflicting propagated mapping for org/espetro/client/gui/HubScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/keyPressed(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyPressed(III)Z: keyPressed -> m_7933_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/keyReleased(III)Z from org/espetro/client/gui/EspetroMenuScreen/keyReleased(III)Z: keyReleased -> m_7920_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseScrolled(DDD)Z from org/espetro/client/gui/EspetroMenuScreen/mouseScrolled(DDD)Z: mouseScrolled -> m_6050_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/onClose()V from net/minecraft/client/gui/screens/Screen/onClose()V: onClose -> m_7379_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseClicked(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseClicked(DDI)Z: mouseClicked -> m_6375_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
-Conflicting propagated mapping for org/espetro/client/gui/MatchScoreboardScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
 Conflicting propagated mapping for org/espetro/client/gui/PartyScreen$CreatePartyScreen/isPauseScreen()Z from org/espetro/client/aui/AuiScreen/isPauseScreen()Z: isPauseScreen -> m_7043_
 Conflicting propagated mapping for org/espetro/client/gui/PartyScreen$CreatePartyScreen/init()V from org/espetro/client/aui/AuiScreen/init()V: init -> m_7856_
 Conflicting propagated mapping for org/espetro/client/gui/PartyScreen$CreatePartyScreen/shouldCloseOnEsc()Z from net/minecraft/client/gui/screens/Screen/shouldCloseOnEsc()Z: shouldCloseOnEsc -> m_6913_
@@ -332,19 +332,19 @@ Conflicting propagated mapping for org/espetro/client/gui/SquadRadialMenuScreen/
 Conflicting propagated mapping for org/espetro/client/gui/SquadRadialMenuScreen/tick()V from org/espetro/client/gui/EspetroMenuScreen/tick()V: tick -> m_86600_
 Conflicting propagated mapping for org/espetro/client/gui/SquadRadialMenuScreen/charTyped(CI)Z from org/espetro/client/gui/EspetroMenuScreen/charTyped(CI)Z: charTyped -> m_5534_
 Conflicting propagated mapping for org/espetro/client/gui/SquadRadialMenuScreen/mouseReleased(DDI)Z from org/espetro/client/gui/EspetroMenuScreen/mouseReleased(DDI)Z: mouseReleased -> m_6348_
+Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryDimensionPackResources/open(Ljava/lang/String;)Lnet/minecraft/server/packs/PackResources; from net/minecraft/server/packs/repository/Pack$ResourcesSupplier/open(Ljava/lang/String;)Lnet/minecraft/server/packs/PackResources;: open -> m_247679_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/getMetadataSection(Lnet/minecraft/server/packs/metadata/MetadataSectionSerializer;)Ljava/lang/Object; from net/minecraft/server/packs/PackResources/getMetadataSection(Lnet/minecraft/server/packs/metadata/MetadataSectionSerializer;)Ljava/lang/Object;: getMetadataSection -> m_5550_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/getNamespaces(Lnet/minecraft/server/packs/PackType;)Ljava/util/Set; from net/minecraft/server/packs/PackResources/getNamespaces(Lnet/minecraft/server/packs/PackType;)Ljava/util/Set;: getNamespaces -> m_5698_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/getResource(Lnet/minecraft/server/packs/PackType;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/server/packs/resources/IoSupplier; from net/minecraft/server/packs/PackResources/getResource(Lnet/minecraft/server/packs/PackType;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/server/packs/resources/IoSupplier;: getResource -> m_214146_
-Conflicting propagated mapping for org/espetro/Espetro$ServerCommandHandler$1/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture; from net/minecraft/server/packs/resources/PreparableReloadListener/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;: reload -> m_5540_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/getRootResource([Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier; from net/minecraft/server/packs/PackResources/getRootResource([Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier;: getRootResource -> m_8017_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/listResources(Lnet/minecraft/server/packs/PackType;Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/server/packs/PackResources$ResourceOutput;)V from net/minecraft/server/packs/PackResources/listResources(Lnet/minecraft/server/packs/PackType;Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/server/packs/PackResources$ResourceOutput;)V: listResources -> m_8031_
 Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryPackResources/packId()Ljava/lang/String; from net/minecraft/server/packs/PackResources/packId()Ljava/lang/String;: packId -> m_5542_
+Conflicting propagated mapping for org/espetro/Espetro$ServerCommandHandler$1/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture; from net/minecraft/server/packs/resources/PreparableReloadListener/reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;: reload -> m_5540_
 Conflicting propagated mapping for org/espetro/Espetro$ServerCommandHandler$1/getName()Ljava/lang/String; from net/minecraft/server/packs/resources/PreparableReloadListener/getName()Ljava/lang/String;: getName -> m_7812_
-Conflicting propagated mapping for org/espetro/dimension/DimensionPackBootstrap$MemoryDimensionPackResources/open(Ljava/lang/String;)Lnet/minecraft/server/packs/PackResources; from net/minecraft/server/packs/repository/Pack$ResourcesSupplier/open(Ljava/lang/String;)Lnet/minecraft/server/packs/PackResources;: open -> m_247679_
-Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlock/newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity; from net/minecraft/world/level/block/EntityBlock/newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity;: newBlockEntity -> m_142194_
-Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlock/getRenderShape(Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/RenderShape; from net/minecraft/world/level/block/BaseEntityBlock/getRenderShape(Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/RenderShape;: getRenderShape -> m_7514_
 Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlockEntity/load(Lnet/minecraft/nbt/CompoundTag;)V from net/minecraft/world/level/block/entity/BlockEntity/load(Lnet/minecraft/nbt/CompoundTag;)V: load -> m_142466_
 Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlockEntity/saveAdditional(Lnet/minecraft/nbt/CompoundTag;)V from net/minecraft/world/level/block/entity/BlockEntity/saveAdditional(Lnet/minecraft/nbt/CompoundTag;)V: saveAdditional -> m_183515_
+Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlock/newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity; from net/minecraft/world/level/block/EntityBlock/newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity;: newBlockEntity -> m_142194_
+Conflicting propagated mapping for org/espetro/logistics/SupplySourceBlock/getRenderShape(Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/RenderShape; from net/minecraft/world/level/block/BaseEntityBlock/getRenderShape(Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/RenderShape;: getRenderShape -> m_7514_
 Conflicting propagated mapping for com/atsuishio/superbwarfare/entity/vehicle/TurretWreckEntity/canBeCollidedWith()Z from net/minecraft/world/entity/Entity/canBeCollidedWith()Z: canBeCollidedWith -> m_5829_
 Conflicting propagated mapping for com/atsuishio/superbwarfare/entity/vehicle/TurretWreckEntity/readAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V from net/minecraft/world/entity/Entity/readAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V: readAdditionalSaveData -> m_7378_
 Conflicting propagated mapping for com/atsuishio/superbwarfare/entity/vehicle/TurretWreckEntity/isPickable()Z from net/minecraft/world/entity/Entity/isPickable()Z: isPickable -> m_6087_
@@ -787,6 +787,7 @@ Writing Output: D:\minecraft\modp\Espetro\build\reobfJar\output.jar
   org/espetro/client/vehicle/ClientEntityRetryQueue$Stashed.class
   org/espetro/client/vehicle/ClientEntityRetryQueue.class
   org/espetro/client/vehicle/DismountGate.class
+  org/espetro/client/vehicle/HitboxPolicyController.class
   org/espetro/client/vehicle/SeatSwitchGate.class
   org/espetro/client/vehicle/VehicleInteractionKind.class
   org/espetro/client/vehicle/VehicleInteractionState$1.class
@@ -963,6 +964,8 @@ Writing Output: D:\minecraft\modp\Espetro\build\reobfJar\output.jar
   org/espetro/network/GovernanceActionPacket.class
   org/espetro/network/GovernanceStatePacket$TeamState.class
   org/espetro/network/GovernanceStatePacket.class
+  org/espetro/network/HitboxPolicyController.class
+  org/espetro/network/HitboxPolicyPacket.class
   org/espetro/network/MapVoteCastPacket.class
   org/espetro/network/MapVoteStatePacket$Candidate.class
   org/espetro/network/MapVoteStatePacket.class
@@ -1152,7 +1155,6 @@ Writing Output: D:\minecraft\modp\Espetro\build\reobfJar\output.jar
   org/espetro/vehicle/VehicleMountEvents.class
   org/espetro/vehicle/VehicleMountServer$PendingMount.class
   org/espetro/vehicle/VehicleMountServer.class
-  org/espetro/vehicle/VehicleSeatAccessPolicy$1.class
   org/espetro/vehicle/VehicleSeatAccessPolicy.class
   org/espetro/vehicle/VehicleSquadOwnership.class
   org/espetro/vehicle/WreckDecayService.class

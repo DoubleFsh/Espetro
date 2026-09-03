@@ -42,9 +42,9 @@ public class DeployPointSelectScreen extends EspetroMenuScreen {
 
         int y = START_Y;
 
-        // 原部署点按钮
+        // 主基地按钮
         if (hasDeployPoint) {
-            String label = "§e原部署点 §7(" + deployPointPos + ")";
+            String label = "§e主基地 §7(" + deployPointPos + ")";
             root.addChild(EspetroAuiWidgets.button(startX, y, BUTTON_WIDTH, BUTTON_HEIGHT,
                 label, () -> {
                 if (Minecraft.getInstance().player != null) {

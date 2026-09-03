@@ -437,6 +437,12 @@ public class NetworkManager {
             .decoder(SeatSwitchReadyPacket::read)
             .consumerMainThread(SeatSwitchReadyPacket::handle)
             .add();
+        // 服务端→客户端：碰撞体积显示策略
+        NET.messageBuilder(HitboxPolicyPacket.class, nextId(), NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(HitboxPolicyPacket::write)
+            .decoder(HitboxPolicyPacket::read)
+            .consumerMainThread(HitboxPolicyPacket::handle)
+            .add();
     }
 
     public static void sendBuildFortification(String fortId) {

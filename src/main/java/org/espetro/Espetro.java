@@ -296,6 +296,8 @@ public class Espetro {
 
                 GamePhase phase = GameStateManager.getInstance().getCurrentPhase();
                 GameStateManager.getInstance().onPlayerJoin(serverPlayer);
+                // 同步碰撞体积显示策略（F3+B）
+                org.espetro.network.HitboxPolicyController.syncToPlayer(serverPlayer);
                 NetworkManager.NET.send(
                     net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> serverPlayer),
                     org.espetro.network.FortificationCatalogPacket.forPlayer(serverPlayer));
